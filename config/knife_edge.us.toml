@@ -6,7 +6,7 @@ symbols_file_path = "knife_edge.us.syms.toml"
 rom_file_path = "../build/knife_edge.z64"
 output_func_path = "../generated/us"
 functions_per_output_file = 50
-recomp_include = "#include \"recomp.h\"\nextern void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);\nextern void unload_overlays(int32_t ram_addr, uint32_t size);"
+recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nextern void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);\nextern void unload_overlays(int32_t ram_addr, uint32_t size);\n#ifdef __cplusplus\n}\n#endif"
 
 [patches]
 stubs = []

@@ -1,6 +1,12 @@
 #include "recomp.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);
 extern void unload_overlays(int32_t ram_addr, uint32_t size);
+#ifdef __cplusplus
+}
+#endif
 #include "funcs.h"
 
 RECOMP_FUNC void func_8017D288_111CC0(uint8_t* rdram, recomp_context* ctx) {

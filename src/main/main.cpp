@@ -137,8 +137,16 @@ namespace {
 }
 
 int main(int argc, char** argv) {
-    (void)argc;
-    (void)argv;
+    // Minimal ROM provisioning: `KnifeEdgeRecompiled --rom <path>` selects and
+    // stores the ROM (librecomp handles z64/v64/n64 byte orders and validates the
+    // XXH3 hash), then the game starts immediately. Without --rom, a previously
+    // stored ROM is used if present.
+    std::filesystem::path rom_path{};
+    for (int i = 1; i < argc - 1; i++) {
+        if (std::string_view{argv[i]} == "--rom") {
+            rom_path = argv[i + 1];
+        }
+    }
 
     recomp::Version project_version{};
     if (!recomp::Version::from_string(version_string, project_version)) {
@@ -164,14 +172,20 @@ int main(int argc, char** argv) {
     // analysis/docs/n64recomp-formats.md (boot: ROM 0x1000 -> VRAM
     // 0x800C2400, CIC 6102).
     recomp::GameEntry knife_edge_entry {
-        .rom_hash = 0, // TODO: XXH3_64bits() of the verified ROM.
+        // XXH3_64bits of the normalized z64 image (md5 8043d829fcd4f8f72dd81e5c6dde916f).
+        .rom_hash = 0x56605501A85C79AFULL,
         .internal_name = "KNIFE EDGE",
-        .game_id = u8"knifeedge.n64.us.1.0", // TODO: confirm/replace once versioning is settled.
+        .game_id = u8"knifeedge.n64.us.1.0",
         .mod_game_id = "",
-        .save_type = recomp::SaveType::None, // TODO: unknown save type.
+        // Cart has no EEPROM/SRAM/Flash symbols; high scores go to Controller Pak
+        // (osPfsIsPlug is the only save-adjacent symbol) which librecomp HLEs.
+        .save_type = recomp::SaveType::None,
         .is_enabled = true,
         .has_compressed_code = false,
-        .entrypoint_address = 0x800C2400,
+        // Must be SIGN-EXTENDED: recomp.h's MEM_* macros index rdram as
+        // (addr - 0xFFFFFFFF80000000), so a bare positive 0x800C2400 lands ~4GB
+        // out of bounds and segfaults in the initial DMA.
+        .entrypoint_address = static_cast<gpr>(static_cast<int32_t>(0x800C2400)),
         .entrypoint = recomp_entrypoint,
     };
 
@@ -205,6 +219,36 @@ int main(int argc, char** argv) {
         .message_box = +[](const char* msg) {
             kerecomp::show_error_message_box("Knife Edge Recompiled", msg);
         },
+    };
+
+    // Select/validate the ROM before starting the runtime threads. select_rom
+    // stores a normalized copy under the config path for future runs.
+    if (!rom_path.empty()) {
+        recomp::RomValidationError rom_err = recomp::select_rom(rom_path, knife_edge_entry.game_id);
+        if (rom_err != recomp::RomValidationError::Good) {
+            exit_error("ROM validation failed (error " +
+                       std::to_string(static_cast<int>(rom_err)) + ") for " +
+                       rom_path.string());
+            return EXIT_FAILURE;
+        }
+    }
+    recomp::check_all_stored_roms();
+    if (!recomp::is_rom_valid(knife_edge_entry.game_id)) {
+        exit_error("No valid ROM. Run with: KnifeEdgeRecompiled --rom <path-to-knife-edge-rom>");
+        return EXIT_FAILURE;
+    }
+
+    // Start the game from the VI callback rather than here. ultramodern's VI
+    // thread only initializes its ViState (mode/framebuffer) via set_dummy_vi
+    // while `!is_game_started()`; starting the game before the VI thread has
+    // ticked leaves both ViStates with a null `mode` and update_vi() segfaults.
+    // Waiting a few retraces guarantees both double-buffered states are valid.
+    static std::u8string start_game_id = knife_edge_entry.game_id;
+    events_callbacks.vi_callback = +[]() {
+        static int vis = 0;
+        if (vis <= 3 && ++vis == 3) {
+            recomp::start_game(start_game_id);
+        }
     };
 
     recomp::start({

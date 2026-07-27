@@ -177,8 +177,14 @@ def main(argv=None):
     # generated code needs the extern declarations.
     inp["recomp_include"] = (
         '#include "recomp.h"\n'
+        "#ifdef __cplusplus\n"
+        'extern "C" {\n'
+        "#endif\n"
         "extern void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);\n"
-        "extern void unload_overlays(int32_t ram_addr, uint32_t size);"
+        "extern void unload_overlays(int32_t ram_addr, uint32_t size);\n"
+        "#ifdef __cplusplus\n"
+        "}\n"
+        "#endif"
     )
     cfg["input"] = inp
     # Names that N64Recomp does not already know about are emitted verbatim as C
