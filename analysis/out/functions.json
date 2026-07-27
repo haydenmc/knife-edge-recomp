@@ -1,0 +1,8038 @@
+{
+ "segments": [
+  {
+   "ambiguous_slot": false,
+   "functions": [
+    {
+     "how": "entry",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148279296
+    },
+    {
+     "how": "ptr",
+     "size": 76,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148279376
+    },
+    {
+     "how": "gap",
+     "size": 100,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148279452
+    },
+    {
+     "how": "jal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148279552
+    },
+    {
+     "how": "jal",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148279716
+    },
+    {
+     "how": "xjal",
+     "size": 384,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148279804
+    },
+    {
+     "how": "jal",
+     "size": 1104,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148280188
+    },
+    {
+     "how": "jal",
+     "size": 1144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148281292
+    },
+    {
+     "how": "xjal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148282436
+    },
+    {
+     "how": "xjal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148282612
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148282788
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148282836
+    },
+    {
+     "how": "xjal",
+     "size": 24,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148282884
+    },
+    {
+     "how": "xjal",
+     "size": 24,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148282908
+    },
+    {
+     "how": "xjal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148282932
+    },
+    {
+     "how": "xjal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148282980
+    },
+    {
+     "how": "xjal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148283020
+    },
+    {
+     "how": "xjal",
+     "size": 60,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148283084
+    },
+    {
+     "how": "xjal",
+     "size": 24,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148283144
+    },
+    {
+     "how": "xjal",
+     "size": 24,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148283168
+    },
+    {
+     "how": "jal",
+     "size": 52,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148283192
+    },
+    {
+     "how": "jal",
+     "size": 364,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148283244
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148283608
+    },
+    {
+     "how": "xjal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148283768
+    },
+    {
+     "how": "jal",
+     "size": 60,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148284104
+    },
+    {
+     "how": "xjal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148284164
+    },
+    {
+     "how": "xjal",
+     "size": 232,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148284256
+    },
+    {
+     "how": "gap",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148284488
+    },
+    {
+     "how": "jal",
+     "size": 104,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148284616
+    },
+    {
+     "how": "jal",
+     "size": 56,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148284720
+    },
+    {
+     "how": "jal",
+     "size": 56,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148284776
+    },
+    {
+     "how": "jal",
+     "size": 640,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148284832
+    },
+    {
+     "how": "jal",
+     "size": 944,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148285472
+    },
+    {
+     "how": "jal",
+     "size": 1672,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148286416
+    },
+    {
+     "how": "jal",
+     "size": 84,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148288088
+    },
+    {
+     "how": "jal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148288172
+    },
+    {
+     "how": "jal",
+     "size": 364,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148288212
+    },
+    {
+     "how": "jal",
+     "size": 452,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148288576
+    },
+    {
+     "how": "jal",
+     "size": 1560,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148289028
+    },
+    {
+     "how": "jal",
+     "size": 1560,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148290588
+    },
+    {
+     "how": "jal",
+     "size": 692,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148292148
+    },
+    {
+     "how": "jal",
+     "size": 684,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148292840
+    },
+    {
+     "how": "xjal",
+     "size": 684,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148293524
+    },
+    {
+     "how": "jal",
+     "size": 608,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148294208
+    },
+    {
+     "how": "xjal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148294816
+    },
+    {
+     "how": "xjal",
+     "size": 1828,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148294980
+    },
+    {
+     "how": "xjal",
+     "size": 788,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148296808
+    },
+    {
+     "how": "xjal",
+     "size": 240,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148297596
+    },
+    {
+     "how": "jal",
+     "size": 240,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148297836
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148298076
+    },
+    {
+     "how": "xjal",
+     "size": 24,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148298172
+    },
+    {
+     "how": "jal",
+     "size": 56,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148298196
+    },
+    {
+     "how": "xjal",
+     "size": 52,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148298252
+    },
+    {
+     "how": "jal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148298304
+    },
+    {
+     "how": "xjal",
+     "size": 104,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148298344
+    },
+    {
+     "how": "jal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148298448
+    },
+    {
+     "how": "jal",
+     "size": 456,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148298488
+    },
+    {
+     "how": "xjal",
+     "size": 148,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148298944
+    },
+    {
+     "how": "jal",
+     "size": 104,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148299092
+    },
+    {
+     "how": "xjal",
+     "size": 68,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148299196
+    },
+    {
+     "how": "xjal",
+     "size": 28,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148299264
+    },
+    {
+     "how": "jal",
+     "size": 348,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148299292
+    },
+    {
+     "how": "jal",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148299640
+    },
+    {
+     "how": "xjal",
+     "size": 548,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148299864
+    },
+    {
+     "how": "xjal",
+     "size": 400,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148300412
+    },
+    {
+     "how": "xjal",
+     "size": 332,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148300812
+    },
+    {
+     "how": "jal",
+     "size": 200,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148301144
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148301344
+    },
+    {
+     "how": "xjal",
+     "size": 20,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148301408
+    },
+    {
+     "how": "xjal",
+     "size": 20,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148301428
+    },
+    {
+     "how": "xjal",
+     "size": 20,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148301448
+    },
+    {
+     "how": "xjal",
+     "size": 52,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148301468
+    },
+    {
+     "how": "xjal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148301520
+    },
+    {
+     "how": "jal",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148301600
+    },
+    {
+     "how": "jal",
+     "size": 676,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148301688
+    },
+    {
+     "how": "jal",
+     "size": 392,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148302364
+    },
+    {
+     "how": "jal",
+     "size": 276,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148302756
+    },
+    {
+     "how": "jal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148303032
+    },
+    {
+     "how": "xjal",
+     "size": 36,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148303104
+    },
+    {
+     "how": "jal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148303140
+    },
+    {
+     "how": "gap",
+     "size": 172,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148303180
+    },
+    {
+     "how": "jal",
+     "size": 844,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148303352
+    },
+    {
+     "how": "jal",
+     "size": 108,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148304196
+    },
+    {
+     "how": "jal",
+     "size": 84,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148304304
+    },
+    {
+     "how": "jal",
+     "size": 2060,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148304388
+    },
+    {
+     "how": "gap",
+     "size": 84,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148306448
+    },
+    {
+     "how": "gap",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148306532
+    },
+    {
+     "how": "jal",
+     "size": 56,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148306576
+    },
+    {
+     "how": "gap",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148306632
+    },
+    {
+     "how": "gap",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148306720
+    },
+    {
+     "how": "jal",
+     "size": 256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148306808
+    },
+    {
+     "how": "jal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148307064
+    },
+    {
+     "how": "jal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148307156
+    },
+    {
+     "how": "jal",
+     "size": 932,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148307312
+    },
+    {
+     "how": "xjal",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148308244
+    },
+    {
+     "how": "gap",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148308288
+    },
+    {
+     "how": "xjal",
+     "size": 244,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148308320
+    },
+    {
+     "how": "xjal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148308564
+    },
+    {
+     "how": "xjal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148308604
+    },
+    {
+     "how": "jal",
+     "size": 300,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148308764
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148309064
+    },
+    {
+     "how": "gap",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148309112
+    },
+    {
+     "how": "gap",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148309204
+    },
+    {
+     "how": "xjal",
+     "size": 4968,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148309292
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148314260
+    },
+    {
+     "how": "jal",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148314388
+    },
+    {
+     "how": "jal",
+     "size": 120,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148314400
+    },
+    {
+     "how": "jal",
+     "size": 136,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148314520
+    },
+    {
+     "how": "jal",
+     "size": 84,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148314656
+    },
+    {
+     "how": "jal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148314740
+    },
+    {
+     "how": "jal",
+     "size": 888,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148314812
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148315700
+    },
+    {
+     "how": "jal",
+     "size": 520,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148315892
+    },
+    {
+     "how": "jal",
+     "size": 220,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148316412
+    },
+    {
+     "how": "jal",
+     "size": 280,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148316632
+    },
+    {
+     "how": "gap",
+     "size": 8,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148316912
+    },
+    {
+     "how": "jal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148316920
+    },
+    {
+     "how": "xjal",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148316960
+    },
+    {
+     "how": "gap",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317048
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317092
+    },
+    {
+     "how": "jal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317140
+    },
+    {
+     "how": "xjal",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317180
+    },
+    {
+     "how": "jal",
+     "size": 52,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317192
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317244
+    },
+    {
+     "how": "gap",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317292
+    },
+    {
+     "how": "xjal",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317332
+    },
+    {
+     "how": "xjal",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317344
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317356
+    },
+    {
+     "how": "xjal",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317372
+    },
+    {
+     "how": "xjal",
+     "size": 108,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317384
+    },
+    {
+     "how": "xjal",
+     "size": 116,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317492
+    },
+    {
+     "how": "jal",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317608
+    },
+    {
+     "how": "jal",
+     "size": 272,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317696
+    },
+    {
+     "how": "jal",
+     "size": 500,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148317968
+    },
+    {
+     "how": "jal",
+     "size": 1136,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148318468
+    },
+    {
+     "how": "jal",
+     "size": 516,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148319604
+    },
+    {
+     "how": "jal",
+     "size": 344,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148320120
+    },
+    {
+     "how": "jal",
+     "size": 448,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148320464
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148320912
+    },
+    {
+     "how": "jal",
+     "size": 120,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148321008
+    },
+    {
+     "how": "jal",
+     "size": 120,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148321128
+    },
+    {
+     "how": "jal",
+     "size": 120,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148321248
+    },
+    {
+     "how": "jal",
+     "size": 120,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148321368
+    },
+    {
+     "how": "jal",
+     "size": 288,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148321488
+    },
+    {
+     "how": "jal",
+     "size": 204,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148321776
+    },
+    {
+     "how": "jal",
+     "size": 204,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148321980
+    },
+    {
+     "how": "xjal",
+     "size": 340,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148322184
+    },
+    {
+     "how": "xjal",
+     "size": 236,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148322524
+    },
+    {
+     "how": "xjal",
+     "size": 1128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148322760
+    },
+    {
+     "how": "xjal",
+     "size": 520,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148323888
+    },
+    {
+     "how": "jal",
+     "size": 124,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148324408
+    },
+    {
+     "how": "jal",
+     "size": 508,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148324532
+    },
+    {
+     "how": "ptr",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148325040
+    },
+    {
+     "how": "ptr",
+     "size": 240,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148325136
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148325376
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148325440
+    },
+    {
+     "how": "gap",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148325488
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148325520
+    },
+    {
+     "how": "ptr",
+     "size": 448,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148325568
+    },
+    {
+     "how": "ptr",
+     "size": 260,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148326016
+    },
+    {
+     "how": "jal",
+     "size": 212,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148326276
+    },
+    {
+     "how": "jal",
+     "size": 536,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148326488
+    },
+    {
+     "how": "ptr",
+     "size": 800,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148327024
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148327824
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148327904
+    },
+    {
+     "how": "gap",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148327968
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148328080
+    },
+    {
+     "how": "jal",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148328224
+    },
+    {
+     "how": "gap",
+     "size": 60,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148328256
+    },
+    {
+     "how": "gap",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148328316
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148328356
+    },
+    {
+     "how": "jal",
+     "size": 372,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148328368
+    },
+    {
+     "how": "gap",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148328740
+    },
+    {
+     "how": "gap",
+     "size": 20,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148328964
+    },
+    {
+     "how": "gap",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148328984
+    },
+    {
+     "how": "gap",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329016
+    },
+    {
+     "how": "gap",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329108
+    },
+    {
+     "how": "gap",
+     "size": 20,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329204
+    },
+    {
+     "how": "gap",
+     "size": 68,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329224
+    },
+    {
+     "how": "gap",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329292
+    },
+    {
+     "how": "gap",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329308
+    },
+    {
+     "how": "gap",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329324
+    },
+    {
+     "how": "gap",
+     "size": 104,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329340
+    },
+    {
+     "how": "gap",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329444
+    },
+    {
+     "how": "gap",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329532
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329548
+    },
+    {
+     "how": "gap",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329560
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329576
+    },
+    {
+     "how": "gap",
+     "size": 236,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329588
+    },
+    {
+     "how": "gap",
+     "size": 180,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148329824
+    },
+    {
+     "how": "gap",
+     "size": 36,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330004
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330040
+    },
+    {
+     "how": "gap",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330052
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330068
+    },
+    {
+     "how": "gap",
+     "size": 20,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330080
+    },
+    {
+     "how": "gap",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330100
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330132
+    },
+    {
+     "how": "gap",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330144
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330184
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330196
+    },
+    {
+     "how": "gap",
+     "size": 100,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330208
+    },
+    {
+     "how": "gap",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330308
+    },
+    {
+     "how": "gap",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330324
+    },
+    {
+     "how": "gap",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330404
+    },
+    {
+     "how": "gap",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330484
+    },
+    {
+     "how": "gap",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330564
+    },
+    {
+     "how": "gap",
+     "size": 232,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330580
+    },
+    {
+     "how": "gap",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330812
+    },
+    {
+     "how": "gap",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330892
+    },
+    {
+     "how": "jal",
+     "size": 656,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148330908
+    },
+    {
+     "how": "jal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148331564
+    },
+    {
+     "how": "jal",
+     "size": 376,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148331604
+    },
+    {
+     "how": "jal",
+     "size": 228,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148331980
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148332208
+    },
+    {
+     "how": "jal",
+     "size": 136,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148332544
+    },
+    {
+     "how": "jal",
+     "size": 108,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148332680
+    },
+    {
+     "how": "jal",
+     "size": 116,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148332788
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148332904
+    },
+    {
+     "how": "jal",
+     "size": 100,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148332984
+    },
+    {
+     "how": "jal",
+     "size": 108,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333084
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333192
+    },
+    {
+     "how": "gap",
+     "size": 148,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333304
+    },
+    {
+     "how": "jal",
+     "size": 132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333452
+    },
+    {
+     "how": "jal",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333584
+    },
+    {
+     "how": "gap",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333616
+    },
+    {
+     "how": "gap",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333688
+    },
+    {
+     "how": "gap",
+     "size": 104,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333760
+    },
+    {
+     "how": "gap",
+     "size": 84,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333864
+    },
+    {
+     "how": "ptr",
+     "size": 696,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148333948
+    },
+    {
+     "how": "jal",
+     "size": 1024,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148334644
+    },
+    {
+     "how": "jal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148335668
+    },
+    {
+     "how": "jal",
+     "size": 408,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148335824
+    },
+    {
+     "how": "jal",
+     "size": 344,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148336232
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148336576
+    },
+    {
+     "how": "jal",
+     "size": 588,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148336688
+    },
+    {
+     "how": "jal",
+     "size": 28,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148337276
+    },
+    {
+     "how": "jal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148337304
+    },
+    {
+     "how": "jal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148337492
+    },
+    {
+     "how": "jal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148337584
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148337748
+    },
+    {
+     "how": "jal",
+     "size": 288,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148337940
+    },
+    {
+     "how": "jal",
+     "size": 432,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148338228
+    },
+    {
+     "how": "jal",
+     "size": 536,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148338660
+    },
+    {
+     "how": "jal",
+     "size": 316,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148339196
+    },
+    {
+     "how": "jal",
+     "size": 312,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148339512
+    },
+    {
+     "how": "jal",
+     "size": 412,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148339824
+    },
+    {
+     "how": "jal",
+     "size": 56,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148340236
+    },
+    {
+     "how": "jal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148340292
+    },
+    {
+     "how": "jal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148340468
+    },
+    {
+     "how": "jal",
+     "size": 196,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148340624
+    },
+    {
+     "how": "jal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148340820
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148341008
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148341200
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148341264
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148341312
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148341376
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148341488
+    },
+    {
+     "how": "ptr",
+     "size": 368,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148341552
+    },
+    {
+     "how": "jal",
+     "size": 788,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148341920
+    },
+    {
+     "how": "jal",
+     "size": 332,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148342708
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148343040
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148343056
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148343184
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148343344
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148343552
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148343712
+    },
+    {
+     "how": "jal",
+     "size": 540,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148343776
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148344316
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148344328
+    },
+    {
+     "how": "ptr",
+     "size": 248,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148344340
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148344588
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148344684
+    },
+    {
+     "how": "jal",
+     "size": 100,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148344828
+    },
+    {
+     "how": "ptr",
+     "size": 400,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148344928
+    },
+    {
+     "how": "ptr",
+     "size": 376,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148345328
+    },
+    {
+     "how": "jal",
+     "size": 152,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148345704
+    },
+    {
+     "how": "xjal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148345856
+    },
+    {
+     "how": "xjal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148346048
+    },
+    {
+     "how": "ptr",
+     "size": 296,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148346160
+    },
+    {
+     "how": "jal",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148346456
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148346544
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148346592
+    },
+    {
+     "how": "gap",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148346656
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148346688
+    },
+    {
+     "how": "jal",
+     "size": 168,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148346736
+    },
+    {
+     "how": "ptr",
+     "size": 216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148346904
+    },
+    {
+     "how": "jal",
+     "size": 408,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148347120
+    },
+    {
+     "how": "gap",
+     "size": 36,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148347528
+    },
+    {
+     "how": "jal",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148347564
+    },
+    {
+     "how": "jal",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148347608
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148347652
+    },
+    {
+     "how": "jal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148347764
+    },
+    {
+     "how": "ptr",
+     "size": 352,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148347856
+    },
+    {
+     "how": "jal",
+     "size": 148,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148348208
+    },
+    {
+     "how": "gap",
+     "size": 36,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148348356
+    },
+    {
+     "how": "jal",
+     "size": 520,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148348392
+    },
+    {
+     "how": "jal",
+     "size": 424,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148348912
+    },
+    {
+     "how": "jal",
+     "size": 108,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148349336
+    },
+    {
+     "how": "jal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148349444
+    },
+    {
+     "how": "jal",
+     "size": 132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148349608
+    },
+    {
+     "how": "jal",
+     "size": 148,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148349740
+    },
+    {
+     "how": "gap",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148349888
+    },
+    {
+     "how": "gap",
+     "size": 52,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148350096
+    },
+    {
+     "how": "jal",
+     "size": 60,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148350148
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148350208
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148350336
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148350448
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148350592
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148350784
+    },
+    {
+     "how": "jal",
+     "size": 448,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148350896
+    },
+    {
+     "how": "gap",
+     "size": 8,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148351344
+    },
+    {
+     "how": "jal",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148351352
+    },
+    {
+     "how": "jal",
+     "size": 36,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148351364
+    },
+    {
+     "how": "jal",
+     "size": 5920,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148351400
+    },
+    {
+     "how": "jal",
+     "size": 300,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148357320
+    },
+    {
+     "how": "jal",
+     "size": 3372,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148357620
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148360992
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148361184
+    },
+    {
+     "how": "jal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148361312
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148361488
+    },
+    {
+     "how": "jal",
+     "size": 696,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148361648
+    },
+    {
+     "how": "jal",
+     "size": 120,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148362344
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148362464
+    },
+    {
+     "how": "jal",
+     "size": 448,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148362480
+    },
+    {
+     "how": "jal",
+     "size": 368,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148362928
+    },
+    {
+     "how": "jal",
+     "size": 256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148363296
+    },
+    {
+     "how": "jal",
+     "size": 136,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148363552
+    },
+    {
+     "how": "gap",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148363688
+    },
+    {
+     "how": "jal",
+     "size": 184,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148363736
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148363920
+    },
+    {
+     "how": "jal",
+     "size": 368,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148364080
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148364448
+    },
+    {
+     "how": "jal",
+     "size": 404,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148364576
+    },
+    {
+     "how": "gap",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148364980
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148365072
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148365184
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148365232
+    },
+    {
+     "how": "jal",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148365248
+    },
+    {
+     "how": "jal",
+     "size": 704,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148365280
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148365984
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148366320
+    },
+    {
+     "how": "jal",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148366656
+    },
+    {
+     "how": "xjal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148366880
+    },
+    {
+     "how": "gap",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148366928
+    },
+    {
+     "how": "gap",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148367024
+    },
+    {
+     "how": "jal",
+     "size": 1848,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148367120
+    },
+    {
+     "how": "gap",
+     "size": 184,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148368968
+    },
+    {
+     "how": "jal",
+     "size": 1036,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148369152
+    },
+    {
+     "how": "gap",
+     "size": 132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370188
+    },
+    {
+     "how": "xjal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370320
+    },
+    {
+     "how": "ptr",
+     "size": 36,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370368
+    },
+    {
+     "how": "xjal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370404
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370496
+    },
+    {
+     "how": "jal",
+     "size": 36,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370544
+    },
+    {
+     "how": "gap",
+     "size": 56,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370580
+    },
+    {
+     "how": "jal",
+     "size": 52,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370636
+    },
+    {
+     "how": "jal",
+     "size": 256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370688
+    },
+    {
+     "how": "jal",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148370944
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148371168
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148371264
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148371328
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148371376
+    },
+    {
+     "how": "jal",
+     "size": 320,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148371712
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372032
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372048
+    },
+    {
+     "how": "jal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372064
+    },
+    {
+     "how": "gap",
+     "size": 8,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372240
+    },
+    {
+     "how": "jal",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372248
+    },
+    {
+     "how": "jal",
+     "size": 56,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372336
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372392
+    },
+    {
+     "how": "jal",
+     "size": 24,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372488
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372512
+    },
+    {
+     "how": "gap",
+     "size": 8,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372560
+    },
+    {
+     "how": "jal",
+     "size": 664,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148372568
+    },
+    {
+     "how": "jal",
+     "size": 768,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148373232
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148374000
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148374336
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148374496
+    },
+    {
+     "how": "jal",
+     "size": 232,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148374576
+    },
+    {
+     "how": "jal",
+     "size": 328,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148374808
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148375136
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148375264
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148375424
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148375584
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148375728
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148375872
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148376016
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148376064
+    },
+    {
+     "how": "jal",
+     "size": 784,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148376176
+    },
+    {
+     "how": "jal",
+     "size": 380,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148376960
+    },
+    {
+     "how": "jal",
+     "size": 116,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148377340
+    },
+    {
+     "how": "jal",
+     "size": 384,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148377456
+    },
+    {
+     "how": "ptr",
+     "size": 400,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148377840
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148378240
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148378352
+    },
+    {
+     "how": "jal",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148378464
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148378496
+    },
+    {
+     "how": "jal",
+     "size": 284,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148378624
+    },
+    {
+     "how": "jal",
+     "size": 400,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148378908
+    },
+    {
+     "how": "jal",
+     "size": 68,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148379308
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148379376
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148379440
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148379504
+    },
+    {
+     "how": "jal",
+     "size": 368,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148379584
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148379952
+    },
+    {
+     "how": "jal",
+     "size": 256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148380160
+    },
+    {
+     "how": "jal",
+     "size": 132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148380416
+    },
+    {
+     "how": "jal",
+     "size": 140,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148380548
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148380688
+    },
+    {
+     "how": "jal",
+     "size": 132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148380896
+    },
+    {
+     "how": "jal",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148381028
+    },
+    {
+     "how": "jal",
+     "size": 360,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148381072
+    },
+    {
+     "how": "jal",
+     "size": 268,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148381432
+    },
+    {
+     "how": "jal",
+     "size": 348,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148381700
+    },
+    {
+     "how": "jal",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382048
+    },
+    {
+     "how": "jal",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382080
+    },
+    {
+     "how": "jal",
+     "size": 320,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382112
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382432
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382624
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382768
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382784
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382800
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382816
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382896
+    },
+    {
+     "how": "ptr",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382976
+    },
+    {
+     "how": "ptr",
+     "size": 1316,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148382992
+    },
+    {
+     "how": "jal",
+     "size": 232,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148384308
+    },
+    {
+     "how": "jal",
+     "size": 256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148384540
+    },
+    {
+     "how": "jal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148384796
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148384868
+    },
+    {
+     "how": "jal",
+     "size": 380,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148384884
+    },
+    {
+     "how": "ptr",
+     "size": 16,
+     "term": false,
+     "valid": 1.0,
+     "vram": 2148385264
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385280
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385408
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385488
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385584
+    },
+    {
+     "how": "gap",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385680
+    },
+    {
+     "how": "jal",
+     "size": 60,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385724
+    },
+    {
+     "how": "jal",
+     "size": 60,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385784
+    },
+    {
+     "how": "gap",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385844
+    },
+    {
+     "how": "gap",
+     "size": 60,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385888
+    },
+    {
+     "how": "jal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148385948
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148386040
+    },
+    {
+     "how": "gap",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148386088
+    },
+    {
+     "how": "gap",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148386184
+    },
+    {
+     "how": "gap",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148386340
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148386384
+    },
+    {
+     "how": "jal",
+     "size": 140,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148386448
+    },
+    {
+     "how": "jal",
+     "size": 376,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148386588
+    },
+    {
+     "how": "jal",
+     "size": 116,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148386964
+    },
+    {
+     "how": "jal",
+     "size": 392,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148387080
+    },
+    {
+     "how": "jal",
+     "size": 1648,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148387472
+    },
+    {
+     "how": "jal",
+     "size": 1616,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148389120
+    },
+    {
+     "how": "jal",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148390736
+    },
+    {
+     "how": "jal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148390780
+    },
+    {
+     "how": "jal",
+     "size": 76,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148390820
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148390896
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148390912
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148391248
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148391296
+    },
+    {
+     "how": "jal",
+     "size": 68,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148391344
+    },
+    {
+     "how": "jal",
+     "size": 84,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148391412
+    },
+    {
+     "how": "jal",
+     "size": 84,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148391496
+    },
+    {
+     "how": "jal",
+     "size": 136,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148391580
+    },
+    {
+     "how": "jal",
+     "size": 168,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148391716
+    },
+    {
+     "how": "jal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148391884
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148392048
+    },
+    {
+     "how": "jal",
+     "size": 1088,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148392208
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148393296
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148393456
+    },
+    {
+     "how": "ptr",
+     "size": 288,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148393504
+    },
+    {
+     "how": "jal",
+     "size": 468,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148393792
+    },
+    {
+     "how": "gap",
+     "size": 940,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148394260
+    },
+    {
+     "how": "jal",
+     "size": 300,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148395200
+    },
+    {
+     "how": "ptr",
+     "size": 1188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148395500
+    },
+    {
+     "how": "jal",
+     "size": 236,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148396688
+    },
+    {
+     "how": "ptr",
+     "size": 532,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148396924
+    },
+    {
+     "how": "gap",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148397456
+    },
+    {
+     "how": "jal",
+     "size": 236,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148397496
+    },
+    {
+     "how": "jal",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148397732
+    },
+    {
+     "how": "jal",
+     "size": 464,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148397956
+    },
+    {
+     "how": "jal",
+     "size": 664,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148398420
+    },
+    {
+     "how": "jal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148399084
+    },
+    {
+     "how": "ptr",
+     "size": 1364,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148399260
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148400624
+    },
+    {
+     "how": "ptr",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148400672
+    },
+    {
+     "how": "jal",
+     "size": 52,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148400896
+    },
+    {
+     "how": "ptr",
+     "size": 140,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148400948
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148401088
+    },
+    {
+     "how": "gap",
+     "size": 68,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148401168
+    },
+    {
+     "how": "gap",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148401236
+    },
+    {
+     "how": "jal",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148401280
+    },
+    {
+     "how": "ptr",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148401312
+    },
+    {
+     "how": "ptr",
+     "size": 560,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148401536
+    },
+    {
+     "how": "ptr",
+     "size": 1168,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148402096
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148403264
+    },
+    {
+     "how": "jal",
+     "size": 768,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148403280
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404048
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404064
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404080
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404096
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404160
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404304
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404352
+    },
+    {
+     "how": "jal",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404496
+    },
+    {
+     "how": "jal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404720
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404896
+    },
+    {
+     "how": "jal",
+     "size": 68,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148404976
+    },
+    {
+     "how": "jal",
+     "size": 44,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148405044
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148405088
+    },
+    {
+     "how": "jal",
+     "size": 160,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148405296
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148405456
+    },
+    {
+     "how": "jal",
+     "size": 560,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148405584
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148406144
+    },
+    {
+     "how": "jal",
+     "size": 272,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148406192
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148406464
+    },
+    {
+     "how": "jal",
+     "size": 672,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148406480
+    },
+    {
+     "how": "jal",
+     "size": 1384,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148407152
+    },
+    {
+     "how": "gap",
+     "size": 8,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148408536
+    },
+    {
+     "how": "jal",
+     "size": 1360,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148408544
+    },
+    {
+     "how": "jal",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148409904
+    },
+    {
+     "how": "jal",
+     "size": 168,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148409936
+    },
+    {
+     "how": "jal",
+     "size": 184,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148410104
+    },
+    {
+     "how": "jal",
+     "size": 392,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148410288
+    },
+    {
+     "how": "jal",
+     "size": 396,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148410680
+    },
+    {
+     "how": "jal",
+     "size": 548,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148411076
+    },
+    {
+     "how": "ptr",
+     "size": 604,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148411624
+    },
+    {
+     "how": "jal",
+     "size": 24,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148412228
+    },
+    {
+     "how": "ptr",
+     "size": 836,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148412252
+    },
+    {
+     "how": "jal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148413088
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148413216
+    },
+    {
+     "how": "jal",
+     "size": 400,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148413312
+    },
+    {
+     "how": "jal",
+     "size": 416,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148413712
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148414128
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148414208
+    },
+    {
+     "how": "jal",
+     "size": 592,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148414288
+    },
+    {
+     "how": "gap",
+     "size": 416,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148414880
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148415296
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148415504
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148415712
+    },
+    {
+     "how": "jal",
+     "size": 196,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148415920
+    },
+    {
+     "how": "jal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148416116
+    },
+    {
+     "how": "jal",
+     "size": 256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148416272
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148416528
+    },
+    {
+     "how": "jal",
+     "size": 116,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148416672
+    },
+    {
+     "how": "jal",
+     "size": 252,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148416788
+    },
+    {
+     "how": "jal",
+     "size": 848,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148417040
+    },
+    {
+     "how": "jal",
+     "size": 356,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148417888
+    },
+    {
+     "how": "gap",
+     "size": 428,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148418244
+    },
+    {
+     "how": "gap",
+     "size": 212,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148418672
+    },
+    {
+     "how": "gap",
+     "size": 732,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148418884
+    },
+    {
+     "how": "jal",
+     "size": 288,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148419616
+    },
+    {
+     "how": "jal",
+     "size": 672,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148419904
+    },
+    {
+     "how": "jal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148420576
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148420752
+    },
+    {
+     "how": "gap",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148420816
+    },
+    {
+     "how": "xjal",
+     "size": 52,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148420828
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148420880
+    },
+    {
+     "how": "jal",
+     "size": 16,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148420896
+    },
+    {
+     "how": "xjal",
+     "size": 32,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148420912
+    },
+    {
+     "how": "gap",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148420944
+    },
+    {
+     "how": "xjal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148421120
+    },
+    {
+     "how": "xjal",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148421168
+    },
+    {
+     "how": "xjal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148421392
+    },
+    {
+     "how": "jal",
+     "size": 656,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148421472
+    }
+   ],
+   "name": "boot",
+   "rejected": [],
+   "rom": 4096,
+   "size": 183120,
+   "text_end": 2148422128,
+   "text_start": 2148279296,
+   "vram": 2148279296
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "jal",
+     "size": 436,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148980464
+    },
+    {
+     "how": "xjal",
+     "size": 324,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148980900
+    },
+    {
+     "how": "xjal",
+     "size": 3268,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148981224
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148984492
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148984604
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148984812
+    },
+    {
+     "how": "xjal",
+     "size": 84,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148984924
+    },
+    {
+     "how": "xjal",
+     "size": 3532,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148985008
+    },
+    {
+     "how": "jal",
+     "size": 380,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148988540
+    },
+    {
+     "how": "jal",
+     "size": 964,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148988920
+    },
+    {
+     "how": "xjal",
+     "size": 2032,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148989884
+    },
+    {
+     "how": "jal",
+     "size": 544,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148991916
+    },
+    {
+     "how": "jal",
+     "size": 540,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148992460
+    },
+    {
+     "how": "jal",
+     "size": 1720,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148993000
+    },
+    {
+     "how": "jal",
+     "size": 1660,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148994720
+    },
+    {
+     "how": "jal",
+     "size": 200,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148996380
+    },
+    {
+     "how": "jal",
+     "size": 228,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148996580
+    },
+    {
+     "how": "xjal",
+     "size": 760,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148996808
+    },
+    {
+     "how": "gap",
+     "size": 712,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148997568
+    },
+    {
+     "how": "xjal",
+     "size": 776,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148998280
+    },
+    {
+     "how": "xjal",
+     "size": 724,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148999056
+    },
+    {
+     "how": "gap",
+     "size": 716,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148999780
+    }
+   ],
+   "name": "seg_02FC30",
+   "rejected": [],
+   "rom": 195632,
+   "size": 20400,
+   "text_end": 2149000496,
+   "text_start": 2148980464,
+   "vram": 2148980464
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036224
+    },
+    {
+     "how": "gap",
+     "size": 216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036400
+    },
+    {
+     "how": "jal",
+     "size": 284,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036616
+    },
+    {
+     "how": "jal",
+     "size": 296,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036900
+    },
+    {
+     "how": "jal",
+     "size": 492,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037196
+    },
+    {
+     "how": "xjal",
+     "size": 772,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037688
+    },
+    {
+     "how": "xjal",
+     "size": 4,
+     "term": false,
+     "valid": 1.0,
+     "vram": 2149038460
+    }
+   ],
+   "name": "seg_03D600",
+   "rejected": [],
+   "rom": 251392,
+   "size": 2432,
+   "text_end": 2149038464,
+   "text_start": 2149036224,
+   "vram": 2149036224
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036224
+    },
+    {
+     "how": "gap",
+     "size": 244,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036412
+    },
+    {
+     "how": "xjal",
+     "size": 4,
+     "term": false,
+     "valid": 1.0,
+     "vram": 2149036656
+    },
+    {
+     "how": "jal",
+     "size": 340,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036660
+    },
+    {
+     "how": "jal",
+     "size": 1732,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037000
+    },
+    {
+     "how": "jal",
+     "size": 424,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038732
+    },
+    {
+     "how": "xjal",
+     "size": 1192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149039156
+    },
+    {
+     "how": "jal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149040348
+    },
+    {
+     "how": "jal",
+     "size": 664,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149040440
+    }
+   ],
+   "name": "seg_041650",
+   "rejected": [],
+   "rom": 267856,
+   "size": 6176,
+   "text_end": 2149041104,
+   "text_start": 2149036224,
+   "vram": 2149036224
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 196,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434144
+    },
+    {
+     "how": "gap",
+     "size": 276,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434340
+    },
+    {
+     "how": "jal",
+     "size": 308,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434616
+    },
+    {
+     "how": "jal",
+     "size": 1328,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434924
+    },
+    {
+     "how": "jal",
+     "size": 284,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149436252
+    },
+    {
+     "how": "xjal",
+     "size": 4,
+     "term": false,
+     "valid": 1.0,
+     "vram": 2149436536
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149436540
+    },
+    {
+     "how": "jal",
+     "size": 440,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149436732
+    },
+    {
+     "how": "jal",
+     "size": 332,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149437172
+    },
+    {
+     "how": "jal",
+     "size": 376,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149437504
+    },
+    {
+     "how": "jal",
+     "size": 1016,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149437880
+    },
+    {
+     "how": "jal",
+     "size": 552,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149438896
+    },
+    {
+     "how": "jal",
+     "size": 532,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149439448
+    },
+    {
+     "how": "jal",
+     "size": 400,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149439980
+    },
+    {
+     "how": "jal",
+     "size": 9960,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149440380
+    },
+    {
+     "how": "jal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149450340
+    },
+    {
+     "how": "xjal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149450432
+    },
+    {
+     "how": "gap",
+     "size": 276,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149450620
+    },
+    {
+     "how": "jal",
+     "size": 356,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149450896
+    },
+    {
+     "how": "jal",
+     "size": 588,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149451252
+    },
+    {
+     "how": "jal",
+     "size": 148,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149451840
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149451988
+    },
+    {
+     "how": "jal",
+     "size": 472,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149452180
+    },
+    {
+     "how": "jal",
+     "size": 1040,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149452652
+    },
+    {
+     "how": "jal",
+     "size": 532,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149453692
+    },
+    {
+     "how": "jal",
+     "size": 448,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149454224
+    },
+    {
+     "how": "jal",
+     "size": 4116,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149454672
+    },
+    {
+     "how": "jal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149458788
+    }
+   ],
+   "name": "seg_0BA450",
+   "rejected": [],
+   "rom": 762960,
+   "size": 75440,
+   "text_end": 2149458880,
+   "text_start": 2149434144,
+   "vram": 2149434144
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 232,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036224
+    },
+    {
+     "how": "gap",
+     "size": 300,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036456
+    },
+    {
+     "how": "jal",
+     "size": 464,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036756
+    },
+    {
+     "how": "jal",
+     "size": 1776,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037220
+    },
+    {
+     "how": "jal",
+     "size": 1168,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038996
+    },
+    {
+     "how": "jal",
+     "size": 132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149040164
+    },
+    {
+     "how": "jal",
+     "size": 2228,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149040296
+    },
+    {
+     "how": "jal",
+     "size": 3504,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149042524
+    },
+    {
+     "how": "xjal",
+     "size": 756,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149046028
+    },
+    {
+     "how": "xjal",
+     "size": 180,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149046784
+    },
+    {
+     "how": "gap",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149046964
+    },
+    {
+     "how": "jal",
+     "size": 432,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149047188
+    },
+    {
+     "how": "jal",
+     "size": 1692,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149047620
+    },
+    {
+     "how": "jal",
+     "size": 504,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149049312
+    },
+    {
+     "how": "xjal",
+     "size": 2216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149049816
+    }
+   ],
+   "name": "seg_0EF7C0",
+   "rejected": [],
+   "rom": 980928,
+   "size": 17088,
+   "text_end": 2149052032,
+   "text_start": 2149036224,
+   "vram": 2149036224
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "jal",
+     "size": 260,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036224
+    },
+    {
+     "how": "jal",
+     "size": 1460,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036484
+    },
+    {
+     "how": "jal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037944
+    },
+    {
+     "how": "jal",
+     "size": 80,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038100
+    },
+    {
+     "how": "jal",
+     "size": 264,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038180
+    },
+    {
+     "how": "xjal",
+     "size": 312,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038444
+    },
+    {
+     "how": "xjal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038756
+    },
+    {
+     "how": "gap",
+     "size": 240,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038944
+    }
+   ],
+   "name": "seg_0F4810",
+   "rejected": [],
+   "rom": 1001488,
+   "size": 3120,
+   "text_end": 2149039184,
+   "text_start": 2149036224,
+   "vram": 2149036224
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "jal",
+     "size": 640,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036224
+    },
+    {
+     "how": "jal",
+     "size": 476,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036864
+    },
+    {
+     "how": "jal",
+     "size": 560,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037340
+    },
+    {
+     "how": "jal",
+     "size": 560,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037900
+    },
+    {
+     "how": "jal",
+     "size": 68,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038460
+    },
+    {
+     "how": "jal",
+     "size": 148,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038528
+    },
+    {
+     "how": "jal",
+     "size": 228,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038676
+    },
+    {
+     "how": "jal",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038904
+    },
+    {
+     "how": "jal",
+     "size": 228,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149039128
+    },
+    {
+     "how": "jal",
+     "size": 28,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149039356
+    },
+    {
+     "how": "jal",
+     "size": 668,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149039384
+    },
+    {
+     "how": "jal",
+     "size": 772,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149040052
+    },
+    {
+     "how": "gap",
+     "size": 456,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149040824
+    },
+    {
+     "how": "jal",
+     "size": 312,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149041280
+    },
+    {
+     "how": "jal",
+     "size": 172,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149041592
+    },
+    {
+     "how": "jal",
+     "size": 372,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149041764
+    },
+    {
+     "how": "jal",
+     "size": 2276,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149042136
+    },
+    {
+     "how": "jal",
+     "size": 460,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149044412
+    },
+    {
+     "how": "jal",
+     "size": 1376,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149044872
+    },
+    {
+     "how": "jal",
+     "size": 1360,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149046248
+    },
+    {
+     "how": "jal",
+     "size": 100,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149047608
+    },
+    {
+     "how": "jal",
+     "size": 260,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149047708
+    },
+    {
+     "how": "xjal",
+     "size": 12,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149047968
+    },
+    {
+     "how": "gap",
+     "size": 464,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149047980
+    },
+    {
+     "how": "xjal",
+     "size": 180,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149048444
+    }
+   ],
+   "name": "seg_111CC0",
+   "rejected": [],
+   "rom": 1121472,
+   "size": 12832,
+   "text_end": 2149048624,
+   "text_start": 2149036224,
+   "vram": 2149036224
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "jal",
+     "size": 1424,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036224
+    },
+    {
+     "how": "xjal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037648
+    },
+    {
+     "how": "gap",
+     "size": 232,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037824
+    },
+    {
+     "how": "jal",
+     "size": 488,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038056
+    },
+    {
+     "how": "jal",
+     "size": 3260,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038544
+    },
+    {
+     "how": "jal",
+     "size": 436,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149041804
+    },
+    {
+     "how": "jal",
+     "size": 468,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149042240
+    },
+    {
+     "how": "jal",
+     "size": 736,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149042708
+    },
+    {
+     "how": "jal",
+     "size": 504,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149043444
+    },
+    {
+     "how": "jal",
+     "size": 1204,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149043948
+    },
+    {
+     "how": "jal",
+     "size": 152,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149045152
+    },
+    {
+     "how": "jal",
+     "size": 148,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149045304
+    },
+    {
+     "how": "xjal",
+     "size": 788,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149045452
+    },
+    {
+     "how": "jal",
+     "size": 416,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149046240
+    }
+   ],
+   "name": "seg_1199D0",
+   "rejected": [],
+   "rom": 1153488,
+   "size": 12400,
+   "text_end": 2149046656,
+   "text_start": 2149036224,
+   "vram": 2149036224
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 200,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036224
+    },
+    {
+     "how": "gap",
+     "size": 232,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036424
+    },
+    {
+     "how": "jal",
+     "size": 684,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149036656
+    },
+    {
+     "how": "jal",
+     "size": 372,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037340
+    },
+    {
+     "how": "jal",
+     "size": 596,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149037712
+    },
+    {
+     "how": "jal",
+     "size": 276,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038308
+    },
+    {
+     "how": "jal",
+     "size": 240,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038584
+    },
+    {
+     "how": "jal",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038824
+    },
+    {
+     "how": "jal",
+     "size": 744,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149038912
+    },
+    {
+     "how": "jal",
+     "size": 104,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149039656
+    },
+    {
+     "how": "xjal",
+     "size": 172,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149039760
+    },
+    {
+     "how": "gap",
+     "size": 216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149039932
+    },
+    {
+     "how": "jal",
+     "size": 868,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149040148
+    },
+    {
+     "how": "jal",
+     "size": 352,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149041016
+    },
+    {
+     "how": "jal",
+     "size": 576,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149041368
+    },
+    {
+     "how": "jal",
+     "size": 348,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149041944
+    },
+    {
+     "how": "jal",
+     "size": 1912,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149042292
+    },
+    {
+     "how": "xjal",
+     "size": 588,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149044204
+    },
+    {
+     "how": "jal",
+     "size": 368,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149044792
+    },
+    {
+     "how": "jal",
+     "size": 216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149045160
+    },
+    {
+     "how": "jal",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149045376
+    }
+   ],
+   "name": "seg_12C2F0",
+   "rejected": [],
+   "rom": 1229552,
+   "size": 9728,
+   "text_end": 2149045600,
+   "text_start": 2149036224,
+   "vram": 2149036224
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "jal",
+     "size": 1508,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148980464
+    },
+    {
+     "how": "jal",
+     "size": 64,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148981972
+    },
+    {
+     "how": "jal",
+     "size": 584,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148982036
+    },
+    {
+     "how": "jal",
+     "size": 820,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148982620
+    },
+    {
+     "how": "jal",
+     "size": 452,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148983440
+    },
+    {
+     "how": "jal",
+     "size": 204,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148983892
+    },
+    {
+     "how": "jal",
+     "size": 2008,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148984096
+    },
+    {
+     "how": "jal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148986104
+    },
+    {
+     "how": "jal",
+     "size": 324,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148986260
+    },
+    {
+     "how": "jal",
+     "size": 576,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148986584
+    },
+    {
+     "how": "jal",
+     "size": 604,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148987160
+    },
+    {
+     "how": "jal",
+     "size": 300,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148987764
+    },
+    {
+     "how": "jal",
+     "size": 256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148988064
+    },
+    {
+     "how": "jal",
+     "size": 120,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148988320
+    },
+    {
+     "how": "jal",
+     "size": 908,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148988440
+    },
+    {
+     "how": "jal",
+     "size": 552,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148989348
+    },
+    {
+     "how": "jal",
+     "size": 260,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148989900
+    },
+    {
+     "how": "jal",
+     "size": 904,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148990160
+    },
+    {
+     "how": "jal",
+     "size": 1348,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148991064
+    },
+    {
+     "how": "jal",
+     "size": 896,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148992412
+    },
+    {
+     "how": "jal",
+     "size": 632,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148993308
+    },
+    {
+     "how": "jal",
+     "size": 728,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148993940
+    },
+    {
+     "how": "jal",
+     "size": 748,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148994668
+    },
+    {
+     "how": "jal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148995416
+    },
+    {
+     "how": "jal",
+     "size": 352,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148995580
+    },
+    {
+     "how": "jal",
+     "size": 352,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148995932
+    },
+    {
+     "how": "jal",
+     "size": 352,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148996284
+    },
+    {
+     "how": "jal",
+     "size": 352,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148996636
+    },
+    {
+     "how": "jal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148996988
+    },
+    {
+     "how": "jal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148997060
+    },
+    {
+     "how": "jal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148997132
+    },
+    {
+     "how": "jal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148997204
+    },
+    {
+     "how": "jal",
+     "size": 392,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148997276
+    },
+    {
+     "how": "jal",
+     "size": 5024,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2148997668
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149002692
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149002804
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149003012
+    },
+    {
+     "how": "jal",
+     "size": 1476,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149003124
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149004600
+    },
+    {
+     "how": "jal",
+     "size": 248,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149004712
+    },
+    {
+     "how": "jal",
+     "size": 452,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149004960
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149005412
+    },
+    {
+     "how": "jal",
+     "size": 984,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149005508
+    },
+    {
+     "how": "jal",
+     "size": 132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149006492
+    },
+    {
+     "how": "jal",
+     "size": 540,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149006624
+    },
+    {
+     "how": "jal",
+     "size": 540,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149007164
+    },
+    {
+     "how": "jal",
+     "size": 1096,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149007704
+    },
+    {
+     "how": "jal",
+     "size": 1028,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149008800
+    },
+    {
+     "how": "jal",
+     "size": 404,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149009828
+    },
+    {
+     "how": "jal",
+     "size": 184,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149010232
+    },
+    {
+     "how": "jal",
+     "size": 1540,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149010416
+    },
+    {
+     "how": "jal",
+     "size": 132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149011956
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149012088
+    },
+    {
+     "how": "xjal",
+     "size": 520,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149012184
+    },
+    {
+     "how": "jal",
+     "size": 200,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149012704
+    },
+    {
+     "how": "jal",
+     "size": 264,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149012904
+    },
+    {
+     "how": "jal",
+     "size": 240,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149013168
+    },
+    {
+     "how": "jal",
+     "size": 1632,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149013408
+    },
+    {
+     "how": "jal",
+     "size": 432,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149015040
+    },
+    {
+     "how": "jal",
+     "size": 2224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149015472
+    },
+    {
+     "how": "jal",
+     "size": 1504,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149017696
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149019200
+    },
+    {
+     "how": "jal",
+     "size": 84,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149019312
+    },
+    {
+     "how": "jal",
+     "size": 356,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149019396
+    },
+    {
+     "how": "jal",
+     "size": 784,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149019752
+    },
+    {
+     "how": "jal",
+     "size": 2172,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149020536
+    },
+    {
+     "how": "jal",
+     "size": 836,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149022708
+    },
+    {
+     "how": "jal",
+     "size": 268,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149023544
+    },
+    {
+     "how": "xjal",
+     "size": 724,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149023812
+    },
+    {
+     "how": "jal",
+     "size": 244,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149024536
+    },
+    {
+     "how": "jal",
+     "size": 844,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149024780
+    },
+    {
+     "how": "jal",
+     "size": 1296,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149025624
+    },
+    {
+     "how": "jal",
+     "size": 316,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149026920
+    },
+    {
+     "how": "jal",
+     "size": 696,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149027236
+    },
+    {
+     "how": "jal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149027932
+    },
+    {
+     "how": "jal",
+     "size": 568,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149028096
+    },
+    {
+     "how": "jal",
+     "size": 404,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149028664
+    },
+    {
+     "how": "jal",
+     "size": 1536,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149029068
+    },
+    {
+     "how": "jal",
+     "size": 88,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149030604
+    },
+    {
+     "how": "jal",
+     "size": 108,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149030692
+    },
+    {
+     "how": "jal",
+     "size": 256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149030800
+    },
+    {
+     "how": "jal",
+     "size": 428,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149031056
+    },
+    {
+     "how": "jal",
+     "size": 496,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149031484
+    },
+    {
+     "how": "jal",
+     "size": 504,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149031980
+    },
+    {
+     "how": "jal",
+     "size": 548,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149032484
+    },
+    {
+     "how": "jal",
+     "size": 620,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149033032
+    },
+    {
+     "how": "jal",
+     "size": 24,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149033652
+    },
+    {
+     "how": "jal",
+     "size": 2024,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149033676
+    },
+    {
+     "how": "jal",
+     "size": 3628,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149035700
+    },
+    {
+     "how": "jal",
+     "size": 380,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149039328
+    },
+    {
+     "how": "jal",
+     "size": 964,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149039708
+    },
+    {
+     "how": "jal",
+     "size": 2756,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149040672
+    },
+    {
+     "how": "jal",
+     "size": 176,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149043428
+    },
+    {
+     "how": "jal",
+     "size": 2700,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149043604
+    },
+    {
+     "how": "xjal",
+     "size": 672,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149046304
+    },
+    {
+     "how": "xjal",
+     "size": 916,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149046976
+    },
+    {
+     "how": "xjal",
+     "size": 916,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149047892
+    },
+    {
+     "how": "xjal",
+     "size": 604,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149048808
+    },
+    {
+     "how": "xjal",
+     "size": 1280,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149049412
+    },
+    {
+     "how": "xjal",
+     "size": 992,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149050692
+    },
+    {
+     "how": "xjal",
+     "size": 376,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149051684
+    },
+    {
+     "how": "xjal",
+     "size": 628,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149052060
+    },
+    {
+     "how": "xjal",
+     "size": 784,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149052688
+    },
+    {
+     "how": "gap",
+     "size": 464,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149053472
+    },
+    {
+     "how": "jal",
+     "size": 228,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149053936
+    },
+    {
+     "how": "xjal",
+     "size": 1084,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149054164
+    },
+    {
+     "how": "xjal",
+     "size": 828,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149055248
+    },
+    {
+     "how": "xjal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149056076
+    },
+    {
+     "how": "jal",
+     "size": 140,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149056264
+    },
+    {
+     "how": "xjal",
+     "size": 140,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149056404
+    },
+    {
+     "how": "gap",
+     "size": 172,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149056544
+    },
+    {
+     "how": "xjal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149056716
+    },
+    {
+     "how": "gap",
+     "size": 216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149056880
+    },
+    {
+     "how": "xjal",
+     "size": 872,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149057096
+    },
+    {
+     "how": "xjal",
+     "size": 1196,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149057968
+    },
+    {
+     "how": "xjal",
+     "size": 100,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149059164
+    },
+    {
+     "how": "xjal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149059264
+    },
+    {
+     "how": "xjal",
+     "size": 108,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149059420
+    },
+    {
+     "how": "jal",
+     "size": 540,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149059528
+    },
+    {
+     "how": "jal",
+     "size": 440,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149060068
+    },
+    {
+     "how": "jal",
+     "size": 772,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149060508
+    },
+    {
+     "how": "jal",
+     "size": 6068,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149061280
+    },
+    {
+     "how": "jal",
+     "size": 544,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149067348
+    },
+    {
+     "how": "xjal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149067892
+    },
+    {
+     "how": "xjal",
+     "size": 172,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149068048
+    },
+    {
+     "how": "xjal",
+     "size": 584,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149068220
+    },
+    {
+     "how": "xjal",
+     "size": 2776,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149068804
+    },
+    {
+     "how": "jal",
+     "size": 1228,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149071580
+    },
+    {
+     "how": "xjal",
+     "size": 40,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149072808
+    },
+    {
+     "how": "xjal",
+     "size": 1284,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149072848
+    },
+    {
+     "how": "gap",
+     "size": 244,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149074132
+    },
+    {
+     "how": "xjal",
+     "size": 1964,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149074376
+    },
+    {
+     "how": "xjal",
+     "size": 2120,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149076340
+    },
+    {
+     "how": "jal",
+     "size": 356,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149078460
+    },
+    {
+     "how": "xjal",
+     "size": 224,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149078816
+    },
+    {
+     "how": "gap",
+     "size": 268,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149079040
+    },
+    {
+     "how": "gap",
+     "size": 496,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149079308
+    },
+    {
+     "how": "xjal",
+     "size": 604,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149079804
+    },
+    {
+     "how": "gap",
+     "size": 348,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149080408
+    },
+    {
+     "how": "gap",
+     "size": 348,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149080756
+    },
+    {
+     "how": "gap",
+     "size": 348,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149081104
+    },
+    {
+     "how": "jal",
+     "size": 568,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149081452
+    },
+    {
+     "how": "xjal",
+     "size": 280,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149082020
+    },
+    {
+     "how": "jal",
+     "size": 5220,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149082300
+    },
+    {
+     "how": "jal",
+     "size": 1340,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149087520
+    },
+    {
+     "how": "jal",
+     "size": 3212,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149088860
+    },
+    {
+     "how": "jal",
+     "size": 816,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149092072
+    },
+    {
+     "how": "jal",
+     "size": 880,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149092888
+    },
+    {
+     "how": "jal",
+     "size": 816,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149093768
+    },
+    {
+     "how": "jal",
+     "size": 640,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149094584
+    },
+    {
+     "how": "jal",
+     "size": 1052,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149095224
+    },
+    {
+     "how": "jal",
+     "size": 416,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149096276
+    },
+    {
+     "how": "jal",
+     "size": 364,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149096692
+    },
+    {
+     "how": "jal",
+     "size": 124,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149097056
+    },
+    {
+     "how": "xjal",
+     "size": 272,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149097180
+    },
+    {
+     "how": "jal",
+     "size": 332,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149097452
+    },
+    {
+     "how": "jal",
+     "size": 92,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149097784
+    },
+    {
+     "how": "jal",
+     "size": 680,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149097876
+    },
+    {
+     "how": "jal",
+     "size": 396,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149098556
+    },
+    {
+     "how": "jal",
+     "size": 300,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149098952
+    },
+    {
+     "how": "jal",
+     "size": 1084,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149099252
+    },
+    {
+     "how": "jal",
+     "size": 868,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149100336
+    },
+    {
+     "how": "jal",
+     "size": 280,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149101204
+    },
+    {
+     "how": "jal",
+     "size": 5436,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149101484
+    },
+    {
+     "how": "jal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149106920
+    },
+    {
+     "how": "gap",
+     "size": 132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149107076
+    },
+    {
+     "how": "xjal",
+     "size": 180,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149107208
+    },
+    {
+     "how": "jal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149107388
+    },
+    {
+     "how": "jal",
+     "size": 364,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149107460
+    },
+    {
+     "how": "jal",
+     "size": 1372,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149107824
+    },
+    {
+     "how": "jal",
+     "size": 3416,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149109196
+    },
+    {
+     "how": "jal",
+     "size": 1556,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149112612
+    },
+    {
+     "how": "jal",
+     "size": 1180,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149114168
+    },
+    {
+     "how": "jal",
+     "size": 3012,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149115348
+    },
+    {
+     "how": "jal",
+     "size": 352,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149118360
+    },
+    {
+     "how": "jal",
+     "size": 1600,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149118712
+    },
+    {
+     "how": "jal",
+     "size": 10368,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149120312
+    },
+    {
+     "how": "jal",
+     "size": 48,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149130680
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149130728
+    },
+    {
+     "how": "jal",
+     "size": 1588,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149130920
+    },
+    {
+     "how": "jal",
+     "size": 140,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149132508
+    },
+    {
+     "how": "jal",
+     "size": 252,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149132648
+    },
+    {
+     "how": "jal",
+     "size": 124,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149132900
+    },
+    {
+     "how": "jal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149133024
+    },
+    {
+     "how": "jal",
+     "size": 136,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149133212
+    },
+    {
+     "how": "jal",
+     "size": 124,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149133348
+    },
+    {
+     "how": "xjal",
+     "size": 1220,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149133472
+    },
+    {
+     "how": "xjal",
+     "size": 372,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149134692
+    },
+    {
+     "how": "xjal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149135064
+    },
+    {
+     "how": "xjal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149135228
+    },
+    {
+     "how": "jal",
+     "size": 96,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149135300
+    },
+    {
+     "how": "jal",
+     "size": 244,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149135396
+    },
+    {
+     "how": "jal",
+     "size": 856,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149135640
+    },
+    {
+     "how": "jal",
+     "size": 452,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149136496
+    },
+    {
+     "how": "xjal",
+     "size": 268,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149136948
+    },
+    {
+     "how": "xjal",
+     "size": 680,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149137216
+    },
+    {
+     "how": "jal",
+     "size": 172,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149137896
+    },
+    {
+     "how": "jal",
+     "size": 3776,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149138068
+    },
+    {
+     "how": "jal",
+     "size": 140,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149141844
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149141984
+    },
+    {
+     "how": "jal",
+     "size": 140,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149142128
+    },
+    {
+     "how": "jal",
+     "size": 144,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149142268
+    },
+    {
+     "how": "jal",
+     "size": 756,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149142412
+    },
+    {
+     "how": "jal",
+     "size": 140,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149143168
+    },
+    {
+     "how": "jal",
+     "size": 108,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149143308
+    },
+    {
+     "how": "jal",
+     "size": 208,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149143416
+    },
+    {
+     "how": "jal",
+     "size": 148,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149143624
+    },
+    {
+     "how": "jal",
+     "size": 212,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149143772
+    },
+    {
+     "how": "jal",
+     "size": 344,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149143984
+    },
+    {
+     "how": "jal",
+     "size": 180,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149144328
+    },
+    {
+     "how": "jal",
+     "size": 268,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149144508
+    },
+    {
+     "how": "jal",
+     "size": 408,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149144776
+    },
+    {
+     "how": "jal",
+     "size": 960,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149145184
+    },
+    {
+     "how": "jal",
+     "size": 212,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149146144
+    },
+    {
+     "how": "jal",
+     "size": 304,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149146356
+    },
+    {
+     "how": "jal",
+     "size": 440,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149146660
+    },
+    {
+     "how": "jal",
+     "size": 1588,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149147100
+    },
+    {
+     "how": "xjal",
+     "size": 2528,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149148688
+    },
+    {
+     "how": "jal",
+     "size": 184,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149151216
+    },
+    {
+     "how": "xjal",
+     "size": 404,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149151400
+    },
+    {
+     "how": "jal",
+     "size": 1156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149151804
+    },
+    {
+     "how": "jal",
+     "size": 660,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149152960
+    },
+    {
+     "how": "jal",
+     "size": 940,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149153620
+    },
+    {
+     "how": "jal",
+     "size": 292,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149154560
+    },
+    {
+     "how": "jal",
+     "size": 3752,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149154852
+    },
+    {
+     "how": "jal",
+     "size": 376,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149158604
+    },
+    {
+     "how": "jal",
+     "size": 464,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149158980
+    },
+    {
+     "how": "jal",
+     "size": 2908,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149159444
+    },
+    {
+     "how": "jal",
+     "size": 860,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149162352
+    },
+    {
+     "how": "jal",
+     "size": 1756,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149163212
+    },
+    {
+     "how": "jal",
+     "size": 484,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149164968
+    },
+    {
+     "how": "jal",
+     "size": 428,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149165452
+    },
+    {
+     "how": "xjal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149165880
+    },
+    {
+     "how": "jal",
+     "size": 808,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149166216
+    },
+    {
+     "how": "jal",
+     "size": 876,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149167024
+    },
+    {
+     "how": "jal",
+     "size": 876,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149167900
+    },
+    {
+     "how": "jal",
+     "size": 948,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149168776
+    },
+    {
+     "how": "jal",
+     "size": 872,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149169724
+    },
+    {
+     "how": "jal",
+     "size": 136,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149170596
+    },
+    {
+     "how": "jal",
+     "size": 436,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149170732
+    },
+    {
+     "how": "jal",
+     "size": 496,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149171168
+    },
+    {
+     "how": "jal",
+     "size": 440,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149171664
+    },
+    {
+     "how": "jal",
+     "size": 228,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149172104
+    },
+    {
+     "how": "jal",
+     "size": 940,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149172332
+    },
+    {
+     "how": "jal",
+     "size": 216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149173272
+    },
+    {
+     "how": "jal",
+     "size": 920,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149173488
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149174408
+    },
+    {
+     "how": "jal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149174600
+    },
+    {
+     "how": "xjal",
+     "size": 384,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149174788
+    },
+    {
+     "how": "ptr",
+     "size": 392,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149175172
+    },
+    {
+     "how": "jal",
+     "size": 304,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149175564
+    },
+    {
+     "how": "jal",
+     "size": 116,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149175868
+    }
+   ],
+   "name": "seg_1501A0",
+   "rejected": [],
+   "rom": 1376672,
+   "size": 210272,
+   "text_end": 2149175984,
+   "text_start": 2148980464,
+   "vram": 2148980464
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149392880
+    },
+    {
+     "how": "xjal",
+     "size": 304,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393008
+    },
+    {
+     "how": "xjal",
+     "size": 4912,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393312
+    },
+    {
+     "how": "xjal",
+     "size": 784,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149398224
+    },
+    {
+     "how": "jal",
+     "size": 1132,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149399008
+    },
+    {
+     "how": "jal",
+     "size": 2196,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149400140
+    },
+    {
+     "how": "jal",
+     "size": 920,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149402336
+    },
+    {
+     "how": "xjal",
+     "size": 1668,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149403256
+    },
+    {
+     "how": "jal",
+     "size": 1528,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149404924
+    },
+    {
+     "how": "jal",
+     "size": 1344,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149406452
+    },
+    {
+     "how": "jal",
+     "size": 1348,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149407796
+    },
+    {
+     "how": "xjal",
+     "size": 444,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149409144
+    },
+    {
+     "how": "jal",
+     "size": 152,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149409588
+    },
+    {
+     "how": "jal",
+     "size": 264,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149409740
+    },
+    {
+     "how": "xjal",
+     "size": 504,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149410004
+    },
+    {
+     "how": "xjal",
+     "size": 12508,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149410508
+    },
+    {
+     "how": "xjal",
+     "size": 34760,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149423016
+    },
+    {
+     "how": "jal",
+     "size": 2244,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149457776
+    },
+    {
+     "how": "jal",
+     "size": 436,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149460020
+    },
+    {
+     "how": "jal",
+     "size": 180,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149460456
+    },
+    {
+     "how": "jal",
+     "size": 452,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149460636
+    },
+    {
+     "how": "jal",
+     "size": 1316,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149461088
+    },
+    {
+     "how": "jal",
+     "size": 1524,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149462404
+    },
+    {
+     "how": "jal",
+     "size": 2784,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149463928
+    },
+    {
+     "how": "xjal",
+     "size": 72,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149466712
+    },
+    {
+     "how": "xjal",
+     "size": 8512,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149466784
+    },
+    {
+     "how": "xjal",
+     "size": 1248,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149475296
+    }
+   ],
+   "name": "seg_1B66F0",
+   "rejected": [],
+   "rom": 1795824,
+   "size": 195888,
+   "text_end": 2149476544,
+   "text_start": 2149392880,
+   "vram": 2149392880
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149392880
+    },
+    {
+     "how": "xjal",
+     "size": 1264,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393008
+    },
+    {
+     "how": "xjal",
+     "size": 5736,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149394272
+    },
+    {
+     "how": "jal",
+     "size": 252,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149400008
+    },
+    {
+     "how": "xjal",
+     "size": 2572,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149400260
+    },
+    {
+     "how": "jal",
+     "size": 468,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149402832
+    },
+    {
+     "how": "xjal",
+     "size": 1048,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149403300
+    },
+    {
+     "how": "jal",
+     "size": 1308,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149404348
+    },
+    {
+     "how": "jal",
+     "size": 204,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149405656
+    },
+    {
+     "how": "xjal",
+     "size": 264,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149405860
+    },
+    {
+     "how": "jal",
+     "size": 216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149406124
+    },
+    {
+     "how": "jal",
+     "size": 228,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149406340
+    },
+    {
+     "how": "jal",
+     "size": 28,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149406568
+    },
+    {
+     "how": "xjal",
+     "size": 504,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149406596
+    },
+    {
+     "how": "xjal",
+     "size": 916,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149407100
+    },
+    {
+     "how": "xjal",
+     "size": 9936,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149408016
+    },
+    {
+     "how": "jal",
+     "size": 540,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149417952
+    },
+    {
+     "how": "xjal",
+     "size": 41624,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149418492
+    },
+    {
+     "how": "jal",
+     "size": 588,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149460116
+    },
+    {
+     "how": "jal",
+     "size": 1256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149460704
+    },
+    {
+     "how": "gap",
+     "size": 656,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149461960
+    },
+    {
+     "how": "jal",
+     "size": 668,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149462616
+    },
+    {
+     "how": "jal",
+     "size": 168,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149463284
+    },
+    {
+     "how": "jal",
+     "size": 2292,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149463452
+    },
+    {
+     "how": "xjal",
+     "size": 14968,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149465744
+    },
+    {
+     "how": "jal",
+     "size": 1436,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149480712
+    },
+    {
+     "how": "jal",
+     "size": 5680,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149482148
+    },
+    {
+     "how": "xjal",
+     "size": 2864,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149487828
+    },
+    {
+     "how": "xjal",
+     "size": 1468,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149490692
+    }
+   ],
+   "name": "seg_255660",
+   "rejected": [],
+   "rom": 2446944,
+   "size": 335696,
+   "text_end": 2149492160,
+   "text_start": 2149392880,
+   "vram": 2149392880
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149392880
+    },
+    {
+     "how": "xjal",
+     "size": 376,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393008
+    },
+    {
+     "how": "xjal",
+     "size": 4516,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393384
+    },
+    {
+     "how": "xjal",
+     "size": 1184,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149397900
+    },
+    {
+     "how": "xjal",
+     "size": 1912,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149399084
+    },
+    {
+     "how": "jal",
+     "size": 416,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149400996
+    },
+    {
+     "how": "xjal",
+     "size": 412,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149401412
+    },
+    {
+     "how": "xjal",
+     "size": 100,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149401824
+    },
+    {
+     "how": "xjal",
+     "size": 4172,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149401924
+    },
+    {
+     "how": "xjal",
+     "size": 37724,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149406096
+    },
+    {
+     "how": "jal",
+     "size": 1740,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149443820
+    },
+    {
+     "how": "jal",
+     "size": 548,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149445560
+    },
+    {
+     "how": "jal",
+     "size": 548,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149446108
+    },
+    {
+     "how": "jal",
+     "size": 548,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149446656
+    },
+    {
+     "how": "gap",
+     "size": 284,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149447204
+    },
+    {
+     "how": "jal",
+     "size": 692,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149447488
+    },
+    {
+     "how": "xjal",
+     "size": 9464,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149448180
+    },
+    {
+     "how": "jal",
+     "size": 352,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149457644
+    },
+    {
+     "how": "jal",
+     "size": 300,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149457996
+    },
+    {
+     "how": "jal",
+     "size": 256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149458296
+    },
+    {
+     "how": "jal",
+     "size": 2732,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149458552
+    },
+    {
+     "how": "xjal",
+     "size": 124,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149461284
+    },
+    {
+     "how": "xjal",
+     "size": 520,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149461408
+    },
+    {
+     "how": "xjal",
+     "size": 776,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149461928
+    }
+   ],
+   "name": "seg_34B590",
+   "rejected": [],
+   "rom": 3454352,
+   "size": 186160,
+   "text_end": 2149462704,
+   "text_start": 2149392880,
+   "vram": 2149392880
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149392880
+    },
+    {
+     "how": "xjal",
+     "size": 164,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393008
+    },
+    {
+     "how": "xjal",
+     "size": 4256,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393172
+    },
+    {
+     "how": "xjal",
+     "size": 588,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149397428
+    },
+    {
+     "how": "xjal",
+     "size": 1716,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149398016
+    },
+    {
+     "how": "xjal",
+     "size": 288,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149399732
+    },
+    {
+     "how": "xjal",
+     "size": 7692,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149400020
+    },
+    {
+     "how": "xjal",
+     "size": 19184,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149407712
+    },
+    {
+     "how": "jal",
+     "size": 1828,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149426896
+    },
+    {
+     "how": "jal",
+     "size": 948,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149428724
+    },
+    {
+     "how": "jal",
+     "size": 148,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149429672
+    },
+    {
+     "how": "jal",
+     "size": 1172,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149429820
+    },
+    {
+     "how": "xjal",
+     "size": 1312,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149430992
+    },
+    {
+     "how": "xjal",
+     "size": 9284,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149432304
+    },
+    {
+     "how": "xjal",
+     "size": 300,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149441588
+    }
+   ],
+   "name": "seg_3EFDD0",
+   "rejected": [],
+   "rom": 4128208,
+   "size": 243008,
+   "text_end": 2149441888,
+   "text_start": 2149392880,
+   "vram": 2149392880
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 128,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149392880
+    },
+    {
+     "how": "xjal",
+     "size": 8,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393008
+    },
+    {
+     "how": "xjal",
+     "size": 1572,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393016
+    },
+    {
+     "how": "xjal",
+     "size": 1336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149394588
+    },
+    {
+     "how": "xjal",
+     "size": 452,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149395924
+    },
+    {
+     "how": "jal",
+     "size": 216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149396376
+    },
+    {
+     "how": "jal",
+     "size": 264,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149396592
+    },
+    {
+     "how": "xjal",
+     "size": 488,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149396856
+    },
+    {
+     "how": "xjal",
+     "size": 440,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149397344
+    },
+    {
+     "how": "xjal",
+     "size": 1240,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149397784
+    },
+    {
+     "how": "xjal",
+     "size": 9376,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149399024
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149408400
+    },
+    {
+     "how": "jal",
+     "size": 100,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149408736
+    },
+    {
+     "how": "xjal",
+     "size": 436,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149408836
+    },
+    {
+     "how": "xjal",
+     "size": 4728,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149409272
+    },
+    {
+     "how": "xjal",
+     "size": 784,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149414000
+    }
+   ],
+   "name": "seg_497140",
+   "rejected": [],
+   "rom": 4813120,
+   "size": 49056,
+   "text_end": 2149414784,
+   "text_start": 2149392880,
+   "vram": 2149392880
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434144
+    },
+    {
+     "how": "gap",
+     "size": 304,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434332
+    },
+    {
+     "how": "jal",
+     "size": 296,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434636
+    },
+    {
+     "how": "jal",
+     "size": 496,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434932
+    },
+    {
+     "how": "jal",
+     "size": 192,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149435428
+    },
+    {
+     "how": "jal",
+     "size": 364,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149435620
+    },
+    {
+     "how": "jal",
+     "size": 552,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149435984
+    },
+    {
+     "how": "jal",
+     "size": 532,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149436536
+    },
+    {
+     "how": "jal",
+     "size": 400,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149437068
+    },
+    {
+     "how": "jal",
+     "size": 6556,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149437468
+    },
+    {
+     "how": "jal",
+     "size": 56,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149444024
+    }
+   ],
+   "name": "seg_4D5FC0",
+   "rejected": [],
+   "rom": 5070784,
+   "size": 25456,
+   "text_end": 2149444080,
+   "text_start": 2149434144,
+   "vram": 2149434144
+  },
+  {
+   "ambiguous_slot": true,
+   "functions": [
+    {
+     "how": "xjal",
+     "size": 156,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149392880
+    },
+    {
+     "how": "xjal",
+     "size": 204,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393036
+    },
+    {
+     "how": "xjal",
+     "size": 4644,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149393240
+    },
+    {
+     "how": "jal",
+     "size": 312,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149397884
+    },
+    {
+     "how": "jal",
+     "size": 100,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149398196
+    },
+    {
+     "how": "gap",
+     "size": 216,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149398296
+    },
+    {
+     "how": "gap",
+     "size": 264,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149398512
+    },
+    {
+     "how": "xjal",
+     "size": 696,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149398776
+    },
+    {
+     "how": "xjal",
+     "size": 136,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149399472
+    },
+    {
+     "how": "jal",
+     "size": 356,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149399608
+    },
+    {
+     "how": "xjal",
+     "size": 220,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149399964
+    },
+    {
+     "how": "xjal",
+     "size": 1948,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149400184
+    },
+    {
+     "how": "xjal",
+     "size": 2400,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149402132
+    },
+    {
+     "how": "xjal",
+     "size": 4476,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149404532
+    },
+    {
+     "how": "jal",
+     "size": 112,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149409008
+    },
+    {
+     "how": "jal",
+     "size": 188,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149409120
+    },
+    {
+     "how": "jal",
+     "size": 264,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149409308
+    },
+    {
+     "how": "xjal",
+     "size": 24820,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149409572
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434392
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149434728
+    },
+    {
+     "how": "jal",
+     "size": 336,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149435064
+    },
+    {
+     "how": "jal",
+     "size": 1628,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149435400
+    },
+    {
+     "how": "jal",
+     "size": 748,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149437028
+    },
+    {
+     "how": "jal",
+     "size": 368,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149437776
+    },
+    {
+     "how": "xjal",
+     "size": 1976,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149438144
+    },
+    {
+     "how": "xjal",
+     "size": 13392,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149440120
+    },
+    {
+     "how": "xjal",
+     "size": 1448,
+     "term": true,
+     "valid": 1.0,
+     "vram": 2149453512
+    }
+   ],
+   "name": "seg_4DC6D0",
+   "rejected": [],
+   "rom": 5097168,
+   "size": 230512,
+   "text_end": 2149454960,
+   "text_start": 2149392880,
+   "vram": 2149392880
+  }
+ ],
+ "stats": {
+  "by_how": {
+   "entry": 1,
+   "gap": 123,
+   "jal": 751,
+   "ptr": 31,
+   "xjal": 209
+  },
+  "forced": [],
+  "jal_targets_outside_any_text": [],
+  "segments": 18,
+  "total_functions": 1115
+ }
+}

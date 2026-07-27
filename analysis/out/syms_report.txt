@@ -1,0 +1,26 @@
+section              rom      functions  named  rejected
+boot                 001000       565    226         0
+seg_02FC30           02FC30        22      0         0
+seg_03D600           03D600         7      0         0
+seg_041650           041650         9      0         0
+seg_0BA450           0BA450        28      0         0
+seg_0EF7C0           0EF7C0        15      0         0
+seg_0F4810           0F4810         8      0         0
+seg_111CC0           111CC0        25      0         0
+seg_1199D0           1199D0        14      0         0
+seg_12C2F0           12C2F0        21      0         0
+seg_1501A0           1501A0       252      0         0
+seg_1B66F0           1B66F0        27      0         0
+seg_255660           255660        29      0         0
+seg_34B590           34B590        24      0         0
+seg_3EFDD0           3EFDD0        15      0         0
+seg_497140           497140        16      0         0
+seg_4D5FC0           4D5FC0        11      0         0
+seg_4DC6D0           4DC6D0        27      0         0
+boot_bss             02DB50         0      0         0
+
+total sections : 19
+total functions: 1115
+named functions: 226
+wrote /workspaces/knife-edge-recomp/config/knife_edge.us.syms.toml
+wrote /workspaces/knife-edge-recomp/config/knife_edge.us.toml

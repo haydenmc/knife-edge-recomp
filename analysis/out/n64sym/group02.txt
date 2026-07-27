@@ -1,0 +1,3 @@
+osDestroyThread = 0x800CB7A4;
+__dummy = 0x8017B338;
+__osCleanupThread = 0x8017DDF4;

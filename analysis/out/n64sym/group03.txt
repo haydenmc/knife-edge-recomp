@@ -1,0 +1,5 @@
+osDestroyThread = 0x800D1640;
+__dummy = 0x8017B648;
+__osCleanupThread = 0x8017B7D0;
+__rmonPanic = 0x801F9FF8;
+rmonmisc_text_010C = 0x80F80000;

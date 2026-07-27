@@ -1,0 +1,310 @@
+== call-graph anchors ==
+  DMA wrapper reads cart rom handle from 8013C3A0
+  DMA wrapper 800D1D10 -> osCreateMesgQueue 800D8B80, osInvalDCache 800D6460, osEPiStartDma 800D8A00, osRecvMesg 800D8D00
+  code-segment loader 800C38C8 -> osInvalICache 800D63E0, osInvalDCache 800D6460
+
+== manual (call-graph derived) names ==
+  osInitialize 800D73E0: accepted (calls osUnmapTLBAll@800DC280, osMapTLBRdb@800DC2D0, __osSetSR@800DB830, __osSpRawWriteIo@800DB8B0, osPiRawReadIo@800DC330) - segment_map.md §c: osUnmapTLBAll/osMapTLBRdb have exactly one caller each, at 0x800D7560/0x800D7568, i.e. inside this function; the SR/SP/PI raw-IO sequence is osInitialize's body
+  viMgrMain 800DA4F0: accepted (calls __osViSwapContext@800E0850, __osTimerInterrupt@800DC71C) - vimgr.c object layout osCreateViManager(800DA370) < this < osViSetEvent(800DA680); n64sym labels it vimgr_text_0180
+  _MakeMotorData 800DB2F8: accepted (calls __osContAddressCrc@800E0F60) - motor.c object layout __osMotorAccess(800DB190) < this < osMotorInit(800DB404); builds the 0xFF/0x23/0x01/0x03/0xC0 rumble PIF block and CRCs address 0x600; n64sym labels it motor_text_0168
+
+== runtime-critical names ==
+  osRecvMesg             800D8D00   verified   call-graph anchor (segment_map.md §b.1/§b.2)
+  osSendMesg             800D95F0   verified   tests mq->validCount(+8) against mq->msgCount(+0x10) (queue-full test)
+  osCreateThread         800D76A0   verified   stores id@0x14, entry@0x38/0x3C, sp@0xF0/0xF4, plants __osCleanupThread 800DC1F0 in the thread frame
+  osStartThread          800D77F0   verified   lhu state@0x10; compares OS_STATE_STOPPED(1)/OS_STATE_WAITING(8)
+  osPiStartDma           -          absent     no surviving candidate
+  osEPiStartDma          800D8A00   verified   call-graph anchor (segment_map.md §b.1/§b.2); stores piHandle into OSIoMesg+0x14, sets hdr.type 0xF/0x10, returns -1 when __osPiDevMgr is inactive
+  osSpTaskLoad           800DA91C   verified   reads OSTask.ucode_boot(+0x38)+0xBFC, writes SP_STATUS 0x2B00, DMAs to IMEM 0x04001000
+  osSpTaskStartGo        800DAAAC   verified   writes SP_STATUS 0x125 (clr_halt|clr_broke|set_intr_break)
+  osViSwapBuffer         800DAB70   verified   __osDisableInt, store framebuffer into __osViNext->framep(+4)
+  osAiSetNextBuffer      800D8E60   verified   AI hardware-bug workaround: addiu <r>, <r>, -0x2000
+  osContInit             800DABC0   verified   PIF ram command setup + >=3 helper calls
+  osContStartReadData    800DAF00   verified   __osSiGetAccess / __osPackReadData / __osSiRawStartDma chain
+  osGetCount             800E0B50   verified   mfc0 v0,Count / jr ra / nop
+  osInvalDCache          800D6460   verified   call-graph anchor (segment_map.md §b.1/§b.2); cache ops [1, 17, 21] (Hit_Invalidate_D), dcache 0x2000, 16-byte lines
+  osInvalICache          800D63E0   verified   call-graph anchor (segment_map.md §b.1/§b.2); cache ops [0, 16], icache size 0x4000, 32-byte lines
+  osWritebackDCache      800DC200   verified   cache ops [1, 25] (Hit_Writeback_D), dcache 0x2000
+  osCreateMesgQueue      800D8B80   verified   call-graph anchor (segment_map.md §b.1/§b.2); sw zero,8/0xC(a0); sw a2,0x10(a0); sw a1,0x14(a0)
+  osSetEventMesg         800DA6F0   verified   indexes an 8-byte-per-entry table by event<<3, stores mq@+0/msg@+4; table base is __osEventStateTab 8016A620
+  osVirtualToPhysical    800D70A0   verified   KSEG0/KSEG1 range test + 0x1FFFFFFF mask
+
+== accepted (226) ==
+  boot         800D3A80  osViSetYScale [reimplemented]
+  boot         800D3B40  osViSetMode [reimplemented]
+  boot         800D3BB0  osViSetSpecialFeatures [reimplemented]
+  boot         800D3D78  spMove
+  boot         800D3D84  spScissor
+  boot         800D54C8  spX2Init
+  boot         800D55F4  spX2Draw
+  boot         800D6320  spX2Finish
+  boot         800D63E0  osInvalICache [reimplemented]
+  boot         800D6460  osInvalDCache [reimplemented]
+  boot         800D6510  _bzero
+  boot         800D65B0  guLookAtF
+  boot         800D6868  guLookAt
+  boot         800D68E0  sqrtf [renamed]
+  boot         800D68F0  sinf [renamed]
+  boot         800D6AB0  __cosf [renamed]
+  boot         800D6C20  guMtxF2L
+  boot         800D6D20  guMtxIdentF
+  boot         800D6DA8  guMtxIdent
+  boot         800D6DD8  guMtxL2F
+  boot         800D6E90  guMtxXFMF
+  boot         800D6F30  guMtxCatF
+  boot         800D70A0  osVirtualToPhysical [reimplemented]
+  boot         800D7120  guAlignF
+  boot         800D72B4  guAlign
+  boot         800D7310  spScale
+  boot         800D7380  spColor
+  boot         800D73B0  spSetAttribute
+  boot         800D73C0  spClearAttribute
+  boot         800D73E0  osInitialize [reimplemented]
+  boot         800D76A0  osCreateThread [reimplemented]
+  boot         800D77F0  osStartThread [reimplemented]
+  boot         800D7940  osSetThreadPri [reimplemented]
+  boot         800D7A20  osSetTime [reimplemented]
+  boot         800D7A50  guMtxXFML
+  boot         800D7AB0  guMtxCatL
+  boot         800D7B10  guLookAtHiliteF
+  boot         800D8248  guLookAtHilite
+  boot         800D8300  guLookAtReflectF
+  boot         800D870C  guLookAtReflect
+  boot         800D8790  guRandom
+  boot         800D87E4  sprintf [renamed]
+  boot         800D8840  alUnlink
+  boot         800D8870  alLink
+  boot         800D8894  alClose
+  boot         800D88CC  alInit
+  boot         800D8900  osCartRomInit [reimplemented]
+  boot         800D8A00  osEPiStartDma [reimplemented]
+  boot         800D8AE0  alHeapDBAlloc
+  boot         800D8B40  alHeapInit
+  boot         800D8B80  osCreateMesgQueue [reimplemented]
+  boot         800D8BB0  osAiSetFrequency [reimplemented]
+  boot         800D8D00  osRecvMesg [reimplemented]
+  boot         800D8E40  osAiGetStatus [reimplemented]
+  boot         800D8E50  osAiGetLength [reimplemented]
+  boot         800D8E60  osAiSetNextBuffer [reimplemented]
+  boot         800D8F18  _timeToSamples
+  boot         800D8F70  _freePVoice
+  boot         800D8FA8  _collectPVoices
+  boot         800D9008  __freeParam
+  boot         800D9020  __allocParam
+  boot         800D9050  __dummy
+  boot         800D9058  alAudioFrame
+  boot         800D92F0  alSynNew
+  boot         800D95F0  osSendMesg [reimplemented]
+  boot         800D9740  osSetIntMask [reimplemented]
+  boot         800D97E0  alSynAddPlayer
+  boot         800D9830  _allocatePVoice
+  boot         800D9918  alSynAllocVoice
+  boot         800D9A60  alSynStopVoice
+  boot         800D9AE0  alSynSetVol
+  boot         800D9B80  alSynSetFXMix
+  boot         800D9C20  alSynStartVoice
+  boot         800D9CB0  alSynSetPan
+  boot         800D9D40  alSynSetPitch
+  boot         800D9DD0  osWritebackDCacheAll [reimplemented]
+  boot         800D9E00  osViBlack [reimplemented]
+  boot         800D9E70  _bcopy
+  boot         800DA370  osCreateViManager [reimplemented]
+  boot         800DA4F0  viMgrMain [ignored]
+  boot         800DA680  osViSetEvent [reimplemented]
+  boot         800DA6F0  osSetEventMesg [reimplemented]
+  boot         800DA760  osSpTaskYield [reimplemented]
+  boot         800DA780  osSpTaskYielded [reimplemented]
+  boot         800DA91C  osSpTaskLoad [reimplemented]
+  boot         800DAAAC  osSpTaskStartGo [reimplemented]
+  boot         800DAAF0  osViGetCurrentFramebuffer [reimplemented]
+  boot         800DAB70  osViSwapBuffer [reimplemented]
+  boot         800DABC0  osContInit [reimplemented]
+  boot         800DAD30  __osContGetInitData [ignored]
+  boot         800DAE00  __osPackRequestData [ignored]
+  boot         800DAF00  osContStartReadData [reimplemented]
+  boot         800DAF84  osContGetReadData [reimplemented]
+  boot         800DB0E0  osContStartQuery [reimplemented]
+  boot         800DB164  osContGetQuery [reimplemented]
+  boot         800DB190  __osMotorAccess [reimplemented]
+  boot         800DB2F8  _MakeMotorData [ignored]
+  boot         800DB404  osMotorInit [reimplemented]
+  boot         800DB560  __osDisableInt [reimplemented]
+  boot         800DB580  __osRestoreInt [reimplemented]
+  boot         800DB5A0  __osViInit [ignored]
+  boot         800DB6E0  __osProbeTLB [ignored]
+  boot         800DB7A0  guNormalize
+  boot         800DB830  __osSetSR [ignored]
+  boot         800DB840  __osGetSR [ignored]
+  boot         800DB850  __osSetFpcCsr [reimplemented]
+  boot         800DB860  __osSpRawReadIo [ignored]
+  boot         800DB8B0  __osSpRawWriteIo [ignored]
+  boot         800DB900  __osExceptionPreamble [ignored]
+  boot         800DB910  __osException [ignored]
+  boot         800DBE34  send_mesg [ignored]
+  boot         800DBF1C  __osEnqueueAndYield [ignored]
+  boot         800DC01C  __osEnqueueThread [ignored]
+  boot         800DC064  __osPopThread [ignored]
+  boot         800DC074  __osDispatchThread [ignored]
+  boot         800DC1F0  __osCleanupThread [ignored]
+  boot         800DC200  osWritebackDCache [reimplemented]
+  boot         800DC280  osUnmapTLBAll [ignored]
+  boot         800DC2D0  osMapTLBRdb [ignored]
+  boot         800DC330  osPiRawReadIo [ignored]
+  boot         800DC390  __ull_rshift [ignored]
+  boot         800DC3BC  __ull_rem [reimplemented]
+  boot         800DC3F8  __ull_div [reimplemented]
+  boot         800DC434  __ll_lshift [ignored]
+  boot         800DC49C  __ll_div [reimplemented]
+  boot         800DC4F8  __ll_mul [reimplemented]
+  boot         800DC528  __ull_divremi [ignored]
+  boot         800DC588  __ll_mod [ignored]
+  boot         800DC624  __ll_rshift [ignored]
+  boot         800DC650  __osDequeueThread [ignored]
+  boot         800DC690  __osTimerServicesInit [ignored]
+  boot         800DC71C  __osTimerInterrupt [ignored]
+  boot         800DC894  __osSetTimerIntr [ignored]
+  boot         800DC908  __osInsertTimer [ignored]
+  boot         800DD100  _Printf
+  boot         800DD750  memcpy [renamed]
+  boot         800DD77C  strlen [renamed]
+  boot         800DD7A4  strchr [renamed]
+  boot         800DD7F0  alSynDelete
+  boot         800DD800  osJamMesg [reimplemented]
+  boot         800DD950  osPiGetCmdQueue [ignored]
+  boot         800DD980  __osAiDeviceBusy [ignored]
+  boot         800DD9B0  alSaveNew
+  boot         800DD9F4  alMainBusNew
+  boot         800DDA48  alAuxBusNew
+  boot         800DDA9C  alResampleNew
+  boot         800DDB24  alLoadNew
+  boot         800DDBCC  alEnvmixerNew
+  boot         800DDC70  init_lpfilter
+  boot         800DDD10  alFxNew
+  boot         800DE150  alSynAllocFX
+  boot         800DE1F0  alAuxBusParam
+  boot         800DE220  alMainBusPull
+  boot         800DE340  alLoadParam
+  boot         800DE514  alRaw16Pull
+  boot         800DE9EC  alAdpcmPull
+  boot         800DEE90  alResampleParam
+  boot         800DEF7C  alResamplePull
+  boot         800DF190  _ldexpf
+  boot         800DF1B8  _frexpf
+  boot         800DF2A4  alEnvmixerParam
+  boot         800DF89C  alEnvmixerPull
+  boot         800DFE20  alAuxBusPull
+  boot         800DFF00  alSaveParam
+  boot         800DFF34  alSavePull
+  boot         800E0080  osGetThreadPri [reimplemented]
+  boot         800E00A0  osPiRawStartDma [ignored]
+  boot         800E0180  osEPiRawStartDma [reimplemented]
+  boot         800E03B0  __osDevMgrMain [ignored]
+  boot         800E0850  __osViSwapContext [ignored]
+  boot         800E0B50  osGetCount [reimplemented]
+  boot         800E0B60  __osSpSetStatus [ignored]
+  boot         800E0B70  __osSpGetStatus [ignored]
+  boot         800E0B80  __osSpSetPc [reimplemented]
+  boot         800E0BC0  __osSpRawStartDma [ignored]
+  boot         800E0C50  __osSpDeviceBusy [ignored]
+  boot         800E0C80  osGetTime [reimplemented]
+  boot         800E0D10  osSetTimer [reimplemented]
+  boot         800E0DF0  __osSiRawStartDma [ignored]
+  boot         800E0EA0  __osSiCreateAccessQueue [ignored]
+  boot         800E0EF0  __osSiGetAccess [ignored]
+  boot         800E0F34  __osSiRelAccess [ignored]
+  boot         800E0F60  __osContAddressCrc [ignored]
+  boot         800E1030  __osContDataCrc [ignored]
+  boot         800E10D0  __osPfsSelectBank [ignored]
+  boot         800E1150  __osContRamRead [ignored]
+  boot         800E1380  __osSiDeviceBusy [ignored]
+  boot         800E13B0  osDestroyThread [reimplemented]
+  boot         800E14C0  __osSetCompare [ignored]
+  boot         800E14D0  _Litob
+  boot         800E1CE0  _Ldtob
+  boot         800E2230  alFilterNew
+  boot         800E2250  _doModFunc
+  boot         800E22F8  _filterBuffer
+  boot         800E23B0  _saveBuffer
+  boot         800E2538  _loadBuffer
+  boot         800E26C4  _loadOutputBuffer
+  boot         800E28E8  alFxParamHdl
+  boot         800E2B44  alFxParam
+  boot         800E2B5C  alFxPull
+  boot         800E2EA0  alCopy
+  boot         800E2F20  __osResetGlobalIntMask [ignored]
+  boot         800E2F80  osEPiRawWriteIo [ignored]
+  boot         800E3110  osEPiRawReadIo [ignored]
+  boot         800E32B0  __osSetGlobalIntMask [ignored]
+  boot         800E3300  osYieldThread [ignored]
+  boot         800E3350  __osContRamWrite [ignored]
+  boot         800E35A0  osPfsIsPlug [ignored]
+  boot         800E3740  __osPfsRequestData [ignored]
+  boot         800E3810  __osPfsGetInitData [ignored]
+  boot         800E38E0  __osPfsGetStatus [ignored]
+  boot         800E39B0  __osPfsRequestOneChannel [ignored]
+  boot         800E3A74  __osPfsGetOneChannelData [ignored]
+  boot         800E3B10  lldiv [renamed]
+  boot         800E3C10  ldiv [renamed]
+  boot         800E3CA0  __osSumcalc
+  boot         800E3D14  __osIdCheckSum
+  boot         800E3E10  __osRepairPackId [ignored]
+  boot         800E4160  __osCheckPackId [ignored]
+  boot         800E42C4  __osGetId [ignored]
+  boot         800E4470  __osCheckId [ignored]
+  boot         800E4544  __osPfsRWInode [ignored]
+  boot         800E4820  _bcmp
+  boot         800E4CD0  osViExtendVStart
+  boot         800E4D10  fabs
+  boot         800E4D20  fabsf
+
+== rejected (50) ==
+  boot         800C24BC  __osCleanupThread                not a detected function start
+  boot         800C24C0  __osCleanupThread                not a detected function start
+  boot         800C46C0  osBbUsbDevGetHandle              implausible family (64DD/iQue/rmon/n_audio)
+  boot         800C7A60  osSetTime                        below libultra cluster floor 800D3A80
+  boot         800CAD14  myfree                           below libultra cluster floor 800D3A80
+  boot         800CB6F0  n_alSynFreeFX                    implausible family (64DD/iQue/rmon/n_audio)
+  boot         800CB7FC  __osGetActiveQueue               below libultra cluster floor 800D3A80
+  boot         800CB8AC  leoInitUnit_atten                implausible family (64DD/iQue/rmon/n_audio)
+  boot         800CD870  n_alSeqpDelete                   implausible family (64DD/iQue/rmon/n_audio)
+  boot         800CEA98  Fstereo                          not a detected function start
+  boot         800CEAD8  Fprint                           not a detected function start
+  boot         800CF1CC  n_alSynRemovePlayer              implausible family (64DD/iQue/rmon/n_audio)
+  boot         800D1640  osDestroyThread                  below libultra cluster floor 800D3A80
+  boot         800D1680  osDestroyThread                  below libultra cluster floor 800D3A80
+  boot         800D2EAC  osProfileFlush                   below libultra cluster floor 800D3A80
+  boot         800D3D70  n_alSynSetPriority               implausible family (64DD/iQue/rmon/n_audio)
+  boot         800D3DA8  spriteEX2_text_0038              sub-object label
+  boot         800D87C0  sprintf_text_0000                sub-object label
+  boot         800DA4F0  vimgr_text_0180                  sub-object label
+  boot         800DA800  sptask_text_0000                 sub-object label
+  boot         800DB010  contreaddata_text_0110           sub-object label
+  boot         800DB2F8  motor_text_0168                  sub-object label
+  boot         800DBDE4  __rmonPanic                      implausible family (64DD/iQue/rmon/n_audio)
+  boot         800DBEE8  handle_CpU                       not a detected function start
+  boot         800DCA90  xprintf_text_0000                sub-object label
+  boot         800DD968  MusPtrBankGetCurrent             not a detected function start
+  boot         800DE8C0  load_text_0580                   sub-object label
+  boot         800DF554  env_text_03C4                    sub-object label
+  boot         800DF7EC  env_text_065C                    sub-object label
+  boot         800DFDF0  alAuxBusParam                    duplicate of 800DE1F0 (lower neighbourhood density)
+  boot         800DFFC0  __osSiCreateAccessQueue          duplicate of 800E0EA0 (lower neighbourhood density)
+  boot         800E0010  __osSiGetAccess                  duplicate of 800E0EF0 (lower neighbourhood density)
+  boot         800E0054  __osSiRelAccess                  duplicate of 800E0F34 (lower neighbourhood density)
+  boot         800E0090  MusFxBankNumberOfEffects         not a detected function start
+  boot         800E1770  xldtob_text_0000                 sub-object label
+  boot         800E1CD0  ptstart                          not a detected function start
+  seg_02FC30   8016D9E0  __dummy                          not a detected function start
+  seg_03D600   8017B168  __dummy                          not a detected function start
+  seg_03D600   8017B230  __osCleanupThread                not a detected function start
+  seg_041650   8017B174  __dummy                          not a detected function start
+  seg_041650   8017B25C  __osCleanupThread                not a detected function start
+  seg_0EF7C0   8017B2B8  __osCleanupThread                not a detected function start
+  seg_0F4810   8017BC38  __osCleanupThread                not a detected function start
+  seg_111CC0   8017B338  __dummy                          not a detected function start
+  seg_111CC0   8017DDF4  __osCleanupThread                not a detected function start
+  seg_1199D0   8017B648  __dummy                          not a detected function start
+  seg_1199D0   8017B7D0  __osCleanupThread                not a detected function start
+  seg_12C2F0   8017B180  __dummy                          not a detected function start
+  seg_12C2F0   8017B258  __osCleanupThread                not a detected function start
+  seg_497140   801D2270  __dummy                          no libultra cluster in segment
