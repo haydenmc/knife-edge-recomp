@@ -7,3 +7,6 @@
 [submodule "deps/rt64"]
 	path = deps/rt64
 	url = https://github.com/rt64/rt64.git
+[submodule "deps/n64sym"]
+	path = deps/n64sym
+	url = https://github.com/shygoo/n64sym.git
