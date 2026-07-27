@@ -1,0 +1,1832 @@
+[
+  {
+    "name": "boot",
+    "rom": 4096,
+    "size": 183120,
+    "vram": 2148279296,
+    "kind": "code+data",
+    "romend": 187216,
+    "vramend": 2148462416,
+    "loader": "IPL3 (CIC-6102)",
+    "note": "entry 0x800C2400; text ~0x800C2400-0x800E51F0, RSP microcode ~0x800E51F0-0x800E8578, rodata/data 0x800E8578-0x800EEF50",
+    "rom_hex": "0x00001000",
+    "romend_hex": "0x0002DB50",
+    "size_hex": "0x0002CB50",
+    "vram_hex": "0x800C2400",
+    "vramend_hex": "0x800EEF50"
+  },
+  {
+    "name": "boot_bss",
+    "size": 507040,
+    "vram": 2148462416,
+    "kind": "bss",
+    "vramend": 2148969456,
+    "loader": "cleared by entry stub 0x800C2400",
+    "note": "lui/ori 0x0007BCA0 loop at 0x800C2410",
+    "size_hex": "0x0007BCA0",
+    "vram_hex": "0x800EEF50",
+    "vramend_hex": "0x8016ABF0"
+  },
+  {
+    "name": "seg_02DB50",
+    "rom": 187216,
+    "size": 8416,
+    "vram": 2148969456,
+    "romend": 195632,
+    "vramend": 2148980464,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148435456,
+    "callers": [
+      "boot:0x800C257C"
+    ],
+    "bss": [
+      2148977872,
+      2148980464
+    ],
+    "rom_hex": "0x0002DB50",
+    "romend_hex": "0x0002FC30",
+    "size_hex": "0x000020E0",
+    "vram_hex": "0x8016ABF0",
+    "vramend_hex": "0x8016D6F0",
+    "desc_hex": "0x800E8600",
+    "bss_hex": [
+      "0x8016CCD0",
+      "0x8016D6F0"
+    ]
+  },
+  {
+    "name": "seg_02FC30",
+    "rom": 195632,
+    "size": 20400,
+    "vram": 2148980464,
+    "romend": 216032,
+    "vramend": 2149000864,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447392,
+    "callers": [
+      "boot:0x800CBA1C",
+      "boot:0x800CBB1C",
+      "boot:0x800CC08C",
+      "boot:0x800CC704",
+      "boot:0x800CC77C",
+      "boot:0x800CC7F4",
+      "boot:0x800CC86C",
+      "boot:0x800CC8EC"
+    ],
+    "text": [
+      2148980464,
+      2149000496
+    ],
+    "data": [
+      2149000496,
+      2149000864
+    ],
+    "rom_hex": "0x0002FC30",
+    "romend_hex": "0x00034BE0",
+    "size_hex": "0x00004FB0",
+    "vram_hex": "0x8016D6F0",
+    "vramend_hex": "0x801726A0",
+    "desc_hex": "0x800EB4A0",
+    "text_hex": [
+      "0x8016D6F0",
+      "0x80172530"
+    ],
+    "data_hex": [
+      "0x80172530",
+      "0x801726A0"
+    ]
+  },
+  {
+    "name": "seg_034BE0",
+    "rom": 216032,
+    "size": 35360,
+    "vram": 2149000864,
+    "romend": 251392,
+    "vramend": 2149036224,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447424,
+    "callers": [
+      "boot:0x800CBA28",
+      "boot:0x800CBB28",
+      "boot:0x800CC098",
+      "boot:0x800CC710",
+      "boot:0x800CC788",
+      "boot:0x800CC800",
+      "boot:0x800CC878",
+      "boot:0x800CC8F8"
+    ],
+    "rom_hex": "0x00034BE0",
+    "romend_hex": "0x0003D600",
+    "size_hex": "0x00008A20",
+    "vram_hex": "0x801726A0",
+    "vramend_hex": "0x8017B0C0",
+    "desc_hex": "0x800EB4C0"
+  },
+  {
+    "name": "seg_03D600",
+    "rom": 251392,
+    "size": 2432,
+    "vram": 2149036224,
+    "romend": 253824,
+    "vramend": 2149038656,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447440,
+    "callers": [
+      "boot:0x800CBA34"
+    ],
+    "text": [
+      2149036224,
+      2149038464
+    ],
+    "data": [
+      2149038464,
+      2149038656
+    ],
+    "rom_hex": "0x0003D600",
+    "romend_hex": "0x0003DF80",
+    "size_hex": "0x00000980",
+    "vram_hex": "0x8017B0C0",
+    "vramend_hex": "0x8017BA40",
+    "desc_hex": "0x800EB4D0",
+    "text_hex": [
+      "0x8017B0C0",
+      "0x8017B980"
+    ],
+    "data_hex": [
+      "0x8017B980",
+      "0x8017BA40"
+    ]
+  },
+  {
+    "name": "seg_03DF80",
+    "rom": 253824,
+    "size": 14000,
+    "vram": 2149038656,
+    "romend": 267824,
+    "vramend": 2149052656,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447472,
+    "callers": [
+      "boot:0x800CBA40"
+    ],
+    "rom_hex": "0x0003DF80",
+    "romend_hex": "0x00041630",
+    "size_hex": "0x000036B0",
+    "vram_hex": "0x8017BA40",
+    "vramend_hex": "0x8017F0F0",
+    "desc_hex": "0x800EB4F0"
+  },
+  {
+    "name": "seg_041630",
+    "rom": 267824,
+    "size": 32,
+    "vram": 2147484672,
+    "romend": 267856,
+    "vramend": 2147484704,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447488,
+    "callers": [
+      "boot:0x800CBA4C"
+    ],
+    "rom_hex": "0x00041630",
+    "romend_hex": "0x00041650",
+    "size_hex": "0x00000020",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80000420",
+    "desc_hex": "0x800EB500"
+  },
+  {
+    "name": "seg_041650",
+    "rom": 267856,
+    "size": 6176,
+    "vram": 2149036224,
+    "romend": 274032,
+    "vramend": 2149042400,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447500,
+    "callers": [
+      "boot:0x800CBB3C"
+    ],
+    "text": [
+      2149036224,
+      2149041104
+    ],
+    "data": [
+      2149041104,
+      2149042400
+    ],
+    "rom_hex": "0x00041650",
+    "romend_hex": "0x00042E70",
+    "size_hex": "0x00001820",
+    "vram_hex": "0x8017B0C0",
+    "vramend_hex": "0x8017C8E0",
+    "desc_hex": "0x800EB50C",
+    "text_hex": [
+      "0x8017B0C0",
+      "0x8017C3D0"
+    ],
+    "data_hex": [
+      "0x8017C3D0",
+      "0x8017C8E0"
+    ]
+  },
+  {
+    "name": "seg_042E70",
+    "rom": 274032,
+    "size": 39264,
+    "vram": 2149042400,
+    "romend": 313296,
+    "vramend": 2149108544,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447532,
+    "callers": [
+      "boot:0x800CBB48"
+    ],
+    "bss": [
+      2149081664,
+      2149108544
+    ],
+    "rom_hex": "0x00042E70",
+    "romend_hex": "0x0004C7D0",
+    "size_hex": "0x00009960",
+    "vram_hex": "0x8017C8E0",
+    "vramend_hex": "0x8018CB40",
+    "desc_hex": "0x800EB52C",
+    "bss_hex": [
+      "0x80186240",
+      "0x8018CB40"
+    ]
+  },
+  {
+    "name": "seg_04C7D0",
+    "rom": 313296,
+    "size": 185280,
+    "vram": 2147484672,
+    "romend": 498576,
+    "vramend": 2147669952,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447548,
+    "callers": [
+      "boot:0x800CBB54"
+    ],
+    "rom_hex": "0x0004C7D0",
+    "romend_hex": "0x00079B90",
+    "size_hex": "0x0002D3C0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x8002D7C0",
+    "desc_hex": "0x800EB53C"
+  },
+  {
+    "name": "seg_079B90",
+    "rom": 498576,
+    "size": 264384,
+    "vram": 2149036224,
+    "romend": 762960,
+    "vramend": 2149434144,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447844,
+    "callers": [
+      "boot:0x800CBC7C",
+      "boot:0x800CC794",
+      "boot:0x800CC884"
+    ],
+    "bss": [
+      2149300608,
+      2149434144
+    ],
+    "rom_hex": "0x00079B90",
+    "romend_hex": "0x000BA450",
+    "size_hex": "0x000408C0",
+    "vram_hex": "0x8017B0C0",
+    "vramend_hex": "0x801DC320",
+    "desc_hex": "0x800EB664",
+    "bss_hex": [
+      "0x801BB980",
+      "0x801DC320"
+    ]
+  },
+  {
+    "name": "seg_0BA450",
+    "rom": 762960,
+    "size": 75440,
+    "vram": 2149434144,
+    "romend": 838400,
+    "vramend": 2149509584,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447812,
+    "callers": [
+      "boot:0x800CBC88",
+      "boot:0x800CC890"
+    ],
+    "text": [
+      2149434144,
+      2149458880
+    ],
+    "data": [
+      2149458880,
+      2149509584
+    ],
+    "rom_hex": "0x000BA450",
+    "romend_hex": "0x000CCB00",
+    "size_hex": "0x000126B0",
+    "vram_hex": "0x801DC320",
+    "vramend_hex": "0x801EE9D0",
+    "desc_hex": "0x800EB644",
+    "text_hex": [
+      "0x801DC320",
+      "0x801E23C0"
+    ],
+    "data_hex": [
+      "0x801E23C0",
+      "0x801EE9D0"
+    ]
+  },
+  {
+    "name": "seg_0CCB00",
+    "rom": 838400,
+    "size": 128432,
+    "vram": 2147484672,
+    "romend": 966832,
+    "vramend": 2147613104,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447860,
+    "callers": [
+      "boot:0x800CBC94",
+      "boot:0x800CC7AC",
+      "boot:0x800CC89C"
+    ],
+    "rom_hex": "0x000CCB00",
+    "romend_hex": "0x000EC0B0",
+    "size_hex": "0x0001F5B0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x8001F9B0",
+    "desc_hex": "0x800EB674"
+  },
+  {
+    "name": "seg_0EC0B0",
+    "rom": 966832,
+    "size": 14096,
+    "vram": 2147484672,
+    "romend": 980928,
+    "vramend": 2147498768,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447872,
+    "callers": [
+      "boot:0x800CBCB4"
+    ],
+    "rom_hex": "0x000EC0B0",
+    "romend_hex": "0x000EF7C0",
+    "size_hex": "0x00003710",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80003B10",
+    "desc_hex": "0x800EB680"
+  },
+  {
+    "name": "seg_0EF7C0",
+    "rom": 980928,
+    "size": 17088,
+    "vram": 2149036224,
+    "romend": 998016,
+    "vramend": 2149053312,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447560,
+    "callers": [
+      "boot:0x800CBA98",
+      "boot:0x800CC0A4"
+    ],
+    "text": [
+      2149036224,
+      2149052032
+    ],
+    "data": [
+      2149052032,
+      2149053312
+    ],
+    "rom_hex": "0x000EF7C0",
+    "romend_hex": "0x000F3A80",
+    "size_hex": "0x000042C0",
+    "vram_hex": "0x8017B0C0",
+    "vramend_hex": "0x8017F380",
+    "desc_hex": "0x800EB548",
+    "text_hex": [
+      "0x8017B0C0",
+      "0x8017EE80"
+    ],
+    "data_hex": [
+      "0x8017EE80",
+      "0x8017F380"
+    ]
+  },
+  {
+    "name": "seg_0F3A80",
+    "rom": 998016,
+    "size": 1152,
+    "vram": 2149053312,
+    "romend": 999168,
+    "vramend": 2149054464,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447592,
+    "callers": [
+      "boot:0x800CBAA4",
+      "boot:0x800CC0B0"
+    ],
+    "rom_hex": "0x000F3A80",
+    "romend_hex": "0x000F3F00",
+    "size_hex": "0x00000480",
+    "vram_hex": "0x8017F380",
+    "vramend_hex": "0x8017F800",
+    "desc_hex": "0x800EB568"
+  },
+  {
+    "name": "seg_0F3F00",
+    "rom": 999168,
+    "size": 2320,
+    "vram": 2147484672,
+    "romend": 1001488,
+    "vramend": 2147486992,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447608,
+    "callers": [
+      "boot:0x800CBAB0",
+      "boot:0x800CC0BC"
+    ],
+    "rom_hex": "0x000F3F00",
+    "romend_hex": "0x000F4810",
+    "size_hex": "0x00000910",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80000D10",
+    "desc_hex": "0x800EB578"
+  },
+  {
+    "name": "seg_0F4810",
+    "rom": 1001488,
+    "size": 3120,
+    "vram": 2149036224,
+    "romend": 1004608,
+    "vramend": 2149039344,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447620,
+    "callers": [
+      "boot:0x800CBBB4"
+    ],
+    "text": [
+      2149036224,
+      2149039184
+    ],
+    "data": [
+      2149039184,
+      2149039344
+    ],
+    "rom_hex": "0x000F4810",
+    "romend_hex": "0x000F5440",
+    "size_hex": "0x00000C30",
+    "vram_hex": "0x8017B0C0",
+    "vramend_hex": "0x8017BCF0",
+    "desc_hex": "0x800EB584",
+    "text_hex": [
+      "0x8017B0C0",
+      "0x8017BC50"
+    ],
+    "data_hex": [
+      "0x8017BC50",
+      "0x8017BCF0"
+    ]
+  },
+  {
+    "name": "seg_0F5440",
+    "rom": 1004608,
+    "size": 35760,
+    "vram": 2149039344,
+    "romend": 1040368,
+    "vramend": 2149101600,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447652,
+    "callers": [
+      "boot:0x800CBBC0"
+    ],
+    "bss": [
+      2149075104,
+      2149101600
+    ],
+    "rom_hex": "0x000F5440",
+    "romend_hex": "0x000FDFF0",
+    "size_hex": "0x00008BB0",
+    "vram_hex": "0x8017BCF0",
+    "vramend_hex": "0x8018B020",
+    "desc_hex": "0x800EB5A4",
+    "bss_hex": [
+      "0x801848A0",
+      "0x8018B020"
+    ]
+  },
+  {
+    "name": "seg_0FDFF0",
+    "rom": 1040368,
+    "size": 52432,
+    "vram": 2147484672,
+    "romend": 1092800,
+    "vramend": 2147537104,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447668,
+    "callers": [
+      "boot:0x800CBBCC"
+    ],
+    "rom_hex": "0x000FDFF0",
+    "romend_hex": "0x0010ACC0",
+    "size_hex": "0x0000CCD0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x8000D0D0",
+    "desc_hex": "0x800EB5B4"
+  },
+  {
+    "name": "seg_10ACC0",
+    "rom": 1092800,
+    "size": 28672,
+    "vram": 2147484672,
+    "romend": 1121472,
+    "vramend": 2147513344,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447680,
+    "callers": [
+      "boot:0x800CBBEC"
+    ],
+    "rom_hex": "0x0010ACC0",
+    "romend_hex": "0x00111CC0",
+    "size_hex": "0x00007000",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80007400",
+    "desc_hex": "0x800EB5C0"
+  },
+  {
+    "name": "seg_111CC0",
+    "rom": 1121472,
+    "size": 12832,
+    "vram": 2149036224,
+    "romend": 1134304,
+    "vramend": 2149049056,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447692,
+    "callers": [
+      "boot:0x800CBC2C"
+    ],
+    "text": [
+      2149036224,
+      2149048624
+    ],
+    "data": [
+      2149048624,
+      2149049056
+    ],
+    "rom_hex": "0x00111CC0",
+    "romend_hex": "0x00114EE0",
+    "size_hex": "0x00003220",
+    "vram_hex": "0x8017B0C0",
+    "vramend_hex": "0x8017E2E0",
+    "desc_hex": "0x800EB5CC",
+    "text_hex": [
+      "0x8017B0C0",
+      "0x8017E130"
+    ],
+    "data_hex": [
+      "0x8017E130",
+      "0x8017E2E0"
+    ]
+  },
+  {
+    "name": "seg_114EE0",
+    "rom": 1134304,
+    "size": 512,
+    "vram": 2149049056,
+    "romend": 1134816,
+    "vramend": 2149052160,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447724,
+    "callers": [
+      "boot:0x800CBC38"
+    ],
+    "bss": [
+      2149049568,
+      2149052160
+    ],
+    "rom_hex": "0x00114EE0",
+    "romend_hex": "0x001150E0",
+    "size_hex": "0x00000200",
+    "vram_hex": "0x8017E2E0",
+    "vramend_hex": "0x8017EF00",
+    "desc_hex": "0x800EB5EC",
+    "bss_hex": [
+      "0x8017E4E0",
+      "0x8017EF00"
+    ]
+  },
+  {
+    "name": "seg_1150E0",
+    "rom": 1134816,
+    "size": 18672,
+    "vram": 2147484672,
+    "romend": 1153488,
+    "vramend": 2147503344,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447740,
+    "callers": [
+      "boot:0x800CBC44"
+    ],
+    "rom_hex": "0x001150E0",
+    "romend_hex": "0x001199D0",
+    "size_hex": "0x000048F0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80004CF0",
+    "desc_hex": "0x800EB5FC"
+  },
+  {
+    "name": "seg_1199D0",
+    "rom": 1153488,
+    "size": 12400,
+    "vram": 2149036224,
+    "romend": 1165888,
+    "vramend": 2149048624,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447752,
+    "callers": [
+      "boot:0x800CC904"
+    ],
+    "text": [
+      2149036224,
+      2149046656
+    ],
+    "data": [
+      2149046656,
+      2149048624
+    ],
+    "rom_hex": "0x001199D0",
+    "romend_hex": "0x0011CA40",
+    "size_hex": "0x00003070",
+    "vram_hex": "0x8017B0C0",
+    "vramend_hex": "0x8017E130",
+    "desc_hex": "0x800EB608",
+    "text_hex": [
+      "0x8017B0C0",
+      "0x8017D980"
+    ],
+    "data_hex": [
+      "0x8017D980",
+      "0x8017E130"
+    ]
+  },
+  {
+    "name": "seg_11CA40",
+    "rom": 1165888,
+    "size": 63328,
+    "vram": 2149048624,
+    "romend": 1229216,
+    "vramend": 2149112816,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447784,
+    "callers": [
+      "boot:0x800CC910"
+    ],
+    "bss": [
+      2149111952,
+      2149112816
+    ],
+    "rom_hex": "0x0011CA40",
+    "romend_hex": "0x0012C1A0",
+    "size_hex": "0x0000F760",
+    "vram_hex": "0x8017E130",
+    "vramend_hex": "0x8018DBF0",
+    "desc_hex": "0x800EB628",
+    "bss_hex": [
+      "0x8018D890",
+      "0x8018DBF0"
+    ]
+  },
+  {
+    "name": "seg_12C1A0",
+    "rom": 1229216,
+    "size": 336,
+    "vram": 2147484672,
+    "romend": 1229552,
+    "vramend": 2147485008,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447800,
+    "callers": [
+      "boot:0x800CC91C"
+    ],
+    "rom_hex": "0x0012C1A0",
+    "romend_hex": "0x0012C2F0",
+    "size_hex": "0x00000150",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80000550",
+    "desc_hex": "0x800EB638"
+  },
+  {
+    "name": "seg_12C2F0",
+    "rom": 1229552,
+    "size": 9728,
+    "vram": 2149036224,
+    "romend": 1239280,
+    "vramend": 2149045952,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447884,
+    "callers": [
+      "boot:0x800CC71C",
+      "boot:0x800CC80C"
+    ],
+    "text": [
+      2149036224,
+      2149045600
+    ],
+    "data": [
+      2149045600,
+      2149045952
+    ],
+    "rom_hex": "0x0012C2F0",
+    "romend_hex": "0x0012E8F0",
+    "size_hex": "0x00002600",
+    "vram_hex": "0x8017B0C0",
+    "vramend_hex": "0x8017D6C0",
+    "desc_hex": "0x800EB68C",
+    "text_hex": [
+      "0x8017B0C0",
+      "0x8017D560"
+    ],
+    "data_hex": [
+      "0x8017D560",
+      "0x8017D6C0"
+    ]
+  },
+  {
+    "name": "seg_12E8F0",
+    "rom": 1239280,
+    "size": 4848,
+    "vram": 2149045952,
+    "romend": 1244128,
+    "vramend": 2149076528,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447916,
+    "callers": [
+      "boot:0x800CC728",
+      "boot:0x800CC818"
+    ],
+    "bss": [
+      2149050800,
+      2149076528
+    ],
+    "rom_hex": "0x0012E8F0",
+    "romend_hex": "0x0012FBE0",
+    "size_hex": "0x000012F0",
+    "vram_hex": "0x8017D6C0",
+    "vramend_hex": "0x80184E30",
+    "desc_hex": "0x800EB6AC",
+    "bss_hex": [
+      "0x8017E9B0",
+      "0x80184E30"
+    ]
+  },
+  {
+    "name": "seg_12FBE0",
+    "rom": 1244128,
+    "size": 132544,
+    "vram": 2147484672,
+    "romend": 1376672,
+    "vramend": 2147617216,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447932,
+    "callers": [
+      "boot:0x800CC734",
+      "boot:0x800CC824"
+    ],
+    "rom_hex": "0x0012FBE0",
+    "romend_hex": "0x001501A0",
+    "size_hex": "0x000205C0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x800209C0",
+    "desc_hex": "0x800EB6BC"
+  },
+  {
+    "name": "seg_1501A0",
+    "rom": 1376672,
+    "size": 210272,
+    "vram": 2148980464,
+    "romend": 1586944,
+    "vramend": 2149190736,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148447944,
+    "callers": [
+      "boot:0x800CC6A4"
+    ],
+    "text": [
+      2148980464,
+      2149175984
+    ],
+    "data": [
+      2149175984,
+      2149190736
+    ],
+    "rom_hex": "0x001501A0",
+    "romend_hex": "0x00183700",
+    "size_hex": "0x00033560",
+    "vram_hex": "0x8016D6F0",
+    "vramend_hex": "0x801A0C50",
+    "desc_hex": "0x800EB6C8",
+    "text_hex": [
+      "0x8016D6F0",
+      "0x8019D2B0"
+    ],
+    "data_hex": [
+      "0x8019D2B0",
+      "0x801A0C50"
+    ]
+  },
+  {
+    "name": "seg_183700",
+    "rom": 1586944,
+    "size": 89920,
+    "vram": 2149190736,
+    "romend": 1676864,
+    "vramend": 2149392880,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148447976,
+    "callers": [
+      "boot:0x800CC6B0"
+    ],
+    "bss": [
+      2149280656,
+      2149392880
+    ],
+    "rom_hex": "0x00183700",
+    "romend_hex": "0x00199640",
+    "size_hex": "0x00015F40",
+    "vram_hex": "0x801A0C50",
+    "vramend_hex": "0x801D21F0",
+    "desc_hex": "0x800EB6E8",
+    "bss_hex": [
+      "0x801B6B90",
+      "0x801D21F0"
+    ]
+  },
+  {
+    "name": "seg_199640",
+    "rom": 1676864,
+    "size": 118208,
+    "vram": 2147484672,
+    "romend": 1795072,
+    "vramend": 2147602880,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148447992,
+    "callers": [
+      "boot:0x800CC6BC"
+    ],
+    "rom_hex": "0x00199640",
+    "romend_hex": "0x001B6400",
+    "size_hex": "0x0001CDC0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x8001D1C0",
+    "desc_hex": "0x800EB6F8"
+  },
+  {
+    "name": "seg_1B6400",
+    "rom": 1795072,
+    "size": 752,
+    "vram": 2147484672,
+    "romend": 1795824,
+    "vramend": 2147485424,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448004,
+    "callers": [
+      "boot:0x800CCB98"
+    ],
+    "rom_hex": "0x001B6400",
+    "romend_hex": "0x001B66F0",
+    "size_hex": "0x000002F0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x800006F0",
+    "desc_hex": "0x800EB704"
+  },
+  {
+    "name": "seg_1B66F0",
+    "rom": 1795824,
+    "size": 195888,
+    "vram": 2149392880,
+    "romend": 1991712,
+    "vramend": 2149588768,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148448016,
+    "callers": [
+      "seg_1501A0:0x8016D97C"
+    ],
+    "text": [
+      2149392880,
+      2149476544
+    ],
+    "data": [
+      2149476544,
+      2149588768
+    ],
+    "rom_hex": "0x001B66F0",
+    "romend_hex": "0x001E6420",
+    "size_hex": "0x0002FD30",
+    "vram_hex": "0x801D21F0",
+    "vramend_hex": "0x80201F20",
+    "desc_hex": "0x800EB710",
+    "text_hex": [
+      "0x801D21F0",
+      "0x801E68C0"
+    ],
+    "data_hex": [
+      "0x801E68C0",
+      "0x80201F20"
+    ]
+  },
+  {
+    "name": "seg_1E6420",
+    "rom": 1991712,
+    "size": 287328,
+    "vram": 2149588768,
+    "romend": 2279040,
+    "vramend": 2149876096,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148448048,
+    "callers": [
+      "seg_1501A0:0x8016D988"
+    ],
+    "rom_hex": "0x001E6420",
+    "romend_hex": "0x0022C680",
+    "size_hex": "0x00046260",
+    "vram_hex": "0x80201F20",
+    "vramend_hex": "0x80248180",
+    "desc_hex": "0x800EB730"
+  },
+  {
+    "name": "seg_22C680",
+    "rom": 2279040,
+    "size": 146656,
+    "vram": 2147484672,
+    "romend": 2425696,
+    "vramend": 2147631328,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448064,
+    "callers": [
+      "seg_1501A0:0x8016D994"
+    ],
+    "rom_hex": "0x0022C680",
+    "romend_hex": "0x00250360",
+    "size_hex": "0x00023CE0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x800240E0",
+    "desc_hex": "0x800EB740"
+  },
+  {
+    "name": "seg_250360",
+    "rom": 2425696,
+    "size": 2544,
+    "vram": 2148262912,
+    "romend": 2428240,
+    "vramend": 2148265456,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448076,
+    "callers": [
+      "seg_1501A0:0x8019722C"
+    ],
+    "rom_hex": "0x00250360",
+    "romend_hex": "0x00250D50",
+    "size_hex": "0x000009F0",
+    "vram_hex": "0x800BE400",
+    "vramend_hex": "0x800BEDF0",
+    "desc_hex": "0x800EB74C"
+  },
+  {
+    "name": "seg_250D50",
+    "rom": 2428240,
+    "size": 18704,
+    "vram": 2147615744,
+    "romend": 2446944,
+    "vramend": 2147634448,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448088,
+    "callers": [
+      "seg_1501A0:0x8016D9BC"
+    ],
+    "rom_hex": "0x00250D50",
+    "romend_hex": "0x00255660",
+    "size_hex": "0x00004910",
+    "vram_hex": "0x80020400",
+    "vramend_hex": "0x80024D10",
+    "desc_hex": "0x800EB758"
+  },
+  {
+    "name": "seg_255660",
+    "rom": 2446944,
+    "size": 335696,
+    "vram": 2149392880,
+    "romend": 2782640,
+    "vramend": 2149728576,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148448100,
+    "callers": [
+      "seg_1501A0:0x8016D9F8"
+    ],
+    "text": [
+      2149392880,
+      2149492160
+    ],
+    "data": [
+      2149492160,
+      2149728576
+    ],
+    "rom_hex": "0x00255660",
+    "romend_hex": "0x002A75B0",
+    "size_hex": "0x00051F50",
+    "vram_hex": "0x801D21F0",
+    "vramend_hex": "0x80224140",
+    "desc_hex": "0x800EB764",
+    "text_hex": [
+      "0x801D21F0",
+      "0x801EA5C0"
+    ],
+    "data_hex": [
+      "0x801EA5C0",
+      "0x80224140"
+    ]
+  },
+  {
+    "name": "seg_2A75B0",
+    "rom": 2782640,
+    "size": 408288,
+    "vram": 2149728576,
+    "romend": 3190928,
+    "vramend": 2150136864,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148448132,
+    "callers": [
+      "seg_1501A0:0x8016DA04",
+      "seg_255660:0x801D36A0"
+    ],
+    "rom_hex": "0x002A75B0",
+    "romend_hex": "0x0030B090",
+    "size_hex": "0x00063AE0",
+    "vram_hex": "0x80224140",
+    "vramend_hex": "0x80287C20",
+    "desc_hex": "0x800EB784"
+  },
+  {
+    "name": "seg_30B090",
+    "rom": 3190928,
+    "size": 167776,
+    "vram": 2147484672,
+    "romend": 3358704,
+    "vramend": 2147652448,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448148,
+    "callers": [
+      "seg_1501A0:0x8016DA10",
+      "seg_255660:0x801D36AC"
+    ],
+    "rom_hex": "0x0030B090",
+    "romend_hex": "0x00333FF0",
+    "size_hex": "0x00028F60",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80029360",
+    "desc_hex": "0x800EB794"
+  },
+  {
+    "name": "seg_333FF0",
+    "rom": 3358704,
+    "size": 2720,
+    "vram": 2148262912,
+    "romend": 3361424,
+    "vramend": 2148265632,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448160,
+    "callers": [
+      "seg_1501A0:0x80197240"
+    ],
+    "rom_hex": "0x00333FF0",
+    "romend_hex": "0x00334A90",
+    "size_hex": "0x00000AA0",
+    "vram_hex": "0x800BE400",
+    "vramend_hex": "0x800BEEA0",
+    "desc_hex": "0x800EB7A0"
+  },
+  {
+    "name": "seg_334A90",
+    "rom": 3361424,
+    "size": 8064,
+    "vram": 2147615744,
+    "romend": 3369488,
+    "vramend": 2147623808,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448172,
+    "callers": [
+      "seg_1501A0:0x8016DA38",
+      "seg_255660:0x801D36CC"
+    ],
+    "rom_hex": "0x00334A90",
+    "romend_hex": "0x00336A10",
+    "size_hex": "0x00001F80",
+    "vram_hex": "0x80020400",
+    "vramend_hex": "0x80022380",
+    "desc_hex": "0x800EB7AC"
+  },
+  {
+    "name": "seg_336A10",
+    "rom": 3369488,
+    "size": 59632,
+    "vram": 2149728576,
+    "romend": 3429120,
+    "vramend": 2149788208,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148448184,
+    "callers": [
+      "seg_255660:0x801D35C0"
+    ],
+    "rom_hex": "0x00336A10",
+    "romend_hex": "0x00345300",
+    "size_hex": "0x0000E8F0",
+    "vram_hex": "0x80224140",
+    "vramend_hex": "0x80232A30",
+    "desc_hex": "0x800EB7B8"
+  },
+  {
+    "name": "seg_345300",
+    "rom": 3429120,
+    "size": 25232,
+    "vram": 2147484672,
+    "romend": 3454352,
+    "vramend": 2147509904,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448200,
+    "callers": [
+      "seg_255660:0x801D35CC"
+    ],
+    "rom_hex": "0x00345300",
+    "romend_hex": "0x0034B590",
+    "size_hex": "0x00006290",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80006690",
+    "desc_hex": "0x800EB7C8"
+  },
+  {
+    "name": "seg_34B590",
+    "rom": 3454352,
+    "size": 186160,
+    "vram": 2149392880,
+    "romend": 3640512,
+    "vramend": 2149579040,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148448212,
+    "callers": [
+      "seg_1501A0:0x8016DA74"
+    ],
+    "text": [
+      2149392880,
+      2149462704
+    ],
+    "data": [
+      2149462704,
+      2149579040
+    ],
+    "rom_hex": "0x0034B590",
+    "romend_hex": "0x00378CC0",
+    "size_hex": "0x0002D730",
+    "vram_hex": "0x801D21F0",
+    "vramend_hex": "0x801FF920",
+    "desc_hex": "0x800EB7D4",
+    "text_hex": [
+      "0x801D21F0",
+      "0x801E32B0"
+    ],
+    "data_hex": [
+      "0x801E32B0",
+      "0x801FF920"
+    ]
+  },
+  {
+    "name": "seg_378CC0",
+    "rom": 3640512,
+    "size": 307472,
+    "vram": 2149579040,
+    "romend": 3947984,
+    "vramend": 2149907440,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148448244,
+    "callers": [
+      "seg_1501A0:0x8016DA80"
+    ],
+    "bss": [
+      2149886512,
+      2149907440
+    ],
+    "rom_hex": "0x00378CC0",
+    "romend_hex": "0x003C3DD0",
+    "size_hex": "0x0004B110",
+    "vram_hex": "0x801FF920",
+    "vramend_hex": "0x8024FBF0",
+    "desc_hex": "0x800EB7F4",
+    "bss_hex": [
+      "0x8024AA30",
+      "0x8024FBF0"
+    ]
+  },
+  {
+    "name": "seg_3C3DD0",
+    "rom": 3947984,
+    "size": 160176,
+    "vram": 2147484672,
+    "romend": 4108160,
+    "vramend": 2147644848,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448260,
+    "callers": [
+      "seg_1501A0:0x8016DA8C"
+    ],
+    "rom_hex": "0x003C3DD0",
+    "romend_hex": "0x003EAF80",
+    "size_hex": "0x000271B0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x800275B0",
+    "desc_hex": "0x800EB804"
+  },
+  {
+    "name": "seg_3EAF80",
+    "rom": 4108160,
+    "size": 2736,
+    "vram": 2148262912,
+    "romend": 4110896,
+    "vramend": 2148265648,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448272,
+    "callers": [
+      "seg_1501A0:0x80197254"
+    ],
+    "rom_hex": "0x003EAF80",
+    "romend_hex": "0x003EBA30",
+    "size_hex": "0x00000AB0",
+    "vram_hex": "0x800BE400",
+    "vramend_hex": "0x800BEEB0",
+    "desc_hex": "0x800EB810"
+  },
+  {
+    "name": "seg_3EBA30",
+    "rom": 4110896,
+    "size": 17312,
+    "vram": 2147615744,
+    "romend": 4128208,
+    "vramend": 2147633056,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448284,
+    "callers": [
+      "seg_1501A0:0x8016DAB4"
+    ],
+    "rom_hex": "0x003EBA30",
+    "romend_hex": "0x003EFDD0",
+    "size_hex": "0x000043A0",
+    "vram_hex": "0x80020400",
+    "vramend_hex": "0x800247A0",
+    "desc_hex": "0x800EB81C"
+  },
+  {
+    "name": "seg_3EFDD0",
+    "rom": 4128208,
+    "size": 243008,
+    "vram": 2149392880,
+    "romend": 4371216,
+    "vramend": 2149635888,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148448296,
+    "callers": [
+      "seg_1501A0:0x8016DAF0"
+    ],
+    "text": [
+      2149392880,
+      2149441888
+    ],
+    "data": [
+      2149441888,
+      2149635888
+    ],
+    "rom_hex": "0x003EFDD0",
+    "romend_hex": "0x0042B310",
+    "size_hex": "0x0003B540",
+    "vram_hex": "0x801D21F0",
+    "vramend_hex": "0x8020D730",
+    "desc_hex": "0x800EB828",
+    "text_hex": [
+      "0x801D21F0",
+      "0x801DE160"
+    ],
+    "data_hex": [
+      "0x801DE160",
+      "0x8020D730"
+    ]
+  },
+  {
+    "name": "seg_42B310",
+    "rom": 4371216,
+    "size": 297808,
+    "vram": 2149635888,
+    "romend": 4669024,
+    "vramend": 2149933696,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148448328,
+    "callers": [
+      "seg_1501A0:0x8016DAFC"
+    ],
+    "rom_hex": "0x0042B310",
+    "romend_hex": "0x00473E60",
+    "size_hex": "0x00048B50",
+    "vram_hex": "0x8020D730",
+    "vramend_hex": "0x80256280",
+    "desc_hex": "0x800EB848"
+  },
+  {
+    "name": "seg_473E60",
+    "rom": 4669024,
+    "size": 135152,
+    "vram": 2147484672,
+    "romend": 4804176,
+    "vramend": 2147619824,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448344,
+    "callers": [
+      "seg_1501A0:0x8016DB08"
+    ],
+    "rom_hex": "0x00473E60",
+    "romend_hex": "0x00494E50",
+    "size_hex": "0x00020FF0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x800213F0",
+    "desc_hex": "0x800EB858"
+  },
+  {
+    "name": "seg_494E50",
+    "rom": 4804176,
+    "size": 1776,
+    "vram": 2148262912,
+    "romend": 4805952,
+    "vramend": 2148264688,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448356,
+    "callers": [
+      "seg_1501A0:0x80197268"
+    ],
+    "rom_hex": "0x00494E50",
+    "romend_hex": "0x00495540",
+    "size_hex": "0x000006F0",
+    "vram_hex": "0x800BE400",
+    "vramend_hex": "0x800BEAF0",
+    "desc_hex": "0x800EB864"
+  },
+  {
+    "name": "seg_495540",
+    "rom": 4805952,
+    "size": 7168,
+    "vram": 2147615744,
+    "romend": 4813120,
+    "vramend": 2147622912,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448368,
+    "callers": [
+      "seg_1501A0:0x8016DB30"
+    ],
+    "rom_hex": "0x00495540",
+    "romend_hex": "0x00497140",
+    "size_hex": "0x00001C00",
+    "vram_hex": "0x80020400",
+    "vramend_hex": "0x80022000",
+    "desc_hex": "0x800EB870"
+  },
+  {
+    "name": "seg_497140",
+    "rom": 4813120,
+    "size": 49056,
+    "vram": 2149392880,
+    "romend": 4862176,
+    "vramend": 2149441936,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148448380,
+    "callers": [
+      "seg_1501A0:0x8016DB6C"
+    ],
+    "text": [
+      2149392880,
+      2149414784
+    ],
+    "data": [
+      2149414784,
+      2149441936
+    ],
+    "rom_hex": "0x00497140",
+    "romend_hex": "0x004A30E0",
+    "size_hex": "0x0000BFA0",
+    "vram_hex": "0x801D21F0",
+    "vramend_hex": "0x801DE190",
+    "desc_hex": "0x800EB87C",
+    "text_hex": [
+      "0x801D21F0",
+      "0x801D7780"
+    ],
+    "data_hex": [
+      "0x801D7780",
+      "0x801DE190"
+    ]
+  },
+  {
+    "name": "seg_4A30E0",
+    "rom": 4862176,
+    "size": 119328,
+    "vram": 2149441936,
+    "romend": 4981504,
+    "vramend": 2149561264,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148448412,
+    "callers": [
+      "seg_1501A0:0x8016DB78"
+    ],
+    "rom_hex": "0x004A30E0",
+    "romend_hex": "0x004C0300",
+    "size_hex": "0x0001D220",
+    "vram_hex": "0x801DE190",
+    "vramend_hex": "0x801FB3B0",
+    "desc_hex": "0x800EB89C"
+  },
+  {
+    "name": "seg_4C0300",
+    "rom": 4981504,
+    "size": 88848,
+    "vram": 2147484672,
+    "romend": 5070352,
+    "vramend": 2147573520,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448428,
+    "callers": [
+      "seg_1501A0:0x8016DB84"
+    ],
+    "rom_hex": "0x004C0300",
+    "romend_hex": "0x004D5E10",
+    "size_hex": "0x00015B10",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80015F10",
+    "desc_hex": "0x800EB8AC"
+  },
+  {
+    "name": "seg_4D5E10",
+    "rom": 5070352,
+    "size": 192,
+    "vram": 2148262912,
+    "romend": 5070544,
+    "vramend": 2148263104,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448440,
+    "callers": [
+      "seg_1501A0:0x8019727C"
+    ],
+    "rom_hex": "0x004D5E10",
+    "romend_hex": "0x004D5ED0",
+    "size_hex": "0x000000C0",
+    "vram_hex": "0x800BE400",
+    "vramend_hex": "0x800BE4C0",
+    "desc_hex": "0x800EB8B8"
+  },
+  {
+    "name": "seg_4D5ED0",
+    "rom": 5070544,
+    "size": 240,
+    "vram": 2147615744,
+    "romend": 5070784,
+    "vramend": 2147615984,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448452,
+    "callers": [
+      "seg_1501A0:0x8016DBAC"
+    ],
+    "rom_hex": "0x004D5ED0",
+    "romend_hex": "0x004D5FC0",
+    "size_hex": "0x000000F0",
+    "vram_hex": "0x80020400",
+    "vramend_hex": "0x800204F0",
+    "desc_hex": "0x800EB8C4"
+  },
+  {
+    "name": "seg_4D5FC0",
+    "rom": 5070784,
+    "size": 25456,
+    "vram": 2149434144,
+    "romend": 5096240,
+    "vramend": 2149459600,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148448464,
+    "callers": [
+      "boot:0x800CC7A0"
+    ],
+    "text": [
+      2149434144,
+      2149444080
+    ],
+    "data": [
+      2149444080,
+      2149459600
+    ],
+    "rom_hex": "0x004D5FC0",
+    "romend_hex": "0x004DC330",
+    "size_hex": "0x00006370",
+    "vram_hex": "0x801DC320",
+    "vramend_hex": "0x801E2690",
+    "desc_hex": "0x800EB8D0",
+    "text_hex": [
+      "0x801DC320",
+      "0x801DE9F0"
+    ],
+    "data_hex": [
+      "0x801DE9F0",
+      "0x801E2690"
+    ]
+  },
+  {
+    "name": "seg_4DC330",
+    "rom": 5096240,
+    "size": 928,
+    "vram": 2148262912,
+    "romend": 5097168,
+    "vramend": 2148263840,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448496,
+    "callers": [
+      "seg_4D5FC0:0x801DC524"
+    ],
+    "rom_hex": "0x004DC330",
+    "romend_hex": "0x004DC6D0",
+    "size_hex": "0x000003A0",
+    "vram_hex": "0x800BE400",
+    "vramend_hex": "0x800BE7A0",
+    "desc_hex": "0x800EB8F0"
+  },
+  {
+    "name": "seg_4DC6D0",
+    "rom": 5097168,
+    "size": 230512,
+    "vram": 2149392880,
+    "romend": 5327680,
+    "vramend": 2149623392,
+    "kind": "code+data",
+    "loader": "func_800C38C8",
+    "desc": 2148448508,
+    "callers": [
+      "seg_1501A0:0x8016DBE8"
+    ],
+    "text": [
+      2149392880,
+      2149454960
+    ],
+    "data": [
+      2149454960,
+      2149623392
+    ],
+    "rom_hex": "0x004DC6D0",
+    "romend_hex": "0x00514B40",
+    "size_hex": "0x00038470",
+    "vram_hex": "0x801D21F0",
+    "vramend_hex": "0x8020A660",
+    "desc_hex": "0x800EB8FC",
+    "text_hex": [
+      "0x801D21F0",
+      "0x801E1470"
+    ],
+    "data_hex": [
+      "0x801E1470",
+      "0x8020A660"
+    ]
+  },
+  {
+    "name": "seg_514B40",
+    "rom": 5327680,
+    "size": 271984,
+    "vram": 2149623392,
+    "romend": 5599664,
+    "vramend": 2149895376,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148448540,
+    "callers": [
+      "seg_1501A0:0x8016DBF4"
+    ],
+    "rom_hex": "0x00514B40",
+    "romend_hex": "0x005571B0",
+    "size_hex": "0x00042670",
+    "vram_hex": "0x8020A660",
+    "vramend_hex": "0x8024CCD0",
+    "desc_hex": "0x800EB91C"
+  },
+  {
+    "name": "seg_5571B0",
+    "rom": 5599664,
+    "size": 168656,
+    "vram": 2149895376,
+    "romend": 5768320,
+    "vramend": 2150064032,
+    "kind": "data",
+    "loader": "func_800C3930",
+    "desc": 2148448556,
+    "callers": [
+      "seg_1501A0:0x8016DC00"
+    ],
+    "rom_hex": "0x005571B0",
+    "romend_hex": "0x00580480",
+    "size_hex": "0x000292D0",
+    "vram_hex": "0x8024CCD0",
+    "vramend_hex": "0x80275FA0",
+    "desc_hex": "0x800EB92C"
+  },
+  {
+    "name": "seg_580480",
+    "rom": 5768320,
+    "size": 144560,
+    "vram": 2147484672,
+    "romend": 5912880,
+    "vramend": 2147629232,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448572,
+    "callers": [
+      "seg_1501A0:0x8016DC0C"
+    ],
+    "rom_hex": "0x00580480",
+    "romend_hex": "0x005A3930",
+    "size_hex": "0x000234B0",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x800238B0",
+    "desc_hex": "0x800EB93C"
+  },
+  {
+    "name": "seg_5A3930",
+    "rom": 5912880,
+    "size": 67088,
+    "vram": 2147484672,
+    "romend": 5979968,
+    "vramend": 2147551760,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448584,
+    "callers": [
+      "seg_1501A0:0x8016DC2C"
+    ],
+    "rom_hex": "0x005A3930",
+    "romend_hex": "0x005B3F40",
+    "size_hex": "0x00010610",
+    "vram_hex": "0x80000400",
+    "vramend_hex": "0x80010A10",
+    "desc_hex": "0x800EB948"
+  },
+  {
+    "name": "seg_5B3F40",
+    "rom": 5979968,
+    "size": 1504,
+    "vram": 2148262912,
+    "romend": 5981472,
+    "vramend": 2148264416,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448596,
+    "callers": [
+      "seg_1501A0:0x80197290"
+    ],
+    "rom_hex": "0x005B3F40",
+    "romend_hex": "0x005B4520",
+    "size_hex": "0x000005E0",
+    "vram_hex": "0x800BE400",
+    "vramend_hex": "0x800BE9E0",
+    "desc_hex": "0x800EB954"
+  },
+  {
+    "name": "seg_5B4520",
+    "rom": 5981472,
+    "size": 10752,
+    "vram": 2147615744,
+    "romend": 5992224,
+    "vramend": 2147626496,
+    "kind": "data(staging buffer)",
+    "loader": "func_800C3968",
+    "desc": 2148448608,
+    "callers": [
+      "seg_1501A0:0x8016DC54"
+    ],
+    "rom_hex": "0x005B4520",
+    "romend_hex": "0x005B6F20",
+    "size_hex": "0x00002A00",
+    "vram_hex": "0x80020400",
+    "vramend_hex": "0x80022E00",
+    "desc_hex": "0x800EB960"
+  },
+  {
+    "name": "audio_ptrtable",
+    "rom": 5992224,
+    "size": 33632,
+    "romend": 6025856,
+    "kind": "data",
+    "loader": "func_800CE290 (malloc + func_800D1D10) @0x800CB4C4",
+    "note": "\"N64 PtrTablesV2\" / \"NEDGE.WBK\" bank+pointer file; destination is heap-allocated at runtime, then fixed up by func_800CF810 with the wavetable ROM base 0x5BF280",
+    "rom_hex": "0x005B6F20",
+    "romend_hex": "0x005BF280",
+    "size_hex": "0x00008360"
+  },
+  {
+    "name": "audio_wavetable",
+    "rom": 6025856,
+    "size": 1889760,
+    "romend": 7915616,
+    "kind": "data",
+    "loader": "streamed by func_800CD8C0 -> osEPiStartDma(0x800D8A00)",
+    "note": "\"N64 WaveTables \" header; ADPCM sample data, DMA'd in 0x400-byte pages into a runtime buffer cache; never resident as a whole",
+    "rom_hex": "0x005BF280",
+    "romend_hex": "0x0078C860",
+    "size_hex": "0x001CD5E0"
+  },
+  {
+    "name": "audio_music",
+    "rom": 7915616,
+    "size": 217744,
+    "romend": 8133360,
+    "kind": "data",
+    "loader": "func_800CD800 @0x800C801C, table at 0x800EAB50",
+    "desc": 2148445008,
+    "note": "30 entries of {u32,u32 romStart,u32 romEnd} (index 0 null); destination is the buffer pointed to by *(0x80149AEC)",
+    "rom_hex": "0x0078C860",
+    "romend_hex": "0x007C1AF0",
+    "size_hex": "0x00035290",
+    "desc_hex": "0x800EAB50"
+  },
+  {
+    "name": "padding",
+    "rom": 8133360,
+    "size": 255248,
+    "romend": 8388608,
+    "kind": "pad",
+    "loader": "(none)",
+    "note": "0xFF filler to 8 MiB",
+    "rom_hex": "0x007C1AF0",
+    "romend_hex": "0x00800000",
+    "size_hex": "0x0003E510"
+  }
+]
