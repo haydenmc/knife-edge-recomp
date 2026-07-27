@@ -1,0 +1,17 @@
+# --- Never commit ROMs or anything derived from ROM bytes ---
+*.n64
+*.z64
+*.v64
+*.rom
+/build*/
+/analysis/out/
+RecompiledFuncs/
+recompiled/
+
+# Tooling noise
+.venv/
+__pycache__/
+*.pyc
+.cache/
+compile_commands.json
+.vscode/

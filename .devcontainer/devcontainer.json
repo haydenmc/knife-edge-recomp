@@ -1,0 +1,18 @@
+{
+  "image": "mcr.microsoft.com/devcontainers/base:trixie",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+  // Recomp toolchain: C++ build tools, SDL2, Vulkan (+ lavapipe for headless GPU),
+  // Xvfb for smoke tests, and a python venv for the ROM-analysis pipeline.
+  "postCreateCommand": "sudo apt-get update -qq && sudo apt-get install -y -qq cmake ninja-build clang lld pkg-config libsdl2-dev libx11-dev libvulkan-dev vulkan-tools glslang-tools spirv-tools mesa-vulkan-drivers xvfb imagemagick python3-pip python3-venv && python3 -m venv .venv && .venv/bin/pip install -q rabbitizer capstone tomlkit && git submodule update --init --recursive",
+  // Rootless Podman on an SELinux host (Fedora):
+  //   * keep-id preserves the host uid (1000) inside the container so it lines up
+  //     with vscode (1000) — this makes the mounted source vscode-owned.
+  //   * label=disable opts the container out of SELinux label separation. Without
+  //     it, SELinux denies container_t access to the host's user_home_t-labelled
+  //     source (Permission denied despite correct uid/gid/mode), which also made
+  //     devpod's chown fail and reap the "idle" container.
+  "runArgs": ["--userns=keep-id", "--security-opt", "label=disable"]
+}

@@ -1,0 +1,9 @@
+[submodule "deps/N64Recomp"]
+	path = deps/N64Recomp
+	url = https://github.com/N64Recomp/N64Recomp.git
+[submodule "deps/N64ModernRuntime"]
+	path = deps/N64ModernRuntime
+	url = https://github.com/N64Recomp/N64ModernRuntime.git
+[submodule "deps/rt64"]
+	path = deps/rt64
+	url = https://github.com/rt64/rt64.git
