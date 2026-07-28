@@ -26,4 +26,8 @@ namespace kerecomp {
     // game's own frame rate (graphics display lists submitted per second).
     void perf_count_vi();
     void perf_count_dl();
+
+    // Writes the commit this binary was built from to stdout at startup, so a
+    // bug report identifies an exact tree. See src/main/build_info.h.in.
+    void log_build_info();
 }

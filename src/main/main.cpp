@@ -265,6 +265,8 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
+    kerecomp::log_build_info();
+
     recomp::register_config_path(kerecomp::get_app_folder_path());
 
     // TODO: rom_hash/save_type/game_id are placeholders until the ROM has

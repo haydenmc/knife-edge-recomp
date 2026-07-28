@@ -237,6 +237,33 @@ if (KE_GENERATED_DIR)
     endif()
 endif()
 
+# ---------------------------------------------------------------------------
+# Build stamp
+# ---------------------------------------------------------------------------
+# Print the commit a binary was built from at startup, so a bug report can be
+# tied to an exact tree ("I'm not sure which binary I ran" cost us a whole
+# debugging detour once). Re-run cmake to refresh; a stale stamp is worse than
+# none, so the dirty flag is included.
+find_package(Git QUIET)
+set(KE_BUILD_COMMIT "unknown")
+set(KE_BUILD_DIRTY 0)
+if (GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+                    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                    OUTPUT_VARIABLE KE_BUILD_COMMIT
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" status --porcelain
+                    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                    OUTPUT_VARIABLE KE_GIT_STATUS
+                    ERROR_QUIET)
+    if (NOT KE_GIT_STATUS STREQUAL "")
+        set(KE_BUILD_DIRTY 1)
+    endif()
+endif()
+configure_file(${CMAKE_SOURCE_DIR}/src/main/build_info.h.in
+               ${CMAKE_BINARY_DIR}/generated_include/build_info.h @ONLY)
+
 add_executable(KnifeEdgeRecompiled
     ${CMAKE_SOURCE_DIR}/src/main/main.cpp
     ${CMAKE_SOURCE_DIR}/src/main/audio.cpp
@@ -248,6 +275,7 @@ add_executable(KnifeEdgeRecompiled
 )
 
 target_include_directories(KnifeEdgeRecompiled PRIVATE
+    ${CMAKE_BINARY_DIR}/generated_include
     ${CMAKE_SOURCE_DIR}/src/main
     ${KE_N64MODERNRUNTIME_DIR}/N64Recomp/include
     ${CMAKE_SOURCE_DIR}/deps/rt64/src/contrib

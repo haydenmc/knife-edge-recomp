@@ -1,5 +1,7 @@
 #include "support.h"
 
+#include "build_info.h"
+
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -63,4 +65,10 @@ void kerecomp::perf_count_vi() {
         last_vis = vis;
         last_dls = dls;
     }
+}
+
+void kerecomp::log_build_info() {
+    std::fprintf(stdout, "Knife Edge Recompiled - build %s%s\n",
+                 KE_BUILD_COMMIT, KE_BUILD_DIRTY ? " (modified working tree)" : "");
+    std::fflush(stdout);
 }
