@@ -68,12 +68,24 @@ REL_OUT = "../generated/us"
 # analysis/docs/timing-and-mission-debug.md; all three back-edges of the loop
 # (0x8019CF28 / 0x8019CF3C / 0x8019CF54) target 0x8019CE5C, so one hook covers
 # them.
+# The same function contains a *second*, inner loop: the cutscene fast-forward.
+# When the player asks to skip a cutscene (func_8016E454 sets bit 0 of
+# 0x8011D1D8+0xE), func_8019CE04 deregisters the per-retrace callback and runs
+# the world logic-only, looping back to 0x8019CE84 for as long as a cutscene is
+# playing (0x8011D298 != 0) or the "cutscene armed" flag is set
+# (*(u16*)0x8011D458 & 0x4000).  Its two back-edges (0x8019CEDC / 0x8019CEF0)
+# target 0x8019CE84, *not* the outer loop head at 0x8019CE5C, so the hook above
+# does not cover it and the thread never re-enters an OS primitive.
 EXTRA_SPIN_YIELD_HOOKS = [
     ("seg_1501A0", 0x8019CE04, 0x8019CE5C,
      "mission loop: polls the frame-ready bit at 0x8011D1D8+0xE and the "
      "screen-result word at 0x8011D1B4 (find_spin_loops needs a "
      "straight-line body; this one is 53 instructions with the per-frame "
      "work behind a branch)"),
+    ("seg_1501A0", 0x8019CE04, 0x8019CE84,
+     "mission loop, inner cutscene fast-forward: back-edges 0x8019CEDC and "
+     "0x8019CEF0 re-run the logic-only frame step from here while a cutscene "
+     "is playing, with no OS primitive on the path"),
 ]
 
 
@@ -97,6 +109,23 @@ RCP_PACING_HOOKS = [
     ("boot", 0x800D25F0, 0x800D2728, "ke_gfx_task_end(rdram);",
      "hold the completion message until the modelled RCP frame time elapsed"),
 ]
+
+
+# Spin-yield hooks whose body is something other than the default
+# `yield_self_1ms(rdram);`.  Keyed by (segment name, function vram).
+SPIN_YIELD_TEXT_OVERRIDES = {
+    # func_800D2B40 is the "wait until 0x8013C280 == 0" rendezvous that
+    # func_800D1640 runs before it swaps the per-retrace callback pointer.
+    # Modelling RCP frame time (RCP_PACING_HOOKS above) keeps that counter
+    # non-zero for essentially the whole frame, and ultramodern only ever hands
+    # execution to a *higher* priority thread, so a waiting thread is resumed
+    # exactly when the retrace-callback thread blocks - just after it queued the
+    # next task.  The default yield therefore never terminates this loop.
+    # ke_rcp_idle_wait() yields identically and publishes "someone is waiting",
+    # which ke_gfx_task_end() uses to retire the in-flight task at once.
+    # See analysis/docs/timing-and-mission-debug.md section 5.
+    ("boot", 0x800D2B40): "ke_rcp_idle_wait(rdram);",
+}
 
 
 def hexint(v):
@@ -239,6 +268,7 @@ def main(argv=None):
         "   which is what sets this game's speed; used by RCP_PACING_HOOKS. */\n"
         "extern void ke_gfx_task_begin(void);\n"
         "extern void ke_gfx_task_end(uint8_t* rdram);\n"
+        "extern void ke_rcp_idle_wait(uint8_t* rdram);\n"
         "#ifdef __cplusplus\n"
         "}\n"
         "#endif"
@@ -326,7 +356,8 @@ def main(argv=None):
             % (hook_vram, branch_vram)))
         h["func"] = nm
         h["before_vram"] = hexint(hook_vram)
-        h["text"] = "yield_self_1ms(rdram);"
+        h["text"] = SPIN_YIELD_TEXT_OVERRIDES.get((segname, func_vram),
+                                                  "yield_self_1ms(rdram);")
         hooks.append(h)
     for segname, func_vram, hook_vram, why in EXTRA_SPIN_YIELD_HOOKS:
         nm = stub_names.get((segname, func_vram))

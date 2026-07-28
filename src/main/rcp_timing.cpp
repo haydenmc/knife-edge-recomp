@@ -26,9 +26,10 @@
 // at the game's osSpTaskStartGo call and ke_gfx_task_end() just before it
 // reports the task complete, in the graphics task thread func_800D25F0.
 //
-// The default budget is the game's own number. The debug/profiling path inside
-// func_801978C0 (in-game overlay, gated on 0x8011D298) ends with a hand-written
-// frame limiter:
+// The default budget is the game's own number. func_801978C0 (in-game overlay),
+// which runs only while a cutscene is playing (0x8011D298 != 0 - see
+// timing-and-mission-debug.md section 5.1), ends with a hand-written frame
+// limiter:
 //
 //     801978AE0  jal osGetTime
 //     ...        while (hi != 0 || lo < 0x002AB980) osGetTime();
@@ -80,6 +81,22 @@ namespace {
     // Only ever touched by the game's graphics task thread (func_800D25F0),
     // which runs one task at a time; atomic purely for tidiness.
     std::atomic<clock_type::time_point> task_start{clock_type::time_point{}};
+
+    // Last time some game thread was seen spinning in func_800D2B40 waiting for
+    // 0x8013C280 ("graphics tasks in flight") to reach 0.  Written by the
+    // waiting thread, read by whichever thread is about to queue the next task.
+    std::atomic<clock_type::time_point> idle_wait_seen{clock_type::time_point{}};
+
+    // How stale an idle_wait_seen stamp may be and still count as "a thread is
+    // waiting".  The waiter refreshes it once per yield_self_1ms, so anything
+    // within a few of those is live; once it leaves the loop the stamp ages out
+    // and pacing resumes on the very next graphics task.
+    constexpr std::chrono::milliseconds idle_wait_live{5};
+
+    bool idle_waiter_live() {
+        clock_type::time_point seen = idle_wait_seen.load(std::memory_order_relaxed);
+        return clock_type::now() - seen <= idle_wait_live;
+    }
 }
 
 // Hooked at the game's osSpTaskStartGo call site: the RCP has just been handed
@@ -109,6 +126,44 @@ extern "C" void ke_gfx_task_end(uint8_t* rdram) {
     }
 
     while (clock_type::now() < deadline) {
+        // A game thread waiting in func_800D2B40 for the RCP to go idle cannot
+        // make progress until this task retires, and cannot be scheduled during
+        // the sliver of time between it retiring and the next one being queued
+        // (see ke_rcp_idle_wait below). Retire now and let it through; the
+        // console's wait resolves inside one frame too.
+        if (idle_waiter_live()) {
+            break;
+        }
         yield_self_1ms(rdram);
     }
+}
+
+// Hooked into func_800D2B40's poll loop, which is
+//
+//     while (*(u32*)0x8013C280 != 0) {}      // wait until the RCP is idle
+//
+// and is what func_800D1640 runs before it swaps the per-retrace callback
+// pointer at 0x800EBC00.
+//
+// Yields exactly like the generic spin hook, and additionally publishes "a
+// thread is waiting for the RCP to go idle" so ke_gfx_task_end() above can stop
+// holding the current task. Without that the wait never ends:
+//
+//   * modelling RCP frame time keeps 0x8013C280 non-zero for essentially the
+//     whole frame - measured over 4.3M samples of a live mission it read 0 for
+//     0.067% of the time, i.e. ~30 microseconds between one task retiring and
+//     the next being queued (on console that gap is the milliseconds the CPU
+//     spends building the next display list; our host builds it ~1000x faster);
+//   * ultramodern only ever hands execution to a *higher* priority thread
+//     (check_running_queue in ultramodern/src/scheduling.cpp), so this waiter is
+//     resumed exactly when the retrace-callback thread blocks - which is just
+//     after it has queued the next task. Every poll therefore reads a non-zero
+//     counter, deterministically, not merely with bad luck.
+//
+// A console CPU polls the word every few cycles and always lands in the gap, so
+// func_800D1640 returns within a frame. See
+// analysis/docs/timing-and-mission-debug.md section 5.
+extern "C" void ke_rcp_idle_wait(uint8_t* rdram) {
+    idle_wait_seen.store(clock_type::now(), std::memory_order_relaxed);
+    yield_self_1ms(rdram);
 }

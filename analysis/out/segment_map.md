@@ -442,6 +442,14 @@ Expansion Pak requirement observed in the load map.
    game either relies on the entry-stub clear (only valid for the first segment,
    `0x8016ABF0..0x8016D6F0`) or zeroes those ranges from segment init code. Needs a
    pass over the overlays' init functions to confirm.
+   **Still open (2026-07-28).** The results-screen wedge investigated in
+   `docs/timing-and-mission-debug.md` §5 looked like a plausible first concrete
+   manifestation and was not: every global in that failure
+   (`0x8011D1E6`, `0x8011D458`, `0x8011D298`, `0x8013C280`, `0x801094B4`) lives in
+   the boot segment's own `.bss`, which librecomp zeroes at startup and
+   `func_800CC174` / `0x8016D74C` re-initialise per mission, and the root cause
+   turned out to be a starved busy-wait in this port's RCP frame-time model. No
+   evidence either way about the nine descriptor BSS tails.
 2. **Exact boundary of the two RSP microcode blobs** inside the boot segment. I have
    bracketed them to `~0x800E51F0..~0x800E85F0` by opcode statistics and by the last
    real MIPS function ending at `0x800E51E8`, but I did not identify the ucode

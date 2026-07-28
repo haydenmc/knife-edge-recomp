@@ -6,7 +6,7 @@ symbols_file_path = "knife_edge.us.syms.toml"
 rom_file_path = "../build/knife_edge.z64"
 output_func_path = "../generated/us"
 functions_per_output_file = 50
-recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n/* src/main/rcp_timing.cpp - models the time the RCP needs for one frame,\n   which is what sets this game's speed; used by RCP_PACING_HOOKS. */\nextern void ke_gfx_task_begin(void);\nextern void ke_gfx_task_end(uint8_t* rdram);\n#ifdef __cplusplus\n}\n#endif"
+recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n/* src/main/rcp_timing.cpp - models the time the RCP needs for one frame,\n   which is what sets this game's speed; used by RCP_PACING_HOOKS. */\nextern void ke_gfx_task_begin(void);\nextern void ke_gfx_task_end(uint8_t* rdram);\nextern void ke_rcp_idle_wait(uint8_t* rdram);\n#ifdef __cplusplus\n}\n#endif"
 
 [patches]
 stubs = []
@@ -123,7 +123,7 @@ text = "yield_self_1ms(rdram);"
 # polling loop 800D2B58..800D2B58 (find_functions.find_spin_loops)
 func = "func_800D2B40"
 before_vram = 0x800D2B58
-text = "yield_self_1ms(rdram);"
+text = "ke_rcp_idle_wait(rdram);"
 
 [[patches.hook]]
 # polling loop 8017B11C..8017B124 (find_functions.find_spin_loops)
@@ -201,6 +201,12 @@ text = "yield_self_1ms(rdram);"
 # mission loop: polls the frame-ready bit at 0x8011D1D8+0xE and the screen-result word at 0x8011D1B4 (find_spin_loops needs a straight-line body; this one is 53 instructions with the per-frame work behind a branch)
 func = "func_8019CE04_1501A0"
 before_vram = 0x8019CE5C
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# mission loop, inner cutscene fast-forward: back-edges 0x8019CEDC and 0x8019CEF0 re-run the logic-only frame step from here while a cutscene is playing, with no OS primitive on the path
+func = "func_8019CE04_1501A0"
+before_vram = 0x8019CE84
 text = "yield_self_1ms(rdram);"
 
 [[patches.hook]]

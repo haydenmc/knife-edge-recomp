@@ -428,11 +428,16 @@ sufficient. The screen is `func_80193A34` in the in-game code overlay
 80193B08  sw    $t2, 0x8011D1B4                 ; result = 1  (mission complete)
 ```
 
-There is no frame counter, no `osGetTime`, no auto-advance: `0xB000` is
-`A (0x8000) | B (0x2000) | START (0x1000)` and the word at `0x8011BE22 + i*0xA`
-is the *held* button state that `func_800C7458` refreshes once per game frame.
-So the screen waits forever, by design, and a swallowed hold is
-indistinguishable from a wedged process from the outside.
+There is no frame counter, no `osGetTime`, no auto-advance *in this function*:
+`0xB000` is `A (0x8000) | B (0x2000) | START (0x1000)` and the word at
+`0x8011BE22 + i*0xA` is the *held* button state that `func_800C7458` refreshes
+once per game frame. So a swallowed hold is indistinguishable from a wedged
+process from the outside.
+
+**Corrected by §5.1**: the screen does not wait forever. The mission script keeps
+running behind it and its `0xFF00` command sets the same `0x8011D1B4` 500 ticks
+(~33 s) after the command that raised the screen. The timeout is in the script,
+not the screen.
 
 Two further details worth having on record, because both are "waiting, not
 hung" states that look identical on screen:
@@ -618,3 +623,288 @@ The two are told apart from the outside by
   which separate a spinning thread from an all-idle deadlock (§2).
 
 Check the first two before reaching for the third.
+
+---
+
+## 5. The results screen's timeout wedges the game (2026-07-28)
+
+Reported from real play on the host GPU: finish mission 1, then let the results
+screen sit for 15-30 s **without pressing anything**. On hardware/emulator that
+times out to the STAGE OVERVIEW screen — the same destination as A/B/START. In
+this port a burst of sounds that do not belong there (radio comms, the
+boss-health-bar sting) played and the process then froze permanently with one
+thread spinning.
+
+The mechanism was established from live captures of the wedged process
+(`scripts/capture_wedge_state.sh`, `scripts/capture_voice_state.sh`,
+`gdb -p ... thread apply all bt`):
+
+| captured | value |
+|---|---|
+| `0x8011D1B4` screen result | `1` — the timeout did set it |
+| `0x8011D1CC` mission clock | `0x44DC` = 17628 |
+| `0x8011D1E2` / `0x8011D1E6` | `0x02` / **`0x83`** |
+| `0x801094B4` current music | `0x1E` (handle `0x801094B0` = `0x457`) |
+| `0x800EBC00` per-retrace callback | `0` |
+| `0x8013C280` graphics tasks in flight | `0` |
+| spinning thread | `func_800C3FD0 <- func_80171A24 <- func_8019CE04 <- func_800CC690` |
+| voice table | 11 active class-0 voices, `func_800CB720() != 0` |
+
+`func_8019CE04`'s exit needs `func_800CB720() == 0`, and that function is
+`func_800CF488(2) + func_800CF488(1)` with one override: `if (*(u32*)0x801094B4
+== 0x1D) treat the class-0 term as idle`. With the current music reading `0x1E`
+the override does not apply, so the gate correctly refuses. The gate was never
+the bug; the wrong current-track id was a symptom.
+
+### 5.1 The timeout is a mission-script command, not a screen timer
+
+§4.1 is still correct that `func_80193A34` has no timer — the timeout lives in
+the **mission script**, which keeps running behind the results screen.
+
+`func_801921B8 -> func_801922A8` runs once per frame (from the per-retrace
+callback at `0x8019CFEC`, and from the mission loop's logic-only branch at
+`0x8019CE84`). It walks a table of 4-byte entries at `*(u32*)0x8011D278`:
+
+```
+struct { u16 time; u16 cmd; }        terminator: time == 0xFFFF
+for each entry:  if (entry.time == *(u32*)0x8011D1CC) dispatch(entry.cmd);
+```
+
+`0x8011D1CC` is the mission clock, incremented once per frame at `0x8019D048`
+(callback) or `0x8019CEB0` (mission loop). Matching is **exact equality**, so a
+command fires on exactly one tick. Commands `>= 0xF000` are opcodes, dispatched
+through three jump tables plus three explicit compares:
+
+| range | table | notes |
+|---|---|---|
+| `0xF001..0xF040` | `0x801A0664` | |
+| `0xF100..0xF127` | `0x801A05C4` | script-clock manipulation |
+| `0xF200..0xF228` | `0x801A0520` | fog / scale floats |
+| `0xFC00`, `0xFC10`, `0xFF00` | compared at `0x80192334/3C/44` | |
+
+Everything below `0xF000` goes to the loaded stage overlay, via the table at
+`0x801A0764` indexed by `*(u32*)0x8011D1BC - 1` (the stage number) — stage 1
+enters its overlay at `func_801D23A0`.
+
+The per-stage script is selected the same way (`0x801A077C`); **stage 1's table
+is at `0x801E8FFC`** in `seg_1B66F0`. Its end-of-mission block is:
+
+| tick | cmd | what it does |
+|---|---|---|
+| 8420 | `0xF002` | clear `0x8011D1E2` bit 2 (boss health bar off) |
+| 8579 | `0xF040` | `0x801926F0` |
+| 8580 | `0xF010` | **`*(u16*)0x8011D458 \|= 0x4000`** + per-player reset |
+| 8600 | `0x1510` | `func_800C992C(0x1E)` — radio comms clip |
+| 8650 | `0xF020` | `func_800C9514()`: **play music `0x1E`** + 300-step volume ramp |
+| 8740/8750/8900/9190/9330 | `0x1511..0x1515` | `func_800C992C(0x23/0x28/0x2D/0x32/0x37)` |
+| 9450 | `0xF001` | `0x8011D1E2 \|= 2` — **show the results screen** |
+| 9950 | `0xFF00` | **the timeout** |
+
+`0xFF00` is `0x8019274C`:
+
+```
+8019274C  lw    $t8, 0x8011D1B4
+80192754  bnez  $t8, <done>              ; player already dismissed it
+8019275C  jal   func_800C32CC
+80192764  addiu $t7, $zero, 0x1
+8019276C  jal   func_800D1680
+80192770  sw    $t7, 0x8011D1B4          ; (delay slot) result = 1
+```
+
+**The branch diff between the timeout path and the button path is: nothing.**
+Both write `1` to `0x8011D1B4` and call `func_800C32CC`; `0x80193B08` (the
+A/B/START poll) is the only other writer of that value during a mission. That is
+why both land on the stage overview. 9950 - 9450 = 500 ticks = ~33 s at 15 fps,
+which is the reported "15-30 s".
+
+Two other things this makes concrete. The boss fight is a script loop: `0x1200`
+at 7630/7780/7930/8080/8230 jumps the clock to 8420 once the boss-defeated flag
+(`0x8011D1D9 & 2`) is set (`0x801D28C4`), and `0x1201` at 8380 jumps it back to
+7630 while it is not (`0x801D2954`). And `0x8011D298` is not the "developer
+profiling flag" §1.3 guessed — it is the **cutscene state** (0/1/2/3), set by
+`func_801972A8` (script cmds `0x1000..0x1002`) and cleared at mission init
+(`0x8016D890`). That makes `func_801978C0`'s `osGetTime` busy-wait the cutscene
+playback limiter rather than a debug view, which if anything strengthens §1.3's
+case for 59.733 ms as the game's intended frame time.
+
+### 5.2 The writer of `0x801094B4`, and where the stray sounds come from
+
+`func_800C7FA4(id)` is *play music*:
+
+```
+if (id == 0)                       { func_800C80B8(); return; }        // stop
+if (id != 0x1D && id == *(0x801094B4)) return;                         // already playing
+func_800C80B8();                                                        // stop current
+e = (struct {u32 tempo; u32 romStart; u32 romEnd;}*)0x800EAB50 + id;   // music table
+func_800CD800(e->romStart, e->romEnd - e->romStart);
+*(0x801094B0) = func_800CD840();                                        // sequence handle
+func_800CF5B8(...); func_800CB808(e->tempo);
+if (*(0x801094C8) == 0) func_800CF61C(*(0x801094B0), 0x80);
+*(0x801094B4) = id;                                                     // <- the writer
+```
+
+`func_800C80B8` (stop) zeroes both `0x801094B0` and `0x801094B4`. The table at
+`0x800EAB50` has 0x1E real entries, so `0x1D` and `0x1E` are the last two
+tracks; `0x1D` is the one exempted from the "already playing" early-out, which
+is why `func_800CB720` singles it out.
+
+During a mission the **only** caller that plays `0x1E` is `func_800C9514`, and
+its only caller is script cmd `0xF020` at tick 8650. So a current track of
+`0x1E` at the audio gate means the script ran `0xF020` — nothing else can
+produce it.
+
+The region at `0x80109440..` in the capture is not a queue: it is the six-entry,
+0x14-byte **SFX channel table** based at `0x80109410` (zeroed by `0x800CB334`,
+scanned by `func_800C8944` and `func_800C9560`). Field `+0` is the sfx id and
+field `+4` is the audio driver's voice handle, so the capture's
+`0x450/0x451/0x454/0x457` are *handles*, and the ids actually playing were
+`0x2D`, `0x36`, `0x3B`:
+
+* `0x2D`, `0x36` — radio-comms clips; script cmds `0x1510..0x1515` call
+  `func_800C992C(0x1E/0x23/0x28/0x2D/0x32/0x37)` (stage-1 overlay `0x801D24F0`
+  onwards);
+* `0x3B` — the boss-health-bar sting, `func_800C8544(0x3B)` at `0x801DB3C0` and
+  `0x801DD904`, right where the overlay sets `0x8011D1E2 |= 4`.
+
+So the "stray" sounds are the mission's own end-of-stage script — they are only
+stray because they all fired at once, seconds after they should have.
+
+### 5.3 Root cause: the RCP frame-time model starves `func_800D2B40`
+
+`0x8011D1E6` bit 0 is the **cutscene-skip request**. `func_8016E454`, called
+once per frame from the callback via `func_8016DF5C`, is:
+
+```
+if (*(u16*)0x8011BAD0 & 0x10) return;
+if (*(u8*)0x8011D1E6 & 2) return;                       // skip already used
+for (i = 0; i < *(u32*)0x8011D1C4; i++)
+    if (*(u16*)(0x8011BE22 + i*10) & 0xB000)            // A | B | START held
+        if ((*(u16*)0x8011D458 & 0x4000) || *(u32*)0x8011D298)
+            *(u8*)0x8011D1E6 |= 1;
+```
+
+and the mission loop acts on it (`func_8019CE04`, `0x8019CE64`):
+
+```
+if (!(*(u8*)0x8011D1E6 & 1)) goto exit_tests;           // 0x8019CF20
+func_800D1610();  func_800D1640(0);                     // stop rendering
+0x8019CE84:  script + world + *(0x8011D1CC)++           // logic-only frame
+if (*(u32*)0x8011D298)            goto 0x8019CE84;      // cutscene still playing
+if (*(u16*)0x8011D458 & 0x4000)   goto 0x8019CE84;      // cutscene still armed
+*(u8*)0x8011D1E6 &= ~1;  func_800D1640(0x8019CF84);  func_800D1D00();
+```
+
+i.e. hold a button during a skippable cutscene and the game fast-forwards it
+with rendering off, then puts rendering back. Perfectly ordinary — except that
+`func_800D1640` starts with `func_800D2B40`:
+
+```
+800D2B40  v0 = 0x8013C280
+800D2B48  if (*v0 == 0) return;
+800D2B58  do { } while (*v0 != 0);        // wait until the RCP is idle
+```
+
+**That wait can never end in this port.** Two measurements:
+
+* `0x8013C280` read via `/proc/<pid>/mem` while a mission ran: **2911 zeros out
+  of 4321962 samples over 3 s — 0.067 %**. §1.4's pacing holds a graphics task
+  in flight for the whole 59.733 ms budget, so the only gap is between one task
+  retiring and the next being queued: on console that gap is the milliseconds
+  the CPU spends building the next display list, here the host builds it in
+  ~30 us.
+* It is not even a race that could occasionally go the right way.
+  `ultramodern::check_running_queue` only ever swaps to a **higher** priority
+  thread, so the waiting main thread is resumed exactly when the retrace-callback
+  thread blocks — which is immediately *after* it queued the next task. Every
+  poll reads non-zero, deterministically.
+
+So the sequence that produced the report is:
+
+1. The player holds A/B/START while the mission-intro cutscene is on screen
+   (entirely natural — A is what dismissed the Rumble Pak notice). At tick ~63
+   `func_8016E454` sets `0x8011D1E6 |= 1`.
+2. The mission loop takes the branch and parks in `func_800D1640(0)` — for the
+   rest of the mission. Bit 0 is therefore never consumed and never cleared
+   (`0x8019CF0C` is its only clear). Script cmd `0xF011` at tick 751 ORs bit 1
+   in, giving `0x03`; the stage-1 boss-defeat handler at `0x801D6274` later ORs
+   bit 7 in, giving the captured **`0x83`**.
+3. At the end of the mission the *callback* deregisters itself
+   (`func_800D1640(0)` at `0x8019D0E0`, once `func_800CB720()` reports idle).
+   Rendering stops, `0x8013C280` finally reaches 0, and the parked main thread
+   returns straight into the fast-forward body at `0x8019CE84`.
+4. `0xF010` set `0x8011D458 |= 0x4000` at tick 8580 and stage 1's script has no
+   later `0xF011`, so the fast-forward's exit condition can never hold. Both of
+   its back-edges (`0x8019CEDC`, `0x8019CEF0`) target `0x8019CE84`, not the outer
+   loop head at `0x8019CE5C` that §2.2's hook covers, so the thread never
+   re-entered an OS primitive: `[perf] 60.00 VI/s 0.00 frames/s`, every other
+   thread in `osRecvMesg`, callback pointer NULL — §2's signature exactly.
+5. Meanwhile that loop's own logic steps raced the mission clock through the
+   remainder of the script in milliseconds: the comms clips at 8600/8740/8750/
+   8900/9190/9330, the fanfare at 8650 (current track := `0x1E`), the results
+   flag at 9450 and the auto-proceed at 9950 (`0x8011D1B4 := 1`). That burst is
+   the stray sounds; the `0x1E` is why the audio gate then refused; and `0x44DC`
+   is simply where the racing clock happened to be when the process was sampled.
+
+The trigger is the skip request, not the timeout as such — once bit 0 is stuck,
+the mission wedges however the results screen is dismissed. The play-tester's
+working button-path sessions were ones where no skip request had been made.
+
+**This is not `segment_map.md` §d open question 1.** Nothing here is stale BSS:
+every value involved is in the boot segment's `.bss`, which librecomp zeroes at
+startup and `func_800CC174`/`0x8016D74C` re-initialise per mission. §d Q1 stays
+open.
+
+### 5.4 The fix
+
+Two changes, both required.
+
+**`src/main/rcp_timing.cpp` + `analysis/gen_syms.py`
+(`SPIN_YIELD_TEXT_OVERRIDES`)** — `func_800D2B40`'s spin hook becomes
+`ke_rcp_idle_wait(rdram)` instead of the generic `yield_self_1ms(rdram)`. It
+yields identically and additionally publishes a timestamp meaning "a game thread
+is waiting for the RCP to go idle". `ke_gfx_task_end()` checks that stamp inside
+its wait loop and, when it is live (within 5 ms — the waiter refreshes it once
+per yield), retires the in-flight task immediately instead of holding it for the
+rest of the frame budget. The waiter then sees the counter at 0 on its next poll
+and `func_800D1640` returns, which is what a console does within one frame.
+
+The stamp ages out as soon as the waiter leaves the loop, so pacing resumes on
+the very next graphics task; nothing else in the game waits on `0x8013C280`
+this way, and no `func_800D2B40` wait happens at all on a normal frame (the
+counter is already 0 when the front-end screens re-register their callbacks).
+
+**`analysis/gen_syms.py` (`EXTRA_SPIN_YIELD_HOOKS`)** — a second yield hook at
+`0x8019CE84` for the fast-forward loop. This one is defence in depth rather than
+the cure: with the first fix the loop is entered and left during the intro, as
+on console, but the loop is still a no-yield poll from ultramodern's point of
+view and every other one in this game is hooked.
+
+Hooks go 14 -> 15; detected spin loops are unchanged at 20.
+
+### 5.5 Verification
+
+Reproduction, all of it removable scaffolding that is **not** in the tree: the
+mission clock `0x8011D1CC` was set to 8420 from `ke_gfx_task_end()` once the
+mission had run past tick 800, which drops the game into the real end-of-mission
+script block (`0xF002`, `0xF040`, `0xF010`, the comms clips, `0xF020`, `0xF001`,
+`0xFF00`) without having to kill the boss — every command below is the game's
+own. `xdotool` held `x` (A) for 25-30 s across the intro cutscene to arm the
+skip request, then pressed nothing at all.
+
+Before the fix, that reproduces the report exactly: `0x8011D1E6` = `0x03` for
+the whole mission, then `[perf] 60.00 VI/s 0.00 frames/s` with the main thread
+spinning in `func_8019CE04`'s frame work, and the trace showing the whole tail
+of the script firing at once.
+
+After the fix, across three runs: `0x8011D1E6` reads `0x01` for exactly one
+sampled frame and `0x02` thereafter — the skip request is consumed and cleared
+during the intro, as on console — the mission plays out at 15 fps, the results
+screen appears at tick 9450, `0xFF00` fires at 9950 with no sound of any kind,
+and the game lands on the **STAGE 2 / PATH A** overview screen ("Dead City",
+route map, stage-select cursor). No `0.00 frames/s` line in any of them.
+
+All three runs held A across the intro, i.e. they exercise the failing case, not
+just the healthy one. Dismissing the results screen with A instead of waiting
+(same scaffold, same hold, `x` pressed at tick 9480) lands on the same overview
+screen, and the plain timeout with no hold at all - which is what the scaffold
+did before this fix - already did.
