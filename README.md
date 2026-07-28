@@ -12,26 +12,23 @@ rendered through RT64's modern graphics backend.
 
 ## Status
 
-- The recompiled binary **boots, initializes RT64/SDL, and runs the game's
-  own code**: KEMCO logo → title screen ("KNIFE EDGE / NOSE GUNNER") → the
-  full attract loop (story text, Mars canyon flythrough, space-station
-  cinematic), looping stably. See `analysis/docs/boot-debug.md` for the debug
-  log that got it there, including a 200 s soak run with no crash.
-- **Audio works.** The game's `aspMain` microcode is recompiled with RSPRecomp
-  and fed to an SDL2 sink (see `analysis/docs/audio.md`); measured output is
-  non-silent, stereo, and tracks the attract sequence.
-- **Gameplay works.** The main menu, game-mode/difficulty/stage select and
-  stage 1 (Amethyst Ravine) play through to a boss and a game over, then back
-  to the title screen. The game also runs at the right speed now: it advances
-  one logic step per *rendered* frame, so with RT64 retiring graphics tasks
-  instantly it used to run ~4x too fast; `src/main/rcp_timing.cpp` models the
-  RCP's frame time. See `analysis/docs/timing-and-mission-debug.md`.
-  There is still no ROM picker, and `recomp::start_game()` is triggered
-  automatically a few VI retraces after boot.
-- Keyboard input is wired up (see "Controls" below) so `osContInit` reports a
-  connected controller instead of the game's "no controllers attached" stall,
-  but there's no controller/gamepad support, no save-file UI, and no
-  in-game configuration yet.
+Playable and stable. Boots through the KEMCO logo, title screen and attract
+loop into the menus and gameplay — verified on real hardware through stage 4
+including an alternate stage path, with correct music and sound effects,
+correct game speed, and working results/stage-overview screens. No known
+defects.
+
+Not yet verified: full campaign completion, and high-score persistence across
+runs (analyzed and almost certainly absent — which is *faithful*, since the
+game only probes for a Controller Pak; see `analysis/docs/enhancements.md`).
+
+Not yet built: widescreen, high framerate, mouse aim, gamepad support, and
+packaging. The configuration system that these will hang off is in place —
+`vanilla` is the default profile and the regression baseline (see
+"Configuration" below and `analysis/docs/enhancements.md`).
+
+Development notes, working practices and a documentation index live in
+`CLAUDE.md`.
 
 ## Repository policy
 
