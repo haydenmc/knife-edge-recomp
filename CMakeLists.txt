@@ -74,6 +74,101 @@ endif()
 set(KE_GENERATED_DIR "" CACHE PATH
     "Directory of N64Recomp output (RecompiledFuncs/*.c + recomp_overlays.inl + funcs.h). Leave empty to build against src/stub_game/ instead.")
 
+# Recompiler output is a build artifact and is NOT committed (see .gitignore).
+# Point KE_ROM at a Knife Edge (USA) ROM and the build regenerates it for you:
+# byteswap/verify the ROM, run the analysis pipeline, then N64Recomp + RSPRecomp.
+# Without a ROM the build falls back to KE_GENERATED_DIR, then to src/stub_game/.
+set(KE_ROM "" CACHE FILEPATH
+    "Path to a Knife Edge (USA) ROM (.z64/.v64/.n64). When set, the recompiled game code is generated at configure time.")
+
+if (KE_ROM)
+    if (NOT EXISTS "${KE_ROM}")
+        message(FATAL_ERROR "KE_ROM is set to '${KE_ROM}' but that file does not exist.")
+    endif()
+    if (NOT EXISTS "${N64RECOMP_HOST_TOOL}")
+        message(FATAL_ERROR
+            "KE_ROM is set but the N64Recomp host tool is missing at ${N64RECOMP_HOST_TOOL}.\n"
+            "Build it first: cmake -S deps/N64Recomp -B deps/N64Recomp/build -G Ninja "
+            "-DCMAKE_BUILD_TYPE=Release && cmake --build deps/N64Recomp/build")
+    endif()
+
+    # The analysis pipeline needs tomlkit/rabbitizer. Prefer the project venv
+    # (created by the devcontainer's postCreateCommand) over the system python.
+    if (EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+        set(KE_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+    else()
+        find_program(KE_PYTHON NAMES python3 python REQUIRED)
+    endif()
+    execute_process(COMMAND "${KE_PYTHON}" -c "import tomlkit, rabbitizer"
+                    RESULT_VARIABLE KE_PYDEPS_RESULT ERROR_QUIET)
+    if (NOT KE_PYDEPS_RESULT EQUAL 0)
+        message(FATAL_ERROR
+            "KE_ROM is set but ${KE_PYTHON} is missing the analysis dependencies.\n"
+            "Install them, e.g.: python3 -m venv .venv && .venv/bin/pip install rabbitizer capstone tomlkit")
+    endif()
+    set(KE_ROM_Z64 "${CMAKE_BINARY_DIR}/knife_edge.z64")
+    set(KE_REGEN_DIR "${CMAKE_BINARY_DIR}/generated")
+
+    # Configure-time so the glob below sees the results. The analysis pipeline
+    # is deterministic, so re-running is idempotent; it is skipped when the
+    # normalized ROM and the recompiled output are already present and newer.
+    if (NOT EXISTS "${KE_ROM_Z64}")
+        message(STATUS "Knife Edge: normalizing ROM -> ${KE_ROM_Z64}")
+        execute_process(
+            COMMAND "${KE_PYTHON}" "${CMAKE_SOURCE_DIR}/analysis/byteswap.py" "${KE_ROM}" "${KE_ROM_Z64}"
+            RESULT_VARIABLE KE_BYTESWAP_RESULT
+            OUTPUT_VARIABLE KE_BYTESWAP_OUTPUT
+            ERROR_VARIABLE KE_BYTESWAP_OUTPUT)
+        if (NOT KE_BYTESWAP_RESULT EQUAL 0)
+            message(FATAL_ERROR "ROM ingest failed:\n${KE_BYTESWAP_OUTPUT}")
+        endif()
+    endif()
+
+    if (NOT EXISTS "${KE_REGEN_DIR}/funcs.h")
+        message(STATUS "Knife Edge: recompiling game code (this takes a minute)")
+        file(MAKE_DIRECTORY "${KE_REGEN_DIR}")
+        execute_process(
+            COMMAND "${KE_PYTHON}" "${CMAKE_SOURCE_DIR}/analysis/gen_syms.py" -q
+                    --rom-path "${KE_ROM_Z64}" --output-func-path "${KE_REGEN_DIR}"
+            RESULT_VARIABLE KE_GENSYMS_RESULT
+            ERROR_VARIABLE KE_GENSYMS_OUTPUT)
+        if (NOT KE_GENSYMS_RESULT EQUAL 0)
+            message(FATAL_ERROR "gen_syms.py failed:\n${KE_GENSYMS_OUTPUT}")
+        endif()
+        execute_process(
+            COMMAND "${N64RECOMP_HOST_TOOL}" "${CMAKE_SOURCE_DIR}/config/knife_edge.us.toml"
+            RESULT_VARIABLE KE_RECOMP_RESULT
+            OUTPUT_VARIABLE KE_RECOMP_OUTPUT
+            ERROR_VARIABLE KE_RECOMP_OUTPUT)
+        if (NOT KE_RECOMP_RESULT EQUAL 0)
+            message(FATAL_ERROR "N64Recomp failed:\n${KE_RECOMP_OUTPUT}")
+        endif()
+        if (EXISTS "${RSPRECOMP_HOST_TOOL}" AND EXISTS "${CMAKE_SOURCE_DIR}/config/aspMain.us.toml")
+            file(MAKE_DIRECTORY "${KE_REGEN_DIR}/rsp")
+            # config/aspMain.us.toml carries paths relative to config/ for the
+            # `make -C analysis` workflow. Write a copy pointing at this build
+            # tree instead of editing the checked-in config.
+            file(READ "${CMAKE_SOURCE_DIR}/config/aspMain.us.toml" KE_RSP_CFG)
+            string(REGEX REPLACE "rom_file_path[ ]*=[ ]*\"[^\"]*\""
+                   "rom_file_path = \"${KE_ROM_Z64}\"" KE_RSP_CFG "${KE_RSP_CFG}")
+            string(REGEX REPLACE "output_file_path[ ]*=[ ]*\"[^\"]*\""
+                   "output_file_path = \"${KE_REGEN_DIR}/rsp/aspMain.cpp\"" KE_RSP_CFG "${KE_RSP_CFG}")
+            file(WRITE "${CMAKE_BINARY_DIR}/aspMain.build.toml" "${KE_RSP_CFG}")
+            execute_process(
+                COMMAND "${RSPRECOMP_HOST_TOOL}" "${CMAKE_BINARY_DIR}/aspMain.build.toml"
+                RESULT_VARIABLE KE_RSP_RESULT
+                OUTPUT_VARIABLE KE_RSP_OUTPUT
+                ERROR_VARIABLE KE_RSP_OUTPUT)
+            if (NOT KE_RSP_RESULT EQUAL 0)
+                message(FATAL_ERROR "RSPRecomp failed:\n${KE_RSP_OUTPUT}")
+            endif()
+        endif()
+    endif()
+
+    set(KE_GENERATED_DIR "${KE_REGEN_DIR}")
+    message(STATUS "Knife Edge: using regenerated game code at ${KE_GENERATED_DIR}")
+endif()
+
 # ---------------------------------------------------------------------------
 # RT64 / ultramodern / librecomp configuration
 # ---------------------------------------------------------------------------

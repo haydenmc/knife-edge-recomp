@@ -1,9 +1,14 @@
-# --- Never commit the ROM or asset/data dumps (functional RE code IS committable) ---
+# --- Never commit the ROM or asset/data dumps ---
 *.n64
 *.z64
 *.v64
 *.rom
 /build*/
+
+# Recompiler output is a build artifact, not source. Regenerate with a ROM:
+#   make -C analysis recomp     (or configure with -DKE_ROM=<path>)
+# The reviewable source of truth is config/knife_edge.us.syms.toml.
+/generated/
 
 # Tooling noise
 .venv/

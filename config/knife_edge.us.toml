@@ -3,8 +3,8 @@
 [input]
 entrypoint = 0x800C2400
 symbols_file_path = "knife_edge.us.syms.toml"
-rom_file_path = "../build/knife_edge.z64"
-output_func_path = "../generated/us"
+rom_file_path = "/tmp/claude-1000/-workspaces-knife-edge-recomp/318a3895-712e-4c6b-ab0a-bd840c6ec831/scratchpad/romgen/knife_edge.z64"
+output_func_path = "/tmp/claude-1000/-workspaces-knife-edge-recomp/318a3895-712e-4c6b-ab0a-bd840c6ec831/scratchpad/romgen/generated"
 functions_per_output_file = 50
 recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n#ifdef __cplusplus\n}\n#endif"
 

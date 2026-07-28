@@ -1,7 +1,8 @@
 name: build
 
 # Repo policy (see README.md "Repository policy" and analysis/docs/build-notes.md):
-# reverse-engineered *functional* code is committed (generated/us/*.c/*.cpp,
+# recompiler output is NOT committed (it is a build artifact); the repo holds
+# only the analysis pipeline and metadata (config/*.toml,
 # config/*.toml) — only the ROM and asset/data dumps are excluded (.gitignore).
 # That means this workflow compiles committed sources only: no ROM fetch, no
 # secrets, no decryption step. See the `regen-verify` job at the bottom for
@@ -30,7 +31,7 @@ jobs:
   # resulting binary is a well-formed executable via a no-ROM smoke test.
   # ---------------------------------------------------------------------------
   build:
-    name: build (ubuntu-latest, clang/ninja)
+    name: build (stub, no ROM)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -97,13 +98,16 @@ jobs:
         run: ninja -C deps/N64Recomp/build N64Recomp RSPRecomp
 
       # ---------------------------------------------------------------------
-      # Main project: KnifeEdgeRecompiled, built against the committed
-      # N64Recomp output in generated/us/ (KE_GENERATED_DIR).
+      # Main project: KnifeEdgeRecompiled, built WITHOUT a ROM. With no
+      # KE_ROM/KE_GENERATED_DIR, CMake compiles src/stub_game/ instead of
+      # recompiled game code, so this job validates everything that is not
+      # ROM-derived (runtime shim, RT64, librecomp, ultramodern, audio,
+      # input) with no secrets and works for pull requests from forks.
       # ---------------------------------------------------------------------
       - name: Compute main build cache key
         id: buildkey
         run: |
-          src_hash="${{ hashFiles('CMakeLists.txt', 'src/**', 'generated/us/**', 'config/**') }}"
+          src_hash="${{ hashFiles('CMakeLists.txt', 'src/**', 'config/**') }}"
           key="build-${{ runner.os }}-clang19-${{ steps.submodules.outputs.n64recomp }}-${{ steps.submodules.outputs.runtime }}-${{ steps.submodules.outputs.rt64 }}-$src_hash"
           echo "key=$key" >> "$GITHUB_OUTPUT"
 
@@ -122,7 +126,6 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
-            -DKE_GENERATED_DIR="${{ github.workspace }}/generated/us" \
             -DN64RECOMP_HOST_TOOL="${{ github.workspace }}/deps/N64Recomp/build/N64Recomp" \
             -DRSPRECOMP_HOST_TOOL="${{ github.workspace }}/deps/N64Recomp/build/RSPRecomp"
 
@@ -132,7 +135,7 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KnifeEdgeRecompiled-linux
+          name: KnifeEdgeRecompiled-linux-stub
           path: build/KnifeEdgeRecompiled
           if-no-files-found: error
 
@@ -184,9 +187,110 @@ jobs:
           echo "OK: binary is well-formed and fails cleanly without a ROM."
 
   # ---------------------------------------------------------------------------
-  # Regenerate the recompiled output from an actual ROM and diff it against
-  # what's committed in generated/us/. This is the CI-shaped version of the
-  # developer recipe documented in README.md ("Regenerating from a ROM").
+  # Release build: the ONLY job that touches a ROM.
+  #
+  # Produces the shippable binary, which contains recompiled game *code* but no
+  # assets or game data (verified: no ROM asset bytes are embedded — the game
+  # reads everything from the player's own ROM at runtime). Players must supply
+  # their own ROM; the binary refuses to run without a matching one.
+  #
+  # Manual dispatch only. Supply the ROM by one of:
+  #   * self-hosted runner with the ROM already on disk -> set `rom_path`
+  #   * hosted runner + your own encrypted storage -> add a fetch+decrypt step
+  #     below (credentials in secrets; the ROM itself never enters the repo).
+  # Secrets are unavailable to fork PRs by design, which is why this is not part
+  # of the normal build.
+  # ---------------------------------------------------------------------------
+  release:
+    name: "release (needs a ROM, manual dispatch)"
+    if: github.event_name == 'workflow_dispatch' && inputs.rom_path != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install toolchain + analysis deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build clang lld pkg-config g++ \
+            libsdl2-dev libx11-dev libvulkan-dev vulkan-tools \
+            glslang-tools spirv-tools mesa-vulkan-drivers xvfb \
+            python3-venv
+          python3 -m venv .venv
+          .venv/bin/pip install -q rabbitizer capstone tomlkit
+
+      # TODO(self-hosted encrypted ROM): replace/augment this with a fetch from
+      # your own storage, e.g.
+      #   curl -sSf "$ROM_URL" -o rom.enc && age -d -i <(echo "$AGE_KEY") rom.enc > rom.z64
+      # using secrets for the URL/key, then point ROM_PATH at the result.
+      - name: Locate the ROM
+        id: rom
+        run: |
+          if [ ! -f "${{ inputs.rom_path }}" ]; then
+            echo "::error::rom_path '${{ inputs.rom_path }}' not found on this runner"
+            exit 1
+          fi
+          echo "path=${{ inputs.rom_path }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build N64Recomp host tools
+        run: |
+          cmake -S deps/N64Recomp -B deps/N64Recomp/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          ninja -C deps/N64Recomp/build N64Recomp RSPRecomp
+
+      # KE_ROM makes CMake normalize the ROM, run the analysis pipeline, and
+      # invoke N64Recomp + RSPRecomp at configure time (see CMakeLists.txt).
+      - name: Configure + build (regenerates game code from the ROM)
+        run: |
+          cmake -S . -B build-release -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
+            -DKE_ROM="${{ steps.rom.outputs.path }}"
+          ninja -C build-release
+
+      # Fails the release if any ROM asset bytes leaked into the binary.
+      - name: Assert the binary embeds no game assets
+        run: |
+          .venv/bin/python - <<'PY'
+          import random, sys
+          rom = open("build-release/knife_edge.z64", "rb").read()
+          binary = open("build-release/KnifeEdgeRecompiled", "rb").read()
+          random.seed(1)
+          leaked = tried = 0
+          for _ in range(400):
+              off = random.randrange(0x2E000, len(rom) - 64)   # past the boot code segment
+              chunk = rom[off:off + 64]
+              if len(set(chunk)) < 8:
+                  continue
+              tried += 1
+              if chunk in binary:
+                  leaked += 1
+          print(f"sampled {tried} distinctive ROM data blocks; embedded in binary: {leaked}")
+          sys.exit(1 if leaked else 0)
+          PY
+
+      - name: Upload release binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: KnifeEdgeRecompiled-linux
+          path: build-release/KnifeEdgeRecompiled
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Prove the analysis pipeline is deterministic: regenerate the symbol/config
+  # metadata from an actual ROM twice and assert config/ is unchanged versus
+  # what's committed. Recompiler output itself is not committed, so there is
+  # nothing else to diff.
   #
   # This job is INTENTIONALLY not part of the normal push/pull_request build:
   # per repo policy the ROM is never committed and is not provided to hosted
@@ -233,14 +337,14 @@ jobs:
       - name: Regenerate symbols + config (make -C analysis)
         run: make -C analysis
 
-      - name: Run N64Recomp (writes straight into generated/us per config/knife_edge.us.toml)
+      - name: Run N64Recomp (output is a build artifact, not committed)
         run: deps/N64Recomp/build/N64Recomp config/knife_edge.us.toml
 
-      - name: Diff regenerated output against committed generated/us
+      - name: Assert regenerated metadata matches what's committed in config/
         run: |
-          if ! git diff --exit-code -- generated/us config; then
+          if ! git diff --exit-code -- config; then
             echo "::error::regenerating from the ROM produced output that differs from" \
-                 "what's committed in generated/us or config/ — see the diff above." \
+                 "what's committed in config/ — see the diff above." \
                  "Either the analysis pipeline changed behavior or the committed" \
                  "output is stale; investigate before merging."
             exit 1
