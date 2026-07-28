@@ -44,6 +44,12 @@ struct EnhancementFlags {
     // scale mode) instead of the original 320x240. Vanilla (off) renders
     // native 320x240 like original hardware, upscaled by the display path.
     bool high_resolution = false;
+
+    // Expands the 3D scene's field of view to fill the window's aspect ratio
+    // via RT64's Expand mode, instead of staying 4:3. Vanilla (off) keeps the
+    // original 4:3 presentation, pillarboxed in a wider window, like original
+    // hardware.
+    bool widescreen = false;
 };
 
 // Fidelity knobs -- NOT enhancements. These approximate a real-hardware
@@ -84,7 +90,8 @@ Config load_config(int argc, char** argv, const std::filesystem::path& app_folde
 
 // The enhancement set actually in effect for cfg.profile:
 //   Vanilla  -> EnhancementFlags{} (everything off)
-//   Enhanced -> the curated set (input_latching = true, high_resolution = true)
+//   Enhanced -> the curated set (input_latching = true, high_resolution = true,
+//               widescreen = true)
 //   Custom   -> cfg.enhancements verbatim
 EnhancementFlags effective_enhancements(const Config& cfg);
 

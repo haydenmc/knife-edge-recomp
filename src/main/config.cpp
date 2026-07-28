@@ -62,6 +62,9 @@ namespace {
         "# Renders the 3D scene at window resolution via RT64 instead of native\n"
         "# 320x240.\n"
         "high_resolution = false\n"
+        "# Expands the 3D scene's field of view to fill the window's aspect ratio\n"
+        "# instead of staying 4:3 (pillarboxed).\n"
+        "widescreen = false\n"
         "\n"
         "[tuning]\n"
         "# Fidelity knobs, NOT enhancements -- see src/main/rcp_timing.cpp.\n"
@@ -127,7 +130,7 @@ namespace {
         if (const toml::table* enh_tbl = tbl["enhancements"].as_table()) {
             // Known [enhancements] keys -- add one line here per new flag.
             static constexpr std::string_view known_enhancement_keys[] = {
-                "input_latching", "high_resolution",
+                "input_latching", "high_resolution", "widescreen",
             };
             for (auto&& [key, value] : *enh_tbl) {
                 std::string_view k = key.str();
@@ -147,6 +150,9 @@ namespace {
             }
             if (auto v = (*enh_tbl)["high_resolution"].value<bool>()) {
                 cfg.enhancements.high_resolution = *v;
+            }
+            if (auto v = (*enh_tbl)["widescreen"].value<bool>()) {
+                cfg.enhancements.widescreen = *v;
             }
         }
 
@@ -233,6 +239,7 @@ kerecomp::EnhancementFlags kerecomp::effective_enhancements(const Config& cfg) {
             EnhancementFlags flags{};
             flags.input_latching = true;
             flags.high_resolution = true;
+            flags.widescreen = true;
             return flags;
         }
         case Profile::Custom:
@@ -250,6 +257,9 @@ std::string kerecomp::describe_config(const Config& cfg) {
     }
     if (effective.high_resolution) {
         parts.emplace_back("high_resolution=on");
+    }
+    if (effective.widescreen) {
+        parts.emplace_back("widescreen=on");
     }
     if (cfg.tuning.rcp_frame_ms > 0.0) {
         char buf[64];

@@ -329,16 +329,16 @@ int main(int argc, char** argv) {
     input_latching_enabled.store(enhancements.input_latching, std::memory_order_relaxed);
     kerecomp::set_rcp_frame_ms_tuning(config.tuning.rcp_frame_ms);
 
-    // enhancements.high_resolution (analysis/docs/enhancements.md). Must be
-    // set before recomp::start() below spins up the gfx thread, since
+    // enhancements.high_resolution / .widescreen (analysis/docs/enhancements.md).
+    // Must be set before recomp::start() below spins up the gfx thread, since
     // gfx_thread_func() reads get_graphics_config() as its very first action
     // (both directly for developer_mode and via create_render_context(), and
     // again for its "old_config" baseline) -- setting it any later would
-    // race the gfx thread's startup read. Every field except res_option pins
-    // today's value-initialized GraphicsConfig{} default (all enums 0, ints
-    // 0) so that vanilla (high_resolution off) stays bit-identical to
-    // pre-existing behavior; ds_option=1 here vs the implicit 0 before this
-    // code existed are equivalent because set_application_user_config()
+    // race the gfx thread's startup read. Every field except res_option and
+    // ar_option pins today's value-initialized GraphicsConfig{} default (all
+    // enums 0, ints 0) so that vanilla (both flags off) stays bit-identical
+    // to pre-existing behavior; ds_option=1 here vs the implicit 0 before
+    // this code existed are equivalent because set_application_user_config()
     // (src/main/rt64_render_context.cpp) clamps with max(ds_option, 1).
     ultramodern::renderer::GraphicsConfig gfx_config{};
     gfx_config.developer_mode = false;
@@ -347,7 +347,8 @@ int main(int argc, char** argv) {
     gfx_config.wm_option = ultramodern::renderer::WindowMode::Windowed;
     gfx_config.hr_option = ultramodern::renderer::HUDRatioMode::Original;
     gfx_config.api_option = ultramodern::renderer::GraphicsApi::Auto;
-    gfx_config.ar_option = ultramodern::renderer::AspectRatio::Original;
+    gfx_config.ar_option = enhancements.widescreen ? ultramodern::renderer::AspectRatio::Expand
+                                                    : ultramodern::renderer::AspectRatio::Original;
     gfx_config.msaa_option = ultramodern::renderer::Antialiasing::None;
     gfx_config.rr_option = ultramodern::renderer::RefreshRate::Original;
     gfx_config.hpfb_option = ultramodern::renderer::HighPrecisionFramebuffer::Auto;
