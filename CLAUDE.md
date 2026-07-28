@@ -26,6 +26,18 @@ Not yet verified: full campaign completion; `--profile enhanced` input latching
 by hand; high-score persistence across runs (analyzed — almost certainly absent
 and *faithful*, see `analysis/docs/enhancements.md` candidates table).
 
+Enhancement work has started. `high_resolution` (render 3D at window
+resolution via RT64) shipped and is in the `enhanced` profile — verified
+headless (A/B screenshots, ~3x distinct colors), owner hands-on GPU check
+pending. Agreed order for the rest: gamepad support → widescreen → mouse aim
+→ Flatpak → high framerate. Rationale: gamepad before mouse aim (both touch
+`get_input`'s axis path; gamepad is the simpler pattern-setter), widescreen
+rides the config→GraphicsConfig plumbing hi-res built, high framerate last
+because it is the deepest timing-sensitive cut, Flatpak once the config
+surface stops churning. Mouse aim caveat: reticle updates at game rate
+(~15 Hz pad sampling) regardless of input smoothness — fully smooth aim is
+coupled to the high-framerate work.
+
 RCP frame budget: **36.5 ms** (~24.6 measured game fps), tuned by the owner
 against real N64 gameplay footage. This replaced an earlier 59.733 ms figure
 taken from the game's own cutscene limiter — that paced cutscenes correctly but
@@ -145,5 +157,7 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    confounded by the title screen auto-advancing and cannot decide it.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
-4. Enhancements not yet started: widescreen, high framerate, mouse aim, gamepad
-   support, Flatpak packaging. High-score persistence deferred (see candidates).
+4. Enhancements not yet started, in agreed order (see Status): gamepad support,
+   widescreen, mouse aim, Flatpak packaging, high framerate. High-score
+   persistence deferred (see candidates).
+5. Owner hands-on GPU check of `high_resolution` (see Status).
