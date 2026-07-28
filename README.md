@@ -20,10 +20,14 @@ rendered through RT64's modern graphics backend.
 - **Audio works.** The game's `aspMain` microcode is recompiled with RSPRecomp
   and fed to an SDL2 sink (see `analysis/docs/audio.md`); measured output is
   non-silent, stereo, and tracks the attract sequence.
-- **Gameplay beyond the title/attract sequence has not been verified.**
-  There is no ROM picker and `recomp::start_game()` is only ever triggered
-  automatically a few VI retraces after boot — nothing has driven the game
-  past Start yet, so mission/gameplay code paths are untested.
+- **Gameplay works.** The main menu, game-mode/difficulty/stage select and
+  stage 1 (Amethyst Ravine) play through to a boss and a game over, then back
+  to the title screen. The game also runs at the right speed now: it advances
+  one logic step per *rendered* frame, so with RT64 retiring graphics tasks
+  instantly it used to run ~4x too fast; `src/main/rcp_timing.cpp` models the
+  RCP's frame time. See `analysis/docs/timing-and-mission-debug.md`.
+  There is still no ROM picker, and `recomp::start_game()` is triggered
+  automatically a few VI retraces after boot.
 - Keyboard input is wired up (see "Controls" below) so `osContInit` reports a
   connected controller instead of the game's "no controllers attached" stall,
   but there's no controller/gamepad support, no save-file UI, and no
@@ -211,7 +215,8 @@ recipe, not as something that runs on every push.
   Zelda64Recomp's reference implementation.
 - `src/main/` — runtime entry point (`main.cpp`), RT64 renderer wiring
   (`rt64_render_context.{h,cpp}`), overlay registration
-  (`register_overlays.cpp`), small platform helpers (`support.{h,cpp}`).
+  (`register_overlays.cpp`), the RCP frame-time model that sets the game's
+  speed (`rcp_timing.cpp`), small platform helpers (`support.{h,cpp}`).
 - `src/stub_game/` — placeholder game code used when no ROM/generated code is
   unset, so the executable always links and runs even without a ROM-derived
   build.
@@ -229,6 +234,10 @@ recipe, not as something that runs on every push.
 - `analysis/docs/boot-debug.md` — the crash-by-crash debugging log from first
   boot to a stable title/attract loop; the best single source for "what does
   and doesn't work yet."
+- `analysis/docs/timing-and-mission-debug.md` — why the game ran 4x too fast
+  and why starting a mission hung, with the measurements and backtraces; also
+  documents `KE_PERF` (frame-rate instrumentation) and `KE_RCP_FRAME_MS` (the
+  RCP frame-time budget), and the headless recipe for driving the menus.
 
 ## Credits
 

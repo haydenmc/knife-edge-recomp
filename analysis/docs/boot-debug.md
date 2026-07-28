@@ -104,8 +104,14 @@ for `ignored_funcs`/`reimplemented_funcs`. The remaining 13 become hooks:
 `func_800CD710`, `func_800D2B40`, and one per menu/mission overlay image
 (the KEMCO/attract screens all spin on the flag at 0x8011D1B4).
 
-`analysis/gen_syms.EXTRA_SPIN_YIELD_HOOKS` is the manual escape hatch; it is
-currently empty.
+`analysis/gen_syms.EXTRA_SPIN_YIELD_HOOKS` is the manual escape hatch.
+
+**Updated 2026-07-28** (`analysis/docs/timing-and-mission-debug.md` §2): two
+more loops of this kind were found by driving the menus, both of which hung
+mission start. The detector now also accepts a body that stores to a *fixed*
+global (20 loops, 14 hooks), and the escape hatch carries one entry for the
+in-game overlay's mission loop, whose body is too large and too branchy for the
+detector's straight-line rule.
 
 ---
 
@@ -215,9 +221,13 @@ of 32 kHz stereo PCM, peak 8274, RMS 740, 99.6 % non-zero, spectral flatness
 
 Remaining, in rough priority order:
 
-1. Gameplay has not been reached - the headless harness has no way to press
-   Start, so the title/attract loop was never advanced past. Expect further
-   overlay churn on the mission segments at 0x801D21F0.
+1. ~~Gameplay has not been reached~~ - **done 2026-07-28**, see
+   `analysis/docs/timing-and-mission-debug.md`: the menus are now driven with
+   `xdotool`, two further busy-wait loops that hung mission start are fixed, and
+   stage 1 plays through to a boss and a game over. The same document fixes the
+   game running ~4x too fast (it advances one logic step per *rendered* frame
+   and RT64 retires a graphics task instantly, so the RCP frame time now has an
+   explicit model).
 2. `[Info] Ambiguous jal target 0x8017B0C0 / 0x801D21F0 / 0x801DC320` - overlay
    slots shared by several images fall back to runtime lookup. Correct, but it
    means a wrong overlay resident at call time would land in the wrong function.

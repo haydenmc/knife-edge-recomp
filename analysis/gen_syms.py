@@ -53,7 +53,50 @@ REL_OUT = "../generated/us"
 
 # Extra busy-wait yield hooks, for loops find_functions.find_spin_loops() does
 # not recognise.  Entries are (segment name, function vram, hook vram, why).
-EXTRA_SPIN_YIELD_HOOKS = []
+#
+# find_spin_loops() only accepts a *straight-line* loop body (no branch other
+# than the back-edge) so that it can prove the loop cannot reach an OS
+# primitive.  The in-game overlay's mission loop is the one place in this game
+# where the wait and the work share a loop: the body is 53 instructions with the
+# per-frame work behind `if (state.flags & 1)`, and when that bit is clear the
+# executed cycle is just `lbu; andi; beqz -> lw 0x8011D1B4; beqz` - a pure poll
+# with no yield, which wedged ultramodern's cooperative scheduler on mission
+# start.  Relaxing the detector to reason about paths instead of whole bodies
+# was tried and rejected: it also matches every memcpy/strlen/table-scan loop in
+# the ROM (_bcopy, memcpy, _bcmp, alCopy, __osSumcalc, ...), and a 1 ms yield in
+# those is a large, silent slowdown.  The audit behind this entry is in
+# analysis/docs/timing-and-mission-debug.md; all three back-edges of the loop
+# (0x8019CF28 / 0x8019CF3C / 0x8019CF54) target 0x8019CE5C, so one hook covers
+# them.
+EXTRA_SPIN_YIELD_HOOKS = [
+    ("seg_1501A0", 0x8019CE04, 0x8019CE5C,
+     "mission loop: polls the frame-ready bit at 0x8011D1D8+0xE and the "
+     "screen-result word at 0x8011D1B4 (find_spin_loops needs a "
+     "straight-line body; this one is 53 instructions with the per-frame "
+     "work behind a branch)"),
+]
+
+
+# RCP frame-time model (analysis/docs/timing-and-mission-debug.md).
+#
+# The game advances exactly one logic step per *rendered* frame and skips a
+# retrace whenever a graphics task is still in flight, so its speed is set by
+# how long the RCP takes.  librecomp+RT64 retire a graphics task essentially
+# instantly, which made every retrace produce a step (60/s instead of 15/s).
+#
+# func_800D25F0 is the graphics task thread (it receives from the task queue at
+# 0x801423EC, does the double-buffer wait in func_800D2768, runs the task and
+# then posts completion, which is what decrements the outstanding-task counter
+# at 0x8013C280 that the per-retrace callback tests).  Bracketing the task with
+# these two hooks gives it a realistic minimum residency.
+#
+# Entries are (segment name, function vram, hook vram, C text, why).
+RCP_PACING_HOOKS = [
+    ("boot", 0x800D25F0, 0x800D26D0, "ke_gfx_task_begin();",
+     "osSpTaskStartGo: the RCP has just been handed this display list"),
+    ("boot", 0x800D25F0, 0x800D2728, "ke_gfx_task_end(rdram);",
+     "hold the completion message until the modelled RCP frame time elapsed"),
+]
 
 
 def hexint(v):
@@ -192,6 +235,10 @@ def main(argv=None):
         "/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n"
         "   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\n"
         "extern void yield_self_1ms(uint8_t* rdram);\n"
+        "/* src/main/rcp_timing.cpp - models the time the RCP needs for one frame,\n"
+        "   which is what sets this game's speed; used by RCP_PACING_HOOKS. */\n"
+        "extern void ke_gfx_task_begin(void);\n"
+        "extern void ke_gfx_task_end(uint8_t* rdram);\n"
         "#ifdef __cplusplus\n"
         "}\n"
         "#endif"
@@ -291,6 +338,19 @@ def main(argv=None):
         h["func"] = nm
         h["before_vram"] = hexint(hook_vram)
         h["text"] = "yield_self_1ms(rdram);"
+        hooks.append(h)
+
+    # RCP frame-time model (see RCP_PACING_HOOKS above).
+    for segname, func_vram, hook_vram, text, why in RCP_PACING_HOOKS:
+        nm = stub_names.get((segname, func_vram))
+        if nm is None:
+            raise SystemExit("rcp pacing hook target %s %08X is not an emitted "
+                             "function" % (segname, func_vram))
+        h = tomlkit.table()
+        h.add(tomlkit.comment(why))
+        h["func"] = nm
+        h["before_vram"] = hexint(hook_vram)
+        h["text"] = text
         hooks.append(h)
     patches["hook"] = hooks
     cfg_path = os.path.join(args.config_dir, CONFIG_NAME)

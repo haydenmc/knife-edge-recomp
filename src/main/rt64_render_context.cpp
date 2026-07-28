@@ -9,6 +9,7 @@
 #include "ultramodern/config.hpp"
 
 #include "rt64_render_context.h"
+#include "support.h"
 
 namespace {
     // RT64's Application::Core wants raw pointers to RDP/VI register storage
@@ -253,6 +254,7 @@ kerecomp::renderer::RT64Context::RT64Context(uint8_t* rdram, ultramodern::render
 kerecomp::renderer::RT64Context::~RT64Context() = default;
 
 void kerecomp::renderer::RT64Context::send_dl(const OSTask* task) {
+    kerecomp::perf_count_dl();
     app->state->rsp->reset();
     app->interpreter->loadUCodeGBI(task->t.ucode & 0x3FFFFFF, task->t.ucode_data & 0x3FFFFFF, true);
     app->processDisplayLists(app->core.RDRAM, task->t.data_ptr & 0x3FFFFFF, 0, true);

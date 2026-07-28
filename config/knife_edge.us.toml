@@ -3,10 +3,10 @@
 [input]
 entrypoint = 0x800C2400
 symbols_file_path = "knife_edge.us.syms.toml"
-rom_file_path = "/tmp/claude-1000/-workspaces-knife-edge-recomp/318a3895-712e-4c6b-ab0a-bd840c6ec831/scratchpad/romgen/knife_edge.z64"
-output_func_path = "/tmp/claude-1000/-workspaces-knife-edge-recomp/318a3895-712e-4c6b-ab0a-bd840c6ec831/scratchpad/romgen/generated"
+rom_file_path = "../build/knife_edge.z64"
+output_func_path = "../generated/us"
 functions_per_output_file = 50
-recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n#ifdef __cplusplus\n}\n#endif"
+recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n/* src/main/rcp_timing.cpp - models the time the RCP needs for one frame,\n   which is what sets this game's speed; used by RCP_PACING_HOOKS. */\nextern void ke_gfx_task_begin(void);\nextern void ke_gfx_task_end(uint8_t* rdram);\n#ifdef __cplusplus\n}\n#endif"
 
 [patches]
 stubs = []
@@ -150,6 +150,12 @@ before_vram = 0x801E0320
 text = "yield_self_1ms(rdram);"
 
 [[patches.hook]]
+# polling loop 8017B128..8017B144 (find_functions.find_spin_loops)
+func = "func_8017B0C0_0EF7C0"
+before_vram = 0x8017B128
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
 # polling loop 8017DA58..8017DA60 (find_functions.find_spin_loops)
 func = "func_8017DA00_0EF7C0"
 before_vram = 0x8017DA58
@@ -190,3 +196,21 @@ text = "yield_self_1ms(rdram);"
 func = "func_801DC320_4D5FC0"
 before_vram = 0x801DC380
 text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# mission loop: polls the frame-ready bit at 0x8011D1D8+0xE and the screen-result word at 0x8011D1B4 (find_spin_loops needs a straight-line body; this one is 53 instructions with the per-frame work behind a branch)
+func = "func_8019CE04_1501A0"
+before_vram = 0x8019CE5C
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# osSpTaskStartGo: the RCP has just been handed this display list
+func = "func_800D25F0"
+before_vram = 0x800D26D0
+text = "ke_gfx_task_begin();"
+
+[[patches.hook]]
+# hold the completion message until the modelled RCP frame time elapsed
+func = "func_800D25F0"
+before_vram = 0x800D2728
+text = "ke_gfx_task_end(rdram);"

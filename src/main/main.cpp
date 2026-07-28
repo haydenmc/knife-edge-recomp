@@ -349,6 +349,7 @@ int main(int argc, char** argv) {
     // Waiting a few retraces guarantees both double-buffered states are valid.
     static std::u8string start_game_id = knife_edge_entry.game_id;
     events_callbacks.vi_callback = +[]() {
+        kerecomp::perf_count_vi();
         static int vis = 0;
         if (vis <= 3 && ++vis == 3) {
             recomp::start_game(start_game_id);

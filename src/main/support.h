@@ -19,4 +19,11 @@ namespace kerecomp {
     // Shows a native OS error dialog. Falls back to stderr if SDL's video
     // subsystem isn't available (e.g. running headless).
     void show_error_message_box(const char* title, const char* message);
+
+    // ---- pacing instrumentation (analysis/docs/timing-and-mission-debug.md) --
+    // Off unless KE_PERF is set in the environment. When on, one line per
+    // second is written to stderr with the measured VI retrace rate and the
+    // game's own frame rate (graphics display lists submitted per second).
+    void perf_count_vi();
+    void perf_count_dl();
 }

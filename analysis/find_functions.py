@@ -383,10 +383,21 @@ def build_functions(seg, sc, cand, min_valid=0.90):
 # what is left to find is the conditional form.  The signature that separates a
 # poll from an ordinary data loop is that the polled address is loop-invariant:
 #
-#   * the loop body is short and contains no call, no store and no other branch,
+#   * the loop body is short and contains no call and no other branch,
 #   * it performs at least one load, and
 #   * no load's base register is written inside the body (a memcpy/strlen style
 #     loop always advances its pointer, so it is excluded).
+#
+# A store is allowed only when its address is materialised from immediates
+# inside the body, i.e. it writes a *fixed* global.  That covers the "publish a
+# value while waiting" idiom the menu/mission screens use -
+#
+#     do { *(u32*)0x8011D1E8 = rand(); } while (*(u32*)0x8011D1B4 == 0);
+#
+# - while still excluding every memcpy/fill/list-walk loop, all of which store
+# through a pointer the loop itself advances.  Rejecting stores outright is what
+# made find_spin_loops() miss the loop that hung mission start (see
+# analysis/docs/timing-and-mission-debug.md).
 #
 # gen_syms.py turns each hit into a [[patches.hook]] that calls yield_self_1ms().
 
@@ -491,9 +502,6 @@ def find_spin_loops(seg, funcs, leaf):
                     if other_branch or jr_jalr:
                         bad = True
                         break
-                if bop in STORE_OPS:
-                    bad = True
-                    break
                 d = _writes_gpr(bw)
                 if d:
                     written_any.add(d)
@@ -520,30 +528,57 @@ def find_spin_loops(seg, funcs, leaf):
                 continue
             # One forward pass over the body: every load must address either a
             # register the body never writes, or an address the body itself
-            # materialises from immediates (lui / addiu from $zero).
-            const_regs = set()
+            # materialises from immediates (lui / addiu from $zero).  A store
+            # must always be to such a materialised - i.e. absolute - address.
+            const_val = {}          # reg -> value, for regs built from immediates
             nloads = 0
+            load_addrs = set()      # None means "not statically known"
+            store_addrs = set()
             for j in body:
                 bw = W[j]
                 bop = bw >> 26
                 rs = (bw >> 21) & 0x1F
                 rt = (bw >> 16) & 0x1F
+                imm = bw & 0xFFFF
+                simm = imm - 0x10000 if imm & 0x8000 else imm
                 if bop in LOAD_OPS:
                     nloads += 1
-                    if rs not in const_regs and rs in written_any:
+                    if rs not in const_val and rs in written_any:
                         bad = True
                         break
+                    load_addrs.add((const_val[rs] + simm) & 0xFFFFFFFF
+                                   if rs in const_val else None)
+                elif bop in STORE_OPS:
+                    if rs not in const_val:
+                        bad = True
+                        break
+                    store_addrs.add((const_val[rs] + simm) & 0xFFFFFFFF)
                 if bop == 0x03:                       # jal: clobbers caller-saved
-                    const_regs -= CALL_CLOBBER
+                    for r in CALL_CLOBBER:
+                        const_val.pop(r, None)
                 elif bop == 0x0F:                     # lui
-                    const_regs.add(rt)
-                elif bop in (0x09, 0x0D, 0x0C, 0x0E) and (rs == 0 or rs in const_regs):
-                    const_regs.add(rt)                # addiu/ori/andi/xori
+                    const_val[rt] = (imm << 16) & 0xFFFFFFFF
+                elif bop in (0x09, 0x0D, 0x0C, 0x0E) and (rs == 0 or rs in const_val):
+                    v = const_val.get(rs, 0)
+                    if bop == 0x09:                   # addiu (sign-extended)
+                        const_val[rt] = (v + simm) & 0xFFFFFFFF
+                    elif bop == 0x0D:                 # ori
+                        const_val[rt] = v | imm
+                    elif bop == 0x0C:                 # andi
+                        const_val[rt] = v & imm
+                    else:                             # xori
+                        const_val[rt] = v ^ imm
                 else:
                     d = _writes_gpr(bw)
                     if d:
-                        const_regs.discard(d)
+                        const_val.pop(d, None)
             if bad or not nloads:
+                continue
+            # A poll waits on something *another* thread writes.  If the body
+            # both writes and reads the same address it is computing, not
+            # waiting - e.g. the rejection sampler at 0x801D3A68,
+            # `do { *p = rand() & 0xF; } while (*p >= 10);`.
+            if store_addrs and (None in load_addrs or (store_addrs & load_addrs)):
                 continue
             out.append({
                 "func": f["vram"],
