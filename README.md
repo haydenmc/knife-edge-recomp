@@ -165,7 +165,9 @@ commented defaults on first run. It selects a **profile**:
 
 - `vanilla` (default) — every enhancement off, faithful to original hardware
   behavior. This is what every other section of this README assumes.
-- `enhanced` — a curated set of opt-in quality-of-life changes.
+- `enhanced` — a curated set of opt-in quality-of-life changes: currently
+  `input_latching` (see Controls above) and `high_resolution` (renders the 3D
+  scene at window resolution through RT64 instead of native 320x240).
 - `custom` — reads individual `[enhancements]` flags from the file.
 
 Two CLI flags, and nothing else config-related:

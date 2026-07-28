@@ -59,6 +59,9 @@ namespace {
         "[enhancements]\n"
         "# Only consulted when profile.active = \"custom\".\n"
         "input_latching = false\n"
+        "# Renders the 3D scene at window resolution via RT64 instead of native\n"
+        "# 320x240.\n"
+        "high_resolution = false\n"
         "\n"
         "[tuning]\n"
         "# Fidelity knobs, NOT enhancements -- see src/main/rcp_timing.cpp.\n"
@@ -122,13 +125,28 @@ namespace {
         }
 
         if (const toml::table* enh_tbl = tbl["enhancements"].as_table()) {
+            // Known [enhancements] keys -- add one line here per new flag.
+            static constexpr std::string_view known_enhancement_keys[] = {
+                "input_latching", "high_resolution",
+            };
             for (auto&& [key, value] : *enh_tbl) {
-                if (key.str() != "input_latching") {
-                    unknown.emplace_back(std::string("enhancements.") + std::string(key.str()));
+                std::string_view k = key.str();
+                bool is_known = false;
+                for (std::string_view known : known_enhancement_keys) {
+                    if (k == known) {
+                        is_known = true;
+                        break;
+                    }
+                }
+                if (!is_known) {
+                    unknown.emplace_back(std::string("enhancements.") + std::string(k));
                 }
             }
             if (auto v = (*enh_tbl)["input_latching"].value<bool>()) {
                 cfg.enhancements.input_latching = *v;
+            }
+            if (auto v = (*enh_tbl)["high_resolution"].value<bool>()) {
+                cfg.enhancements.high_resolution = *v;
             }
         }
 
@@ -214,6 +232,7 @@ kerecomp::EnhancementFlags kerecomp::effective_enhancements(const Config& cfg) {
         case Profile::Enhanced: {
             EnhancementFlags flags{};
             flags.input_latching = true;
+            flags.high_resolution = true;
             return flags;
         }
         case Profile::Custom:
@@ -228,6 +247,9 @@ std::string kerecomp::describe_config(const Config& cfg) {
 
     if (effective.input_latching) {
         parts.emplace_back("input_latching=on");
+    }
+    if (effective.high_resolution) {
+        parts.emplace_back("high_resolution=on");
     }
     if (cfg.tuning.rcp_frame_ms > 0.0) {
         char buf[64];

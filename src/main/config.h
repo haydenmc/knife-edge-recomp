@@ -7,8 +7,8 @@
 // available as a faithful regression baseline ("vanilla") at all times.
 // This header is the config surface for that policy; src/main/main.cpp reads
 // it once at startup and wires the resulting flags into the input backend
-// (press-latching) and src/main/rcp_timing.cpp (the RCP frame-time tuning
-// knob).
+// (press-latching), src/main/rcp_timing.cpp (the RCP frame-time tuning
+// knob), and the RT64 renderer's graphics config (resolution).
 //
 // Precedence, matching analysis/docs/enhancements.md: CLI > env > config file
 // > built-in defaults. The only CLI flags are --profile <name> and
@@ -39,6 +39,11 @@ struct EnhancementFlags {
     // analysis/docs/timing-and-mission-debug.md 3.1) still registers on the
     // next read. Vanilla (off) samples raw state per read, same as hardware.
     bool input_latching = false;
+
+    // Renders the 3D scene at window resolution through RT64 (window-integer-
+    // scale mode) instead of the original 320x240. Vanilla (off) renders
+    // native 320x240 like original hardware, upscaled by the display path.
+    bool high_resolution = false;
 };
 
 // Fidelity knobs -- NOT enhancements. These approximate a real-hardware
@@ -79,7 +84,7 @@ Config load_config(int argc, char** argv, const std::filesystem::path& app_folde
 
 // The enhancement set actually in effect for cfg.profile:
 //   Vanilla  -> EnhancementFlags{} (everything off)
-//   Enhanced -> the curated set (currently just input_latching = true)
+//   Enhanced -> the curated set (input_latching = true, high_resolution = true)
 //   Custom   -> cfg.enhancements verbatim
 EnhancementFlags effective_enhancements(const Config& cfg);
 
