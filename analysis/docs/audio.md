@@ -387,10 +387,14 @@ audio-init lines — no RSP diagnostics, no assertions.
 3. **`ucode_data` DMA length.** librecomp reads 0xF80 bytes where the task says
    0x800 (§1.5). Harmless here, but it is a real difference from hardware and
    would matter for a microcode that reads its own data tail.
-4. **Only the attract loop has been heard.** The headless harness still cannot
-   press Start (`boot-debug.md` §6), so in-mission SFX, the ADPCM voice path
-   under load and the streamed-music path (`func_800CD800`, the 30 files at ROM
-   `0x78C860`) are exercised only as far as the attract sequence uses them.
+4. ~~**Only the attract loop has been heard.**~~ **RESOLVED (2026-07-28) by
+   real-hardware-GPU play-testing**: during a full stage 1 session the music was
+   "the right track, and sounds completely correct" and all sound effects played
+   properly (play-tester's words). That exercises in-mission SFX, the ADPCM
+   voice path under gameplay load, and the streamed-music path
+   (`func_800CD800`, the 30 files at ROM `0x78C860`) end-to-end. The runtime
+   destination pointer for streaming was never traced statically — it did not
+   need to be; the path demonstrably works.
 5. **Second/third ucode blob boundaries.** This pass pinned rspboot and the
    audio ucode exactly; the two graphics ucode text/data blobs that follow are
    still only bracketed, not split (`segment_map.md` §d open question 2). RT64
