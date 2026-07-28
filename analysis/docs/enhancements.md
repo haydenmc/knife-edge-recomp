@@ -96,6 +96,15 @@ stay as env vars rather than config-file entries):
 | `KE_AUDIO_DUMP` | Path to write raw PCM audio output to, for offline inspection (`scripts/smoke_test.sh` uses it). |
 | `KE_PERF` | Turns on the per-second VI-rate / game-frame-rate counters in `src/main/support.cpp`, used throughout `analysis/docs/timing-and-mission-debug.md` to measure pacing. |
 
+## Candidate enhancements (not implemented)
+
+Ideas that have been analyzed but deliberately not built yet. Recorded so the
+reasoning is not re-derived.
+
+| Candidate | Analysis | Mechanism | Notes |
+|---|---|---|---|
+| High-score persistence | The game's only save-adjacent symbol is `osPfsIsPlug` (a Controller Pak probe), and we register `SaveType::None` with `get_connected_device_info` reporting `Pak::None`. So the game sees no pak and keeps scores in RAM only — which is *faithful* to a console with no pak inserted, i.e. vanilla-correct. librecomp already HLEs the Pfs/Controller Pak API (`osPfsAllocateFile` and friends are in its reimplemented set), so wiring a virtual pak is mostly reporting the device and choosing where its data file lives (alongside the rest of `ke_recomp_data`). | (d) runtime shim | Presenting a pak the player did not have is technically an enhancement and belongs behind a flag — though it is a strong candidate for the `enhanced` profile's default set, since persistent high scores are about the least controversial modernization available. Deferred by project decision. |
+
 ## Config file
 
 Schema, precedence (CLI > env > config file > built-in defaults), and
