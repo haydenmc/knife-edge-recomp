@@ -378,14 +378,152 @@ Two things this does *not* cover, if a desktop still intercepts holds:
    time varies with scene complexity, so a light 2D menu would have run faster
    than a mission. Modelling that would need an RDP cost estimate RT64 does not
    expose; `KE_RCP_FRAME_MS` is the knob if a per-scene number is ever wanted.
-2. **Only stage 1 path A was played.** The other five mission overlays load into
-   the same `0x801D21F0` slot and were not exercised, so `segment_map.md` §d
-   open question 1 (nine descriptors declare BSS past the DMA'd image and no
-   loader zeroes it, which only matters on a *re*load into a shared slot) is
-   still open — it was not what hung mission start, and a first load into
-   zeroed RDRAM is safe.
+2. **`segment_map.md` §d open question 1 is still OPEN.** Nine descriptors
+   declare BSS past the DMA'd image and no loader zeroes it, which only matters
+   on a *re*load into a shared slot. §4 exercised the `0x801D21F0` slot a second
+   time (mission 1 → mission 2) without a fault, but that is a single sample and
+   the stale bytes left behind depend on how the mission was played (score,
+   kills, RNG, live object state), so the question is not closed.
 3. **Streamed music during a mission is unverified.** `func_800CD800`'s
    destination is still the untraced runtime pointer at `0x80149AEC`
    (`segment_map.md` §d open question 5). Audio is non-silent in-mission
    (`scripts/smoke_test.sh` passes) but the streamed tracks specifically were
    not identified in the output.
+
+---
+
+## 4. "Stuck on the post-mission results screen" — not a hang (2026-07-28)
+
+A play-tester completed mission 1, saw the results screen (SCORE / PLAYER 1
+STATUS / ENEMY DEFEAT % / VULCAN LEVEL / HIT %, drawn over the darkened mission
+terrain) and reported that the game sat there permanently with input doing
+nothing and no console output.
+
+**It was never a hang.** The binary from that run does not print the
+`SDL text input (IME): ...` line, so it predates §3.1's `SDL_StopTextInput()`
+fix: the desktop's input method was swallowing the held button. A later build
+completed mission 1 and reached stage 2 cleanly. No code change was made for
+this report; §3.1's fix already covers it.
+
+### 4.1 The results screen has no timer — it exits only on a button
+
+Established statically, and it is what makes the "dropped input" explanation
+sufficient. The screen is `func_80193A34` in the in-game code overlay
+(`seg_1501A0`), reached from the mission sub-state dispatcher `func_800C7E1C`
+(jump table at `0x800ED414`, entry 20 = `0x800C7E7C`) once the script command at
+`0x80192434` sets bit 1 of the flag byte `0x8011D1E2`:
+
+```
+80193A40  jal   func_800C7AD0 / func_800C7A60   ; fade the terrain down
+80193A7C  jal   func_801957BC/8C8/A60           ; draw the table (by game mode)
+80193AA4  jal   func_80193E94
+80193AAC  lw    $t6, 0x8011D1B4                 ; screen result
+80193AB4  bnez  $t6, 80193B2C                   ; already set -> do nothing
+80193AC0  lw    $t7, 0x8011D1C4                 ; player count
+80193AC8  beqz  $t7, 80193B2C
+80193AE8  lhu   $t0, 0x8011BE22 + i*0xA         ; controller i, held buttons
+80193AEC  andi  $t1, $t0, 0xB000                ; A | B | START
+80193AF0  beqz  $t1, next
+80193AF8  jal   func_800C32CC
+80193B08  sw    $t2, 0x8011D1B4                 ; result = 1  (mission complete)
+```
+
+There is no frame counter, no `osGetTime`, no auto-advance: `0xB000` is
+`A (0x8000) | B (0x2000) | START (0x1000)` and the word at `0x8011BE22 + i*0xA`
+is the *held* button state that `func_800C7458` refreshes once per game frame.
+So the screen waits forever, by design, and a swallowed hold is
+indistinguishable from a wedged process from the outside.
+
+Two further details worth having on record, because both are "waiting, not
+hung" states that look identical on screen:
+
+* Once a button *is* seen, `0x8011D1B4` becomes 1 and the `bnez` at `0x80193AB4`
+  makes every later press a no-op — so a genuinely stuck completion would also
+  report "input does nothing".
+* The mission loop `func_8019CE04` does not return the moment the result is set.
+  Its exit needs all three of `result != 0`, `!(*(u16*)0x8011BAD0 & 0x2000)` and
+  `func_800CB720() == 0`, and `func_800CB720` is
+  `func_800CF488(2) + func_800CF488(1)`, i.e. the number of sound/sequence
+  players still active (`0x80149CF4` count, list at `0x80149CFC`, stride
+  `0x120`). The game therefore holds the results screen until the mission-end
+  audio has finished. A sequence player that never reports idle would freeze the
+  screen with input dead — the same picture again.
+
+### 4.2 How mission completion was reproduced without beating the boss
+
+Stage 1 only ends when its boss is killed, which is not automatable, so the
+completion path was driven by firing the game's own "mission cleared" script
+command from the shim. Recorded here because it is the cheap way to test any
+mission-end path; the scaffold itself was **removed** and is not in the tree.
+
+The command is the case at `0x80192434` of the script interpreter
+`func_801922A8`:
+
+```
+*(u8*)0x8011D1E2 |= 2;      /* show the results screen */
+*(u8*)0x8011D1E5  = 0;
+*(u32*)0x8011D1F0 = 0;      /* selects func_80193A34 over func_80196810 */
+*(u32*)0x8011D204 = 0;  *(u32*)0x8011D200 = 0;  *(u32*)0x8011D1FC = 0;
+func_800D1680();
+```
+
+Writing those six globals from `ke_gfx_task_end()` in `src/main/rcp_timing.cpp`
+(which already runs once per game frame and has `rdram`) N frames after
+`ke_overlay_dma()` sees a load into the shared mission slot `0x801D21F0` puts
+the results screen up in seconds. `rdram` addressing is
+`*(uint32_t*)(rdram + (vaddr & 0x0FFFFFFF))` for words and `^ 3` for bytes.
+Optional invulnerability for longer runs: hold `*(u32*)0x8011D464` (player 1
+health %, the value `func_801752D8` prints in the HUD) at 100.
+
+With that, `xdotool` reached the results screen, dismissed it with `x` (A),
+advanced through the STAGE 2 / PATH A select and the Rumble Pak notice, played
+mission 2 (Dead City) and reached *its* results screen — so the completion
+transition, the score accumulation in `func_800CC4D0`, the stage counter at
+`0x8011D1BC`, the intermission screen `func_800CC8D0` and a second load into the
+shared `0x801D21F0` slot all work.
+
+**One latent hazard was found and is deliberately left unfixed.** Two of five
+forced completions died with
+
+```
+Failed to find function at 0x8019CF84
+```
+
+(`librecomp`'s `get_function`, which `std::exit()`s). `0x8019CF84` is the
+mission's per-retrace callback, registered in `0x800EBC00` by `func_800D1640`
+and dispatched by `func_800D2930`'s `jalr`. It deregisters itself
+(`func_800D1640(0)` at `0x8019D0E0`) only under the same three-way condition the
+mission loop uses, and the callback runs at most once per RCP frame (~60 ms
+under §1.4's pacing) while the mission loop re-tests it every ~1 ms — so the
+main thread can leave the loop and reach `func_800CC8D0`'s first DMA while the
+pointer is still live. On hardware that is harmless: `func_800CC8D0`'s four
+images only reach `0x8018DBF0`, so the bytes at `0x8019CF84` are *not*
+overwritten and the callback stays valid for the frame or so until it retires
+itself. `ke_overlay_dma()` in `src/main/register_overlays.cpp`, however, grows
+the unload to whole-section granularity and drops all of `seg_1501A0`
+(`0x8016D6F0..0x801A0C50`), so that still-intact code becomes unresolvable.
+
+The fix would be to re-register a section this DMA only *partially* covers,
+before loading the incoming sections so theirs win for any address both claim.
+It is not applied because the fault has only ever been produced by the forced
+trigger above — a natural completion sets up the mission-end audio, which
+changes the interleaving — and because re-registering makes an address in the
+overwritten head resolve to the old section's function instead of the new bytes.
+If `Failed to find function at 0x8019CF84` is ever seen in normal play, that is
+the change to make.
+
+### 4.3 Diagnostic lesson
+
+A screen that waits on input is indistinguishable from a hang once input is
+being dropped: same frozen picture, same dead controller, same silent stderr.
+The two are told apart from the outside by
+
+* the `SDL text input (IME): on at window creation, off now` line at startup —
+  its **absence** means the build predates §3.1 and the input path is suspect
+  before anything else is;
+* `KE_PERF=1` — a wedged game thread reads `60.00 VI/s 0.00 frames/s`, while a
+  screen that is merely waiting keeps its 15–17 frames/s;
+* `gdb -p <pid> -batch -ex "thread apply all bt 20"` plus `top -H -p <pid>`,
+  which separate a spinning thread from an all-idle deadlock (§2).
+
+Check the first two before reaching for the third.

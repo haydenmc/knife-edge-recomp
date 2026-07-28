@@ -122,6 +122,8 @@ namespace kerecomp {
 // and librecomp treats that as fatal. Dropping the whole displaced section is
 // the closest representable behaviour - its tail bytes survive in rdram exactly
 // as on hardware, but the game never calls into a half-overwritten overlay.
+// (That last clause has a known counter-example on the mission-completion path;
+// see analysis/docs/timing-and-mission-debug.md section 4.2.)
 extern "C" void ke_overlay_dma(uint32_t rom, int32_t ram, uint32_t size) {
     std::lock_guard lock{ overlay_mutex };
 
