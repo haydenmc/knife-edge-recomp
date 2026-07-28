@@ -37,4 +37,11 @@ namespace kerecomp {
     // The KE_RCP_FRAME_MS env var still takes precedence when set. Call once,
     // before recomp::start(), with the resolved kerecomp::Config's value.
     void set_rcp_frame_ms_tuning(double ms);
+
+    // ---- enhancements (analysis/docs/enhancements.md, src/main/full_height.cpp) --
+    // Turns the full_height enhancement on/off (removes the in-mission
+    // letterbox, rendering the full 320x240 frame instead of 320x200).
+    // Implemented in full_height.cpp. Call once, before recomp::start(), with
+    // the resolved kerecomp::EnhancementFlags's value.
+    void set_full_height_enhancement(bool on);
 }

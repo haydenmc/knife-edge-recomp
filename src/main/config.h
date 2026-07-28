@@ -50,6 +50,14 @@ struct EnhancementFlags {
     // original 4:3 presentation, pillarboxed in a wider window, like original
     // hardware.
     bool widescreen = false;
+
+    // Removes the in-mission letterbox: the game renders missions at
+    // 320x200 (a 20-line black band top and bottom), an RDP scissor derived
+    // from a height global that the viewport/projection never see -- the
+    // extra rows are genuinely rendered scene, not a stretch. On = full
+    // 320x240. Vanilla (off) keeps the 320x200 letterbox, faithful to
+    // original hardware.
+    bool full_height = false;
 };
 
 // Fidelity knobs -- NOT enhancements. These approximate a real-hardware
@@ -91,7 +99,9 @@ Config load_config(int argc, char** argv, const std::filesystem::path& app_folde
 // The enhancement set actually in effect for cfg.profile:
 //   Vanilla  -> EnhancementFlags{} (everything off)
 //   Enhanced -> the curated set (input_latching = true, high_resolution = true,
-//               widescreen = true)
+//               widescreen = true). full_height is deliberately NOT included
+//               yet, pending the project owner's hands-on hardware
+//               verification -- see analysis/docs/enhancements.md.
 //   Custom   -> cfg.enhancements verbatim
 EnhancementFlags effective_enhancements(const Config& cfg);
 

@@ -6,7 +6,7 @@ symbols_file_path = "knife_edge.us.syms.toml"
 rom_file_path = "../build/knife_edge.z64"
 output_func_path = "../generated/us"
 functions_per_output_file = 50
-recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n/* src/main/rcp_timing.cpp - models the time the RCP needs for one frame,\n   which is what sets this game's speed; used by RCP_PACING_HOOKS. */\nextern void ke_gfx_task_begin(void);\nextern void ke_gfx_task_end(uint8_t* rdram);\nextern void ke_rcp_idle_wait(uint8_t* rdram);\n#ifdef __cplusplus\n}\n#endif"
+recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n/* src/main/rcp_timing.cpp - models the time the RCP needs for one frame,\n   which is what sets this game's speed; used by RCP_PACING_HOOKS. */\nextern void ke_gfx_task_begin(void);\nextern void ke_gfx_task_end(uint8_t* rdram);\nextern void ke_rcp_idle_wait(uint8_t* rdram);\n/* src/main/full_height.cpp - full-height missions enhancement: rewrites the\n   mission's 320x200 request to 320x240 when the flag is on. */\nextern uint32_t ke_view_height(uint32_t w, uint32_t h);\n#ifdef __cplusplus\n}\n#endif"
 
 [patches]
 stubs = []
@@ -112,6 +112,10 @@ renamed = [
 [[patches.hook]]
 func = "func_800D1D10"
 text = "ke_overlay_dma(((uint32_t)ctx->r4) & 0x1FFFFFFF, (int32_t)ctx->r5, (uint32_t)ctx->r6);"
+
+[[patches.hook]]
+func = "func_800C3044"
+text = "ctx->r5 = (int32_t)ke_view_height((uint32_t)ctx->r4, (uint32_t)ctx->r5);"
 
 [[patches.hook]]
 # polling loop 800CD7B4..800CD7BC (find_functions.find_spin_loops)

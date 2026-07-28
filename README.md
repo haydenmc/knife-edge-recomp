@@ -170,7 +170,10 @@ commented defaults on first run. It selects a **profile**:
   scene at window resolution through RT64 instead of native 320x240), and
   `widescreen` (expands the 3D field of view to the window's aspect ratio
   instead of 4:3-pillarboxing it).
-- `custom` — reads individual `[enhancements]` flags from the file.
+- `custom` — reads individual `[enhancements]` flags from the file, including
+  `full_height` (removes the in-mission 20-line letterbox, revealing the full
+  320x240 frame) — not part of `enhanced` yet, pending hands-on hardware
+  verification.
 
 Two CLI flags, and nothing else config-related:
 

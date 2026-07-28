@@ -269,6 +269,9 @@ def main(argv=None):
         "extern void ke_gfx_task_begin(void);\n"
         "extern void ke_gfx_task_end(uint8_t* rdram);\n"
         "extern void ke_rcp_idle_wait(uint8_t* rdram);\n"
+        "/* src/main/full_height.cpp - full-height missions enhancement: rewrites the\n"
+        "   mission's 320x200 request to 320x240 when the flag is on. */\n"
+        "extern uint32_t ke_view_height(uint32_t w, uint32_t h);\n"
         "#ifdef __cplusplus\n"
         "}\n"
         "#endif"
@@ -321,6 +324,25 @@ def main(argv=None):
         "(int32_t)ctx->r5, (uint32_t)ctx->r6);"
     )
     hooks = tomlkit.aot()
+    hooks.append(hook)
+
+    # Full-height missions enhancement (analysis/docs/letterbox-full-height.md).
+    # The in-mission letterbox (320x200, rows 20..219) is only an RDP scissor:
+    # the per-frame clear builder func_800C277C computes uly=(240-H)/2 from the
+    # height global 0x8010BAE4, and nothing else in the ROM reads that height -
+    # the viewport (Vp at 0x8016AEC0, 320x240) and projection (30deg / 4:3) are
+    # already full-frame. func_800C3044(w, h) is the lo-res mode setter that
+    # stores the global; the mission overlay is its only caller passing h=200
+    # (jal 0x8019CE38, immediate 0x240500C8 at 0x8019CE3C). Entry hook (no
+    # before_vram) rewrites a1: ke_view_height returns 240 iff the enhancement
+    # is on and (w,h)==(320,200), else h unchanged - so front-end callers
+    # (320,240) and the blank/unblank pair are untouched.
+    hook = tomlkit.table()
+    hook["func"] = "func_800C3044"
+    hook["text"] = (
+        "ctx->r5 = (int32_t)ke_view_height((uint32_t)ctx->r4, "
+        "(uint32_t)ctx->r5);"
+    )
     hooks.append(hook)
 
     # Busy-wait yield hooks (analysis/docs/boot-debug.md).

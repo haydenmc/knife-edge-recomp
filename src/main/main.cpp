@@ -328,6 +328,7 @@ int main(int argc, char** argv) {
     kerecomp::EnhancementFlags enhancements = kerecomp::effective_enhancements(config);
     input_latching_enabled.store(enhancements.input_latching, std::memory_order_relaxed);
     kerecomp::set_rcp_frame_ms_tuning(config.tuning.rcp_frame_ms);
+    kerecomp::set_full_height_enhancement(enhancements.full_height);
 
     // enhancements.high_resolution / .widescreen (analysis/docs/enhancements.md).
     // Must be set before recomp::start() below spins up the gfx thread, since

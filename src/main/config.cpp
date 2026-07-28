@@ -65,6 +65,9 @@ namespace {
         "# Expands the 3D scene's field of view to fill the window's aspect ratio\n"
         "# instead of staying 4:3 (pillarboxed).\n"
         "widescreen = false\n"
+        "# Removes the 20-line letterbox during missions (renders the full\n"
+        "# 320x240 frame).\n"
+        "full_height = false\n"
         "\n"
         "[tuning]\n"
         "# Fidelity knobs, NOT enhancements -- see src/main/rcp_timing.cpp.\n"
@@ -130,7 +133,7 @@ namespace {
         if (const toml::table* enh_tbl = tbl["enhancements"].as_table()) {
             // Known [enhancements] keys -- add one line here per new flag.
             static constexpr std::string_view known_enhancement_keys[] = {
-                "input_latching", "high_resolution", "widescreen",
+                "input_latching", "high_resolution", "widescreen", "full_height",
             };
             for (auto&& [key, value] : *enh_tbl) {
                 std::string_view k = key.str();
@@ -153,6 +156,9 @@ namespace {
             }
             if (auto v = (*enh_tbl)["widescreen"].value<bool>()) {
                 cfg.enhancements.widescreen = *v;
+            }
+            if (auto v = (*enh_tbl)["full_height"].value<bool>()) {
+                cfg.enhancements.full_height = *v;
             }
         }
 
@@ -260,6 +266,9 @@ std::string kerecomp::describe_config(const Config& cfg) {
     }
     if (effective.widescreen) {
         parts.emplace_back("widescreen=on");
+    }
+    if (effective.full_height) {
+        parts.emplace_back("full_height=on");
     }
     if (cfg.tuning.rcp_frame_ms > 0.0) {
         char buf[64];
