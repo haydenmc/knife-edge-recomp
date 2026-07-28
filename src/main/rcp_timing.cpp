@@ -68,8 +68,31 @@ extern "C" void yield_self_1ms(uint8_t* rdram);
 namespace {
     using clock_type = std::chrono::steady_clock;
 
-    // 2,800,000 OSTime counts / 46.875 MHz.
-    constexpr double default_frame_ms = 2800000.0 / 46875.0;
+    // Modelled RCP frame time, in milliseconds. Tuned by eye against real N64
+    // gameplay footage (the project owner's capture), landing at 36.5 ms
+    // (~24.6 measured game fps -- the effective rate is continuous, not
+    // quantised to 60/N, because the game's per-retrace callback returns early
+    // whenever a task is still outstanding).
+    //
+    // This deliberately REPLACES the earlier 2800000/46875 = 59.733 ms figure,
+    // which came from the game's own cutscene playback limiter
+    // (func_801978C0's osGetTime busy-wait). That number paced cutscenes
+    // correctly -- unsurprisingly, since it is the cutscene limiter -- but had
+    // no reason to match gameplay, where nothing self-limits and the pace is
+    // purely how long the RCP takes. Cutscenes are unaffected by lowering this:
+    // while our budget stays below the game's own limiter, cutscenes are paced
+    // by that limiter and not by us.
+    //
+    // Caveat inherent to a single constant: on real hardware RCP frame time
+    // rises with scene complexity, so busy scenes genuinely ran slower. This
+    // matches the typical case, not every moment. A workload-proportional model
+    // (scaling with display-list size) would track the real thing more closely
+    // and is a candidate enhancement, not a bug fix.
+    //
+    // Override live with KE_RCP_FRAME_MS=<ms>, or persistently via
+    // tuning.rcp_frame_ms in config.toml. NOTE: 0 disables pacing entirely
+    // (the game then runs ~4x too fast); it does not mean "use this default".
+    constexpr double default_frame_ms = 36.5;
 
     // Set by kerecomp::set_rcp_frame_ms_tuning() (called from main(), before
     // recomp::start()) from the resolved config file's tuning.rcp_frame_ms.

@@ -26,9 +26,16 @@ Not yet verified: full campaign completion; `--profile enhanced` input latching
 by hand; high-score persistence across runs (analyzed — almost certainly absent
 and *faithful*, see `analysis/docs/enhancements.md` candidates table).
 
-Still inferred, not measured: the RCP frame budget (59.733 ms) comes from the
-game's own cutscene limiter, cross-checked against the owner's "~4x too fast"
-observation. `KE_RCP_FRAME_MS` retunes it live if it ever feels wrong.
+RCP frame budget: **36.5 ms** (~24.6 measured game fps), tuned by the owner
+against real N64 gameplay footage. This replaced an earlier 59.733 ms figure
+taken from the game's own cutscene limiter — that paced cutscenes correctly but
+had no reason to match gameplay. Lowering it does not disturb cutscenes: while
+our budget stays under the game's own limiter, cutscenes are paced by that
+limiter. Retune live with `KE_RCP_FRAME_MS=<ms>` or persistently via
+`tuning.rcp_frame_ms`; **`0` disables pacing entirely** rather than meaning
+"default". Real hardware frame time rises with scene complexity, so a single
+constant matches the typical case only — a workload-proportional model is a
+candidate enhancement.
 
 ## Build / run / test
 
