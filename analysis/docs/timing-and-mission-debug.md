@@ -581,12 +581,12 @@ none here). Neither affects `scripts/smoke_test.sh` (no `xdotool` involved),
 which passed before and after this change, including a 90 s run.
 
 **A second, separate issue was discovered by this fix, not caused by it, and
-is out of scope for it.** In the 2 runs where `0x8019CF84` was actually
-invoked post-displacement, the real callback body ran correctly (per the fix)
-and submitted one display list — and RT64's HLE microcode auto-detection could
-not identify it (`Unable to find a matching GBI in the current database. This
-game is not supported in HLE.`), after which the process segfaulted. Root
-cause, purely from reading (no `deps/` changes made): `getGBIForUCode()` in
+has since been fixed too (implemented 2026-07-28).** In the 2 runs where
+`0x8019CF84` was actually invoked post-displacement, the real callback body
+ran correctly (per the fix above) and submitted one display list — and RT64's
+HLE microcode auto-detection could not identify it (`Unable to find a
+matching GBI in the current database. This game is not supported in HLE.`),
+after which the process segfaulted. Root cause: `getGBIForUCode()` in
 `deps/rt64/src/gbi/rt64_gbi.cpp` returns `nullptr` on a
 detection miss; `Interpreter::processDisplayLists()` in
 `deps/rt64/src/hle/rt64_interpreter.cpp` only guards the
@@ -596,17 +596,64 @@ null pointer. This code path was previously unreachable in this project: the
 old whole-section-drop behaviour meant `0x8019CF84` either aborted at
 `get_function` first (2/5 in the original sample) or was never called post-
 displacement at all (3/5) — nothing ever got far enough to submit a display
-list built from a genuinely stale-tail call, so this RT64 gap has been latent
-and unexercised until now. Whether hardware would also render one glitched
-frame here or whether the display list is subtly wrong for a reason specific
-to how this scaffold forces completion (skipping whatever a natural
-mission-end sequence, notably the mission-end audio setup mentioned above,
-would otherwise have quiesced first) is open. Fixing it would mean touching
-`deps/rt64`, which is out of scope here (`register_overlays.cpp` is the
-documented and correct place for the actual §4.2 fix, and this project's
-constraints exclude `deps/` changes); if `Unable to find a matching GBI`
-followed by a crash is ever seen from a natural mission completion, this is
-the lead to start from.
+list built from a genuinely stale-tail call, so this RT64 gap had been latent
+and unexercised until then.
+
+**The fix** does not touch `deps/rt64` at all. `RT64::Application::interpreter`
+and `RT64::Interpreter::hleGBI` are both plain public members (not encapsulated
+behind anything RT64-internal), and `kerecomp::renderer::RT64Context::send_dl`
+in `src/main/rt64_render_context.cpp` — our own code, already the sole caller
+of `loadUCodeGBI()`/`processDisplayLists()` for this project — already had a
+seam between the two calls. `send_dl` now checks `app->interpreter->hleGBI`
+right after `loadUCodeGBI()` returns and, if it is still null, skips the
+`processDisplayLists()` call for that task entirely instead of handing RT64
+a display list it cannot interpret. `dp_complete()` still fires as usual
+because `send_dl` still returns normally (§1.2), so this does not stall the
+graphics thread or the RCP-frame pacing; it just drops the one unrenderable
+display list, which is what the hardware-faithful "stale tail kept running"
+behavior calls for anyway (rendering one frame from code RT64 cannot decode
+is not something more correct than skipping it). The skip is logged once
+via a function-local `std::atomic<bool>`, not per frame, since the game
+submits at 15+ display lists/s and a stuck-in-this-state run would otherwise
+flood stderr.
+
+A `deps/rt64` patch (`patches-deps/`) was considered but rejected: it would
+have meant duplicating this exact same one-line null check either inside
+`Interpreter::processDisplayLists()` or `Application::processDisplayLists()`,
+for no benefit over doing it at the one call site we already own — the
+our-side interception point is not a workaround, it is the natural seam,
+since `send_dl` is where this project decides what to hand RT64 in the first
+place (the same place `RspUcodeFunc* get_rsp_microcode()` in `src/main/main.cpp`
+handles the analogous "unrecognized task type" case for the RSP microcode
+path). `patches-deps/` was therefore not created.
+
+**Verification.** Reproducing the real 2-in-18 stale-tail race is not
+deterministic enough to prove a fix by absence, so this was verified with a
+temporary, fully-removed test scaffold instead: an env-var-gated branch in
+`send_dl` that, on the first display list of a run, substituted a bogus ucode
+address (`0x00800000`, well outside any real microcode segment) before calling
+`loadUCodeGBI()`. Confirmed **before** the fix (guard temporarily disabled):
+`Unable to find a matching GBI in the current database. This game is not
+supported in HLE.` immediately followed by the process dying with SIGSEGV
+(shell-reported exit code 139). Confirmed **after** the fix, same scaffold,
+same bogus ucode: `[rt64] unable to identify microcode (ucode 0x00800000,
+data 0x00800000); dropping this display list instead of crashing` printed
+exactly once, and the process stayed alive and kept rendering (a second run
+was left going 25+ s past the injection point with no further occurrences of
+that line). The scaffold was then completely removed
+(`grep -rn "scaffold\|KE_TEST_BOGUS_UCODE" src/` returns nothing) and the
+build re-verified clean.
+
+`scripts/smoke_test.sh` (normal play, no scaffold, no forced completion) was
+run with `--keep-artifacts` and its `run.log` grepped for both
+`unable to identify microcode` and `Unable to find a matching GBI`: neither
+string appears, confirming the guard never fires in a healthy run — a normal
+game never hands RT64 a ucode it cannot identify, so this fix is purely
+defensive. `cmake --build build-shim` is clean (no new warnings from this
+change), `make -C analysis clean && make -C analysis` leaves `git diff --
+config` empty (this fix touches nothing under `analysis/`), and a fresh
+`N64Recomp config/knife_edge.us.toml` + `cmake --build build-shim` +
+`scripts/smoke_test.sh` cycle after regenerating still passes.
 
 ### 4.3 Diagnostic lesson
 

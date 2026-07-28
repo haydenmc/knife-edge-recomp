@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -256,7 +257,43 @@ kerecomp::renderer::RT64Context::~RT64Context() = default;
 void kerecomp::renderer::RT64Context::send_dl(const OSTask* task) {
     kerecomp::perf_count_dl();
     app->state->rsp->reset();
-    app->interpreter->loadUCodeGBI(task->t.ucode & 0x3FFFFFF, task->t.ucode_data & 0x3FFFFFF, true);
+
+    const uint32_t ucode_text = task->t.ucode & 0x3FFFFFF;
+    const uint32_t ucode_data = task->t.ucode_data & 0x3FFFFFF;
+    app->interpreter->loadUCodeGBI(ucode_text, ucode_data, true);
+
+    // Guard against a display list built from an unidentifiable microcode.
+    // This became reachable once the overlay tail-survival fix
+    // (analysis/docs/timing-and-mission-debug.md §4.2) started letting a
+    // surviving stale-tail function run to completion instead of aborting at
+    // get_function(): if it submits a graphics task whose ucode bytes don't
+    // hash-match anything in RT64's GBI database, loadUCodeGBI() above leaves
+    // Interpreter::hleGBI null (RT64::GBIManager::getGBIForUCode() in
+    // deps/rt64/src/gbi/rt64_gbi.cpp), and
+    // Interpreter::processDisplayLists() in
+    // deps/rt64/src/hle/rt64_interpreter.cpp only guards that with
+    // `assert(hleGBI != nullptr)`, which is compiled out in this release
+    // (NDEBUG) build -- so it falls through to a null-pointer dereference.
+    //
+    // `Interpreter::hleGBI` and `Application::interpreter` are both public
+    // members, so this checks the exact same state RT64 would have crashed
+    // on, from our side, without patching deps/rt64: skip this one display
+    // list (dp_complete() still fires because send_dl still returns
+    // normally -- see analysis/docs/timing-and-mission-debug.md §1.2) and log
+    // once, not per frame, since a stuck-in-this-state game would otherwise
+    // flood stderr at 15+ Hz.
+    if (app->interpreter->hleGBI == nullptr) {
+        static std::atomic<bool> warned{false};
+        if (!warned.exchange(true)) {
+            std::fprintf(stderr,
+                "[rt64] unable to identify microcode (ucode 0x%08X, data 0x%08X); "
+                "dropping this display list instead of crashing "
+                "(see analysis/docs/timing-and-mission-debug.md §4.2)\n",
+                ucode_text, ucode_data);
+        }
+        return;
+    }
+
     app->processDisplayLists(app->core.RDRAM, task->t.data_ptr & 0x3FFFFFF, 0, true);
 }
 
