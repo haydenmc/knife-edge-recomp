@@ -1,5 +1,11 @@
 # Overlay tracking design (decided 2026-07-27)
 
+> **Superseded in part on 2026-07-28** - the hook now calls
+> `ke_overlay_dma()` (src/main/register_overlays.cpp) rather than librecomp's
+> `unload_overlays`/`load_overlays` pair directly, and librecomp's first-1MB
+> registration has to be undone at the entrypoint. Both reasons, with the
+> failure modes that forced them, are in `boot-debug.md` §3.
+
 Problem: the game swaps fixed-address code overlays (69 loads, shared VRAM slots) via
 its own loaders; librecomp only registers the boot 1MB (`recomp.cpp:486`) and its PI DMA
 (`pi.cpp do_dma`) does NOT update the overlay function map.

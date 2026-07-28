@@ -2,8 +2,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);
-extern void unload_overlays(int32_t ram_addr, uint32_t size);
+/* src/main/register_overlays.cpp - whole-section overlay tracking. */
+extern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);
+/* ultramodern/src/scheduling.cpp - pumps the external message queue and
+   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */
+extern void yield_self_1ms(uint8_t* rdram);
 #ifdef __cplusplus
 }
 #endif
@@ -1409,7 +1412,7 @@ RECOMP_FUNC void func_800D1D00(uint8_t* rdram, recomp_context* ctx) {
 RECOMP_FUNC void func_800D1D10(uint8_t* rdram, recomp_context* ctx) {
     uint64_t hi = 0, lo = 0, result = 0;
     int c1cs = 0;
-    unload_overlays((int32_t)ctx->r5, (uint32_t)ctx->r6); load_overlays(((uint32_t)ctx->r4) & 0x1FFFFFFF, (int32_t)ctx->r5, (uint32_t)ctx->r6);
+    ke_overlay_dma(((uint32_t)ctx->r4) & 0x1FFFFFFF, (int32_t)ctx->r5, (uint32_t)ctx->r6);
     // 0x800D1D10: addiu       $sp, $sp, -0x50
     ctx->r29 = ADD32(ctx->r29, -0X50);
     // 0x800D1D14: sw          $ra, 0x14($sp)
@@ -1874,7 +1877,7 @@ RECOMP_FUNC void func_800D1FA0(uint8_t* rdram, recomp_context* ctx) {
     // 0x800D1FBC: jal         0x800DA180
     // 0x800D1FC0: addiu       $a3, $zero, 0x32
     ctx->r7 = ADD32(0, 0X32);
-    func_800DA180(rdram, ctx);
+    osCreatePiManager_recomp(rdram, ctx);
         goto after_0;
     // 0x800D1FC0: addiu       $a3, $zero, 0x32
     ctx->r7 = ADD32(0, 0X32);
@@ -3320,7 +3323,7 @@ RECOMP_FUNC void func_800D2768(uint8_t* rdram, recomp_context* ctx) {
     // 0x800D27A4: jal         0x800DAB30
     // 0x800D27A8: nop
 
-    func_800DAB30(rdram, ctx);
+    osViGetNextFramebuffer_recomp(rdram, ctx);
         goto after_2;
     // 0x800D27A8: nop
 
@@ -3365,7 +3368,7 @@ L_800D27B4:
     // 0x800D27D0: jal         0x800DAB30
     // 0x800D27D4: nop
 
-    func_800DAB30(rdram, ctx);
+    osViGetNextFramebuffer_recomp(rdram, ctx);
         goto after_5;
     // 0x800D27D4: nop
 
@@ -3993,6 +3996,7 @@ RECOMP_FUNC void func_800D2B40(uint8_t* rdram, recomp_context* ctx) {
     // 0x800D2B54: lw          $t7, 0x0($v0)
     ctx->r15 = MEM_W(ctx->r2, 0X0);
 L_800D2B58:
+    yield_self_1ms(rdram);
     // 0x800D2B58: bnel        $t7, $zero, L_800D2B58
     if (ctx->r15 != 0) {
         // 0x800D2B5C: lw          $t7, 0x0($v0)

@@ -82,6 +82,88 @@ MANUAL_NAMES = [
      "block and CRCs address 0x600; n64sym labels it motor_text_0168"),
 ]
 
+
+# --------------------------------------------------------------------------- #
+# Curated overrides (analysis/docs/boot-debug.md)
+# --------------------------------------------------------------------------- #
+# n64sym produces no usable label for these (static functions have no signature
+# in its database, and near-identical PI/SI access-queue helpers collide), yet
+# every one of them is an `ignored_funcs` / `reimplemented_funcs` member.  Left
+# unnamed they are recompiled verbatim and then dereference RCP MMIO addresses
+# (0xA4xxxxxx), which are outside librecomp's rdram window -> SIGSEGV.
+#
+# Each entry is applied only if its structural gate still holds against the
+# current find_functions.py output, so a boundary regression fails loudly
+# instead of silently mislabelling.  Gates:
+#   calls      - the function jals every listed (already accepted) name
+#   called_by  - every listed name jals this function
+#   words      - exact instruction words at the given intra-function offsets
+#   loads_io   - set of (lui immediate, lw offset) MMIO reads it performs
+# Entries are applied in order, so later ones may depend on earlier names.
+CURATED_NAMES = [
+    dict(vram=0x800DA180, name="osCreatePiManager",
+         calls=["osCreateMesgQueue", "osSetEventMesg", "osGetThreadPri",
+                "osSetThreadPri", "__osDisableInt", "osCreateThread",
+                "osStartThread", "__osRestoreInt"],
+         refs=["osPiRawStartDma", "osEPiRawStartDma", "__osDevMgrMain"],
+         why="pimgr.c osCreatePiManager: fills OSDevMgr __osPiDevMgr at 800ECE10 "
+             "(active@+0, thread@+4, cmdQueue@+8, evtQueue@+C, acsQueue@+10, "
+             "dma=osPiRawStartDma@+14, edma=osEPiRawStartDma@+18) and spawns a "
+             "thread whose entry is __osDevMgrMain.  Named so librecomp's "
+             "reimplementation runs instead of the MMIO-touching original; "
+             "this was the first-boot SIGSEGV (via __createSpeedParam)"),
+    dict(vram=0x800DA2FC, name="__createSpeedParam",
+         called_by=["osCreatePiManager"],
+         loads_io=[(0xA460, 0x14), (0xA460, 0x18), (0xA460, 0x1C),
+                   (0xA460, 0x20), (0xA460, 0x24), (0xA460, 0x28),
+                   (0xA460, 0x2C), (0xA460, 0x30)],
+         why="pimgr.c static __createSpeedParam: copies PI_BSD_DOM1/DOM2 "
+             "LAT/PWD/PGS/RLS into __Dom1SpeedParam(80178140)/"
+             "__Dom2SpeedParam(801781B8) latency@+5 pageSize@+6 relDuration@+7 "
+             "pulse@+8 domain@+9.  Direct PI register reads - the actual "
+             "faulting frame in the first-boot backtrace"),
+    dict(vram=0x800DFFC0, name="__osPiCreateAccessQueue",
+         calls=["osCreateMesgQueue", "osSendMesg"],
+         called_by=["osCreatePiManager"],
+         why="piacs.c: sets __osPiAccessQueueEnabled(800ED260)=1 then creates "
+             "and primes the 1-slot __osPiAccessQueue(8016A8B8).  n64sym only "
+             "offered __osSiCreateAccessQueue here (the SI twin is byte-for-byte "
+             "similar) and the duplicate resolver dropped it"),
+    dict(vram=0x800E0010, name="__osPiGetAccess",
+         calls=["__osPiCreateAccessQueue", "osRecvMesg"],
+         why="piacs.c: lazily creates the PI access queue then blocks on it; "
+             "same file, immediately after __osPiCreateAccessQueue"),
+    dict(vram=0x800E0054, name="__osPiRelAccess",
+         calls=["osSendMesg"],
+         why="piacs.c: releases the same __osPiAccessQueue(8016A8B8) token that "
+             "__osPiGetAccess takes"),
+    dict(vram=0x800DAB30, name="osViGetNextFramebuffer",
+         calls=["__osDisableInt", "__osRestoreInt"],
+         why="vigetnextframebuffer.c: __osDisableInt / return __osViNext"
+             "(800ECED4)->framep(+4) / __osRestoreInt.  Game code calls it "
+             "directly (from 800D2768), and librecomp owns the VI context, so "
+             "the recompiled body would read an rdram copy nobody updates"),
+    dict(vram=0x800E0840, name="__osViGetCurrentContext",
+         called_by=["viMgrMain"],
+         words={0: 0x3C02800F, 1: 0x03E00008, 2: 0x8C42CED0},
+         why="vimgr.c: `lui v0,0x800F / jr ra / lw v0,-0x3130(v0)` returns "
+             "__osViCurr(800ECED0) - the counterpart of the __osViNext(800ECED4) "
+             "that __osViSwapContext(800E0850) loads"),
+    dict(vram=0x800DB010, name="__osPackReadData",
+         called_by=["osContStartReadData"],
+         why="contreaddata.c static helper (n64sym: contreaddata_text_0110): "
+             "zero-fills the PIF block at 8016A6E0..8016A71C and lays down the "
+             "0x01/0x04/0x01 read-controller commands"),
+]
+
+# OS-level functions that must never execute but that we cannot name with
+# confidence.  gen_syms.py emits them into [patches].stubs, so N64Recomp
+# generates an empty body instead of the real (MMIO-touching) one.  An entry is
+# dropped automatically once a real name is assigned to the same address.
+STUB_FUNCS = [
+    # (vram, justification)
+]
+
 # Names whose correctness is load-bearing at run time (spec stage 2.3).
 RUNTIME_CRITICAL = [
     "osRecvMesg", "osSendMesg", "osCreateThread", "osStartThread",
@@ -211,6 +293,25 @@ class Boot(object):
                 out.add((regs[rs] + simm) & 0xFFFFFFFF)
             elif op == 0x0F:
                 pass
+        return out
+
+    def io_loads(self, v):
+        """(lui immediate, load offset) pairs for loads off a lui-only base."""
+        regs = {}
+        out = set()
+        for w in self.func_words(v):
+            op = w >> 26
+            rs = (w >> 21) & 0x1F
+            rt = (w >> 16) & 0x1F
+            imm = w & 0xFFFF
+            if op == 0x0F:
+                regs[rt] = imm
+            elif op in (0x20, 0x21, 0x23, 0x24, 0x25):
+                if rs in regs:
+                    out.add((regs[rs], imm))
+                regs.pop(rt, None)
+            elif op in (0x09, 0x0D) and rs in regs:
+                regs.pop(rt, None)
         return out
 
     def cache_ops(self, v):
@@ -618,6 +719,56 @@ def main(argv=None):
                                ", ".join("%s@%08X" % (r, want[r]) for r in needs),
                                why))
 
+    # ---- curated overrides (see CURATED_NAMES) ----------------------------- #
+    def boot_addr(nm):
+        for (s, v), n in names.items():
+            if s == "boot" and n == nm:
+                return v
+        return None
+
+    curated_notes = []
+    curated_applied = []
+    for ent in CURATED_NAMES:
+        vram, nm = ent["vram"], ent["name"]
+        fails = []
+        if not boot.is_start(vram):
+            fails.append("not a detected function start (boundary regression?)")
+        else:
+            jals = set(boot.jals(vram))
+            for req in ent.get("calls", []):
+                a = boot_addr(req)
+                if a is None or a not in jals:
+                    fails.append("does not call %s" % req)
+            for req in ent.get("called_by", []):
+                a = boot_addr(req)
+                if a is None or vram not in set(boot.jals(a)):
+                    fails.append("not called by %s" % req)
+            refs = boot.consts(vram)
+            for req in ent.get("refs", []):
+                a = boot_addr(req)
+                if a is None or a not in refs:
+                    fails.append("does not reference %s" % req)
+            io = boot.io_loads(vram)
+            for base, off in ent.get("loads_io", []):
+                if (base, off) not in io:
+                    fails.append("no load of 0x%04X0000+0x%X" % (base, off))
+            for idx, want in sorted(ent.get("words", {}).items()):
+                got = boot.func_words(vram)
+                if idx >= len(got) or got[idx] != want:
+                    fails.append("word[%d] != %08X" % (idx, want))
+        if fails:
+            curated_notes.append("%s %08X: REJECTED - %s" %
+                                 (nm, vram, "; ".join(fails)))
+            continue
+        for key in [k for k, val in names.items() if val == nm]:
+            del names[key]
+        prev = names.get(("boot", vram))
+        names[("boot", vram)] = nm
+        curated_applied.append(nm)
+        curated_notes.append("%s %08X: accepted%s - %s" %
+                             (nm, vram,
+                              (" (was %s)" % prev) if prev else "", ent["why"]))
+
     verification = []
     for nm in RUNTIME_CRITICAL:
         vram = None
@@ -657,6 +808,18 @@ def main(argv=None):
     out["verification"] = [
         {"name": n, "vram": v, "status": s, "evidence": e}
         for n, v, s, e in verification]
+    out["stats"]["curated_applied"] = len(curated_applied)
+    # Functions that must not execute but that we cannot name confidently.
+    # gen_syms.py turns these into [patches].stubs entries (empty C bodies).
+    stubs = []
+    for vram, why in STUB_FUNCS:
+        if not boot.is_start(vram):
+            raise SystemExit("stub target %08X is not a detected function start"
+                             % vram)
+        if ("boot", vram) in names:
+            continue    # a real name won; librecomp handles it
+        stubs.append({"segment": "boot", "vram": "0x%08X" % vram, "why": why})
+    out["stubs"] = stubs
     with open(args.out, "w") as fh:
         json.dump(out, fh, indent=1, sort_keys=True)
         fh.write("\n")
@@ -672,6 +835,16 @@ def main(argv=None):
     L.append("== manual (call-graph derived) names ==")
     for n in manual_notes:
         L.append("  " + n)
+    L.append("")
+    L.append("== curated overrides ==")
+    for n in curated_notes:
+        L.append("  " + n)
+    L.append("")
+    L.append("== stubbed (unnamed, must not execute) ==")
+    for s in stubs:
+        L.append("  %s %s  %s" % (s["segment"], s["vram"], s["why"]))
+    if not stubs:
+        L.append("  (none)")
     L.append("")
     L.append("== runtime-critical names ==")
     for n, v, s, e in verification:

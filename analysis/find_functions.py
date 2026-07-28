@@ -369,6 +369,191 @@ def build_functions(seg, sc, cand, min_valid=0.90):
     return funcs, dropped
 
 
+# --------------------------------------------------------------------------- #
+# no-yield busy-wait detection
+# --------------------------------------------------------------------------- #
+#
+# ultramodern schedules recompiled threads cooperatively: messages posted by
+# native threads (VI retrace, SP/DP done, PI) are only drained when a game
+# thread enters osSendMesg/osRecvMesg/osJamMesg or blocks.  A recompiled thread
+# that polls a memory flag in a tight loop therefore wedges the entire runtime,
+# where real hardware would have preempted it from an RCP interrupt.
+#
+# N64Recomp already rewrites the unconditional `b .` form into pause_self(), so
+# what is left to find is the conditional form.  The signature that separates a
+# poll from an ordinary data loop is that the polled address is loop-invariant:
+#
+#   * the loop body is short and contains no call, no store and no other branch,
+#   * it performs at least one load, and
+#   * no load's base register is written inside the body (a memcpy/strlen style
+#     loop always advances its pointer, so it is excluded).
+#
+# gen_syms.py turns each hit into a [[patches.hook]] that calls yield_self_1ms().
+
+LOAD_OPS = frozenset([0x20, 0x21, 0x23, 0x24, 0x25, 0x27, 0x31, 0x35, 0x37])
+STORE_OPS = frozenset([0x28, 0x29, 0x2B, 0x2C, 0x2D, 0x2F, 0x39, 0x3D])
+MAX_SPIN_BODY = 12
+
+
+def _writes_gpr(w):
+    """Destination GPR of instruction word `w`, or None."""
+    op = w >> 26
+    if op == 0:                       # SPECIAL: R-type writes rd, except jr/jalr-less
+        funct = w & 0x3F
+        if funct == 0x08:             # jr
+            return None
+        if funct in (0x0C, 0x0D):     # syscall / break
+            return None
+        return (w >> 11) & 0x1F
+    if op == 1:                       # REGIMM: branches (bltz/bgez[al])
+        return 31 if ((w >> 16) & 0x1E) == 0x10 else None
+    if op in (0x02, 0x03):            # j / jal
+        return 31 if op == 3 else None
+    if op in (0x04, 0x05, 0x06, 0x07, 0x14, 0x15, 0x16, 0x17):
+        return None                   # branches
+    if op in (0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x18, 0x19,
+              0x11, 0x12, 0x13):
+        # addi/addiu/slti/sltiu/andi/ori/xori/lui/daddi/daddiu; COPz writes are
+        # only relevant for mtc/mfc which we treat conservatively below.
+        if op in (0x11, 0x12, 0x13):
+            return (w >> 16) & 0x1F if ((w >> 21) & 0x1F) == 0 else None
+        return (w >> 16) & 0x1F
+    if op in LOAD_OPS:
+        return (w >> 16) & 0x1F
+    return None
+
+
+def leaf_functions(segments, funcs_by_seg):
+    """vram -> True when every function starting there makes no calls at all.
+
+    A leaf cannot reach osRecvMesg/osSendMesg/osYieldThread, so calling one from
+    inside a loop still leaves the loop unable to yield.  Overlay slots are
+    shared, so a vram only counts as a leaf if *all* images agree.
+    """
+    leaf = {}
+    for seg in segments:
+        base = seg.text_start
+        for f in funcs_by_seg[seg.name]:
+            i0 = (f["vram"] - base) // 4
+            i1 = min(i0 + f["size"] // 4, seg.n)
+            calls = any((seg.words[j] >> 26) in (0x02, 0x03) or
+                        ((seg.words[j] >> 26) == 0 and (seg.words[j] & 0x3F) == 0x09)
+                        for j in range(i0, i1))
+            leaf[f["vram"]] = leaf.get(f["vram"], True) and not calls
+    return leaf
+
+
+def find_spin_loops(seg, funcs, leaf):
+    """Locate no-yield polling loops; returns [{func, branch, target, ...}]."""
+    base = seg.text_start
+    W = seg.words
+    out = []
+    for f in funcs:
+        i0 = (f["vram"] - base) // 4
+        i1 = i0 + f["size"] // 4
+        for i in range(i0, min(i1, seg.n)):
+            w = W[i]
+            op = w >> 26
+            is_cond = op in (0x04, 0x05, 0x06, 0x07, 0x14, 0x15, 0x16, 0x17) or \
+                (op == 1 and ((w >> 16) & 0x1E) != 0x10)
+            if not is_cond:
+                continue
+            off = w & 0xFFFF
+            if not off & 0x8000:          # forward branch: not a loop back-edge
+                continue
+            target = base + (i + 1 + (off - 0x10000)) * 4
+            if target < f["vram"] or target > base + i * 4:
+                continue
+            t = (target - base) // 4
+            body = list(range(t, i + 2))  # branch + its delay slot included
+            if len(body) > MAX_SPIN_BODY or i + 1 >= seg.n:
+                continue
+            bad = False
+            written_any = set()
+            for j in body:
+                bw = W[j]
+                bop = bw >> 26
+                if j != i:
+                    if bop == 0x03:
+                        # A call is tolerated only when the callee is a leaf:
+                        # a leaf cannot reach an OS primitive, so the loop is
+                        # still unable to yield. Anything else (including an
+                        # unknown target) is assumed to be able to block.
+                        tgt = ((base + (j + 1) * 4) & 0xF0000000) | ((bw & 0x03FFFFFF) << 2)
+                        if not leaf.get(tgt, False):
+                            bad = True
+                            break
+                        written_any |= CALL_CLOBBER
+                        continue
+                    other_branch = bop in (0x01, 0x02, 0x04, 0x05, 0x06,
+                                           0x07, 0x14, 0x15, 0x16, 0x17)
+                    jr_jalr = bop == 0 and (bw & 0x3F) in (0x08, 0x09)
+                    if other_branch or jr_jalr:
+                        bad = True
+                        break
+                if bop in STORE_OPS:
+                    bad = True
+                    break
+                d = _writes_gpr(bw)
+                if d:
+                    written_any.add(d)
+            if bad:
+                continue
+            # If the loop calls something, the call must not be fed with a value
+            # the loop computed: `while (x) { unlink(x); link(x); }` walks a data
+            # structure and only looks like a poll. A real poll either takes no
+            # argument or a constant one (e.g. the PRNG the KEMCO logo screens
+            # spin on).
+            if any((W[j] >> 26) == 0x03 for j in body):
+                for j in body:
+                    bw = W[j]
+                    bop = bw >> 26
+                    d = _writes_gpr(bw)
+                    if d is None or not (4 <= d <= 7):
+                        continue
+                    src = (bw >> 21) & 0x1F
+                    const_src = bop == 0x0F or (bop in (0x09, 0x0D, 0x0C, 0x0E) and src == 0)
+                    if not const_src:
+                        bad = True
+                        break
+            if bad:
+                continue
+            # One forward pass over the body: every load must address either a
+            # register the body never writes, or an address the body itself
+            # materialises from immediates (lui / addiu from $zero).
+            const_regs = set()
+            nloads = 0
+            for j in body:
+                bw = W[j]
+                bop = bw >> 26
+                rs = (bw >> 21) & 0x1F
+                rt = (bw >> 16) & 0x1F
+                if bop in LOAD_OPS:
+                    nloads += 1
+                    if rs not in const_regs and rs in written_any:
+                        bad = True
+                        break
+                if bop == 0x03:                       # jal: clobbers caller-saved
+                    const_regs -= CALL_CLOBBER
+                elif bop == 0x0F:                     # lui
+                    const_regs.add(rt)
+                elif bop in (0x09, 0x0D, 0x0C, 0x0E) and (rs == 0 or rs in const_regs):
+                    const_regs.add(rt)                # addiu/ori/andi/xori
+                else:
+                    d = _writes_gpr(bw)
+                    if d:
+                        const_regs.discard(d)
+            if bad or not nloads:
+                continue
+            out.append({
+                "func": f["vram"],
+                "branch": base + i * 4,
+                "target": target,
+                "body": len(body),
+            })
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -390,10 +575,16 @@ def main(argv=None):
 
     result = {"segments": [], "stats": {}}
     dropped_all = []
+    built = {}
     for seg in segments:
         funcs, dropped = build_functions(seg, scans[seg.name], starts[seg.name],
                                          min_valid=args.min_valid)
+        built[seg.name] = funcs
         dropped_all.append((seg.name, dropped))
+    leaf = leaf_functions(segments, built)
+    for seg in segments:
+        funcs = built[seg.name]
+        dropped = dict(dropped_all)[seg.name]
         result["segments"].append({
             "name": seg.name,
             "rom": seg.rom,
@@ -404,6 +595,7 @@ def main(argv=None):
             "ambiguous_slot": seg.name in ambiguous,
             "functions": funcs,
             "rejected": dropped,
+            "spin_loops": find_spin_loops(seg, funcs, leaf),
         })
 
     # ---- global coverage check: every jal target must be somebody's function ----

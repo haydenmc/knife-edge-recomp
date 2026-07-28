@@ -47,11 +47,23 @@
 namespace kerecomp {
     // Defined in register_overlays.cpp.
     void register_overlays();
+    void reset_boot_window_overlays();
 }
 
 // Defined in src/stub_game/recomp_entrypoint.c today; will come from
 // KE_GENERATED_DIR once the ROM has been run through N64Recomp.
 extern "C" void recomp_entrypoint(uint8_t* rdram, recomp_context* ctx);
+
+namespace {
+    // librecomp's init() registers every code section whose ROM range falls in
+    // the first 1MB before handing control to the entrypoint, which for this
+    // game wrongly registers six overlays (see register_overlays.cpp). Undo
+    // that here: this runs after init() and before any recompiled game code.
+    void knife_edge_entrypoint(uint8_t* rdram, recomp_context* ctx) {
+        kerecomp::reset_boot_window_overlays();
+        recomp_entrypoint(rdram, ctx);
+    }
+}
 
 namespace {
     const std::string version_string = "0.0.1";
@@ -125,14 +137,81 @@ namespace {
         }
     }
 
-    // TODO: no RSP microcodes are wired up yet. RT64 handles F3DEX/F3DLX
-    // graphics tasks (M_GFXTASK) internally via RT64Context::send_dl, so this
-    // is only consulted for other task types (e.g. the audio ucode, still
-    // TBD per analysis/docs/n64recomp-formats.md). Returning nullptr causes
-    // librecomp to log and skip the task rather than crash.
+    // ---- input -------------------------------------------------------------
+    // Minimal but real: without this the game stops on its "THERE ARE NO
+    // CONTROLLERS ATTACHED" screen forever, because osContInit (HLE'd by
+    // librecomp) reports zero devices when get_connected_device_info is unset.
+    // Keyboard only for now; a proper remappable binding UI is still TODO.
+    constexpr uint16_t BTN_A = 0x8000, BTN_B = 0x4000, BTN_Z = 0x2000, BTN_START = 0x1000;
+    constexpr uint16_t BTN_DU = 0x0800, BTN_DD = 0x0400, BTN_DL = 0x0200, BTN_DR = 0x0100;
+    constexpr uint16_t BTN_L = 0x0020, BTN_R = 0x0010;
+    constexpr uint16_t BTN_CU = 0x0008, BTN_CD = 0x0004, BTN_CL = 0x0002, BTN_CR = 0x0001;
+
+    void poll_input() {
+        SDL_PumpEvents();
+    }
+
+    bool get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
+        if (controller_num != 0) {
+            return false;
+        }
+        const Uint8* keys = SDL_GetKeyboardState(nullptr);
+        if (keys == nullptr) {
+            return false;
+        }
+        struct Binding { SDL_Scancode key; uint16_t mask; };
+        static const Binding bindings[] = {
+            { SDL_SCANCODE_X,      BTN_A },     { SDL_SCANCODE_Z,     BTN_B },
+            { SDL_SCANCODE_LSHIFT, BTN_Z },     { SDL_SCANCODE_RETURN, BTN_START },
+            { SDL_SCANCODE_UP,     BTN_DU },    { SDL_SCANCODE_DOWN,  BTN_DD },
+            { SDL_SCANCODE_LEFT,   BTN_DL },    { SDL_SCANCODE_RIGHT, BTN_DR },
+            { SDL_SCANCODE_Q,      BTN_L },     { SDL_SCANCODE_E,     BTN_R },
+            { SDL_SCANCODE_I,      BTN_CU },    { SDL_SCANCODE_K,     BTN_CD },
+            { SDL_SCANCODE_J,      BTN_CL },    { SDL_SCANCODE_L,     BTN_CR },
+        };
+        uint16_t held = 0;
+        for (const Binding& b : bindings) {
+            if (keys[b.key]) {
+                held |= b.mask;
+            }
+        }
+        *buttons = held;
+        *x = (keys[SDL_SCANCODE_D] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_A] ? 1.0f : 0.0f);
+        *y = (keys[SDL_SCANCODE_W] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_S] ? 1.0f : 0.0f);
+        return true;
+    }
+
+    void set_rumble(int, bool) {}
+
+    ultramodern::input::connected_device_info_t get_connected_device_info(int controller_num) {
+        if (controller_num == 0) {
+            return { ultramodern::input::Device::Controller, ultramodern::input::Pak::None };
+        }
+        return { ultramodern::input::Device::None, ultramodern::input::Pak::None };
+    }
+
+    // Audio microcode stand-in. Consuming the task without producing samples is
+    // audibly wrong but structurally correct: the RSP "finishes" and librecomp's
+    // task_thread_func sends the SP-done message the game is blocked on. The
+    // real fix is an RSPRecomp pass over the audio ucode (see
+    // analysis/docs/n64recomp-formats.md - "audio ucode TBD").
+    RspExitReason skip_audio_task(uint8_t*, uint32_t) {
+        return RspExitReason::Broke;
+    }
+
+    // RT64 handles F3DEX/F3DLX graphics tasks (M_GFXTASK) internally via
+    // RT64Context::send_dl, so this is only consulted for other task types.
+    // Returning nullptr makes librecomp abort the process, so unknown types get
+    // the no-op above rather than killing the run.
     RspUcodeFunc* get_rsp_microcode(const OSTask* task) {
-        std::fprintf(stderr, "No RSP microcode registered for task type %u yet\n", task->t.type);
-        return nullptr;
+        static bool warned[8] = {};
+        uint32_t type = task->t.type;
+        if (type < 8 && !warned[type]) {
+            warned[type] = true;
+            std::fprintf(stderr,
+                "No RSP microcode registered for task type %u; skipping these tasks\n", type);
+        }
+        return skip_audio_task;
     }
 }
 
@@ -186,7 +265,7 @@ int main(int argc, char** argv) {
         // (addr - 0xFFFFFFFF80000000), so a bare positive 0x800C2400 lands ~4GB
         // out of bounds and segfaults in the initial DMA.
         .entrypoint_address = static_cast<gpr>(static_cast<int32_t>(0x800C2400)),
-        .entrypoint = recomp_entrypoint,
+        .entrypoint = knife_edge_entrypoint,
     };
 
     recomp::register_game(knife_edge_entry);
@@ -211,7 +290,12 @@ int main(int argc, char** argv) {
     // all optional (librecomp null-checks each field individually) and left
     // unset for this skeleton. Wire these up alongside the ROM picker.
     ultramodern::audio_callbacks_t audio_callbacks {};
-    ultramodern::input::callbacks_t input_callbacks {};
+    ultramodern::input::callbacks_t input_callbacks {
+        .poll_input = poll_input,
+        .get_input = get_input,
+        .set_rumble = set_rumble,
+        .get_connected_device_info = get_connected_device_info,
+    };
     ultramodern::events::callbacks_t events_callbacks {};
     ultramodern::threads::callbacks_t threads_callbacks {};
 

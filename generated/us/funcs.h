@@ -2,8 +2,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);
-extern void unload_overlays(int32_t ram_addr, uint32_t size);
+/* src/main/register_overlays.cpp - whole-section overlay tracking. */
+extern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);
+/* ultramodern/src/scheduling.cpp - pumps the external message queue and
+   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */
+extern void yield_self_1ms(uint8_t* rdram);
 #ifdef __cplusplus
 }
 #endif
@@ -401,8 +404,7 @@ void alSynSetPitch_recomp(uint8_t* rdram, recomp_context* ctx);
 void osWritebackDCacheAll_recomp(uint8_t* rdram, recomp_context* ctx);
 void osViBlack_recomp(uint8_t* rdram, recomp_context* ctx);
 void _bcopy_recomp(uint8_t* rdram, recomp_context* ctx);
-void func_800DA180(uint8_t* rdram, recomp_context* ctx);
-void func_800DA2FC(uint8_t* rdram, recomp_context* ctx);
+void osCreatePiManager_recomp(uint8_t* rdram, recomp_context* ctx);
 void osCreateViManager_recomp(uint8_t* rdram, recomp_context* ctx);
 void osViSetEvent_recomp(uint8_t* rdram, recomp_context* ctx);
 void osSetEventMesg_recomp(uint8_t* rdram, recomp_context* ctx);
@@ -412,12 +414,11 @@ void func_800DA800(uint8_t* rdram, recomp_context* ctx);
 void osSpTaskLoad_recomp(uint8_t* rdram, recomp_context* ctx);
 void osSpTaskStartGo_recomp(uint8_t* rdram, recomp_context* ctx);
 void osViGetCurrentFramebuffer_recomp(uint8_t* rdram, recomp_context* ctx);
-void func_800DAB30(uint8_t* rdram, recomp_context* ctx);
+void osViGetNextFramebuffer_recomp(uint8_t* rdram, recomp_context* ctx);
 void osViSwapBuffer_recomp(uint8_t* rdram, recomp_context* ctx);
 void osContInit_recomp(uint8_t* rdram, recomp_context* ctx);
 void osContStartReadData_recomp(uint8_t* rdram, recomp_context* ctx);
 void osContGetReadData_recomp(uint8_t* rdram, recomp_context* ctx);
-void func_800DB010(uint8_t* rdram, recomp_context* ctx);
 void osContStartQuery_recomp(uint8_t* rdram, recomp_context* ctx);
 void osContGetQuery_recomp(uint8_t* rdram, recomp_context* ctx);
 void __osMotorAccess_recomp(uint8_t* rdram, recomp_context* ctx);
@@ -467,12 +468,8 @@ void func_800DFDF0(uint8_t* rdram, recomp_context* ctx);
 void alAuxBusPull_recomp(uint8_t* rdram, recomp_context* ctx);
 void alSaveParam_recomp(uint8_t* rdram, recomp_context* ctx);
 void alSavePull_recomp(uint8_t* rdram, recomp_context* ctx);
-void func_800DFFC0(uint8_t* rdram, recomp_context* ctx);
-void func_800E0010(uint8_t* rdram, recomp_context* ctx);
-void func_800E0054(uint8_t* rdram, recomp_context* ctx);
 void osGetThreadPri_recomp(uint8_t* rdram, recomp_context* ctx);
 void osEPiRawStartDma_recomp(uint8_t* rdram, recomp_context* ctx);
-void func_800E0840(uint8_t* rdram, recomp_context* ctx);
 void osGetCount_recomp(uint8_t* rdram, recomp_context* ctx);
 void __osSpSetPc_recomp(uint8_t* rdram, recomp_context* ctx);
 void osGetTime_recomp(uint8_t* rdram, recomp_context* ctx);

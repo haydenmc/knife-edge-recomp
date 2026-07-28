@@ -2,8 +2,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);
-extern void unload_overlays(int32_t ram_addr, uint32_t size);
+/* src/main/register_overlays.cpp - whole-section overlay tracking. */
+extern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);
+/* ultramodern/src/scheduling.cpp - pumps the external message queue and
+   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */
+extern void yield_self_1ms(uint8_t* rdram);
 #ifdef __cplusplus
 }
 #endif
@@ -400,8 +403,7 @@ static FuncEntry section_0_boot_funcs[] = {
     { .func = osWritebackDCacheAll_recomp, .offset = 0x000179D0, .rom_size = 0x00000000 },
     { .func = osViBlack_recomp, .offset = 0x00017A00, .rom_size = 0x00000000 },
     { .func = _bcopy_recomp, .offset = 0x00017A70, .rom_size = 0x00000310 },
-    { .func = func_800DA180, .offset = 0x00017D80, .rom_size = 0x0000017C },
-    { .func = func_800DA2FC, .offset = 0x00017EFC, .rom_size = 0x00000074 },
+    { .func = osCreatePiManager_recomp, .offset = 0x00017D80, .rom_size = 0x00000000 },
     { .func = osCreateViManager_recomp, .offset = 0x00017F70, .rom_size = 0x00000000 },
     { .func = osViSetEvent_recomp, .offset = 0x00018280, .rom_size = 0x00000000 },
     { .func = osSetEventMesg_recomp, .offset = 0x000182F0, .rom_size = 0x00000000 },
@@ -411,12 +413,11 @@ static FuncEntry section_0_boot_funcs[] = {
     { .func = osSpTaskLoad_recomp, .offset = 0x0001851C, .rom_size = 0x00000000 },
     { .func = osSpTaskStartGo_recomp, .offset = 0x000186AC, .rom_size = 0x00000000 },
     { .func = osViGetCurrentFramebuffer_recomp, .offset = 0x000186F0, .rom_size = 0x00000000 },
-    { .func = func_800DAB30, .offset = 0x00018730, .rom_size = 0x00000040 },
+    { .func = osViGetNextFramebuffer_recomp, .offset = 0x00018730, .rom_size = 0x00000000 },
     { .func = osViSwapBuffer_recomp, .offset = 0x00018770, .rom_size = 0x00000000 },
     { .func = osContInit_recomp, .offset = 0x000187C0, .rom_size = 0x00000000 },
     { .func = osContStartReadData_recomp, .offset = 0x00018B00, .rom_size = 0x00000000 },
     { .func = osContGetReadData_recomp, .offset = 0x00018B84, .rom_size = 0x00000000 },
-    { .func = func_800DB010, .offset = 0x00018C10, .rom_size = 0x000000D0 },
     { .func = osContStartQuery_recomp, .offset = 0x00018CE0, .rom_size = 0x00000000 },
     { .func = osContGetQuery_recomp, .offset = 0x00018D64, .rom_size = 0x00000000 },
     { .func = __osMotorAccess_recomp, .offset = 0x00018D90, .rom_size = 0x00000000 },
@@ -466,12 +467,8 @@ static FuncEntry section_0_boot_funcs[] = {
     { .func = alAuxBusPull_recomp, .offset = 0x0001DA20, .rom_size = 0x000000E0 },
     { .func = alSaveParam_recomp, .offset = 0x0001DB00, .rom_size = 0x00000034 },
     { .func = alSavePull_recomp, .offset = 0x0001DB34, .rom_size = 0x0000008C },
-    { .func = func_800DFFC0, .offset = 0x0001DBC0, .rom_size = 0x00000050 },
-    { .func = func_800E0010, .offset = 0x0001DC10, .rom_size = 0x00000044 },
-    { .func = func_800E0054, .offset = 0x0001DC54, .rom_size = 0x0000002C },
     { .func = osGetThreadPri_recomp, .offset = 0x0001DC80, .rom_size = 0x00000000 },
     { .func = osEPiRawStartDma_recomp, .offset = 0x0001DD80, .rom_size = 0x00000000 },
-    { .func = func_800E0840, .offset = 0x0001E440, .rom_size = 0x00000010 },
     { .func = osGetCount_recomp, .offset = 0x0001E750, .rom_size = 0x00000000 },
     { .func = __osSpSetPc_recomp, .offset = 0x0001E780, .rom_size = 0x00000000 },
     { .func = osGetTime_recomp, .offset = 0x0001E880, .rom_size = 0x00000000 },

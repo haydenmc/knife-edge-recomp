@@ -8,6 +8,19 @@
   viMgrMain 800DA4F0: accepted (calls __osViSwapContext@800E0850, __osTimerInterrupt@800DC71C) - vimgr.c object layout osCreateViManager(800DA370) < this < osViSetEvent(800DA680); n64sym labels it vimgr_text_0180
   _MakeMotorData 800DB2F8: accepted (calls __osContAddressCrc@800E0F60) - motor.c object layout __osMotorAccess(800DB190) < this < osMotorInit(800DB404); builds the 0xFF/0x23/0x01/0x03/0xC0 rumble PIF block and CRCs address 0x600; n64sym labels it motor_text_0168
 
+== curated overrides ==
+  osCreatePiManager 800DA180: accepted - pimgr.c osCreatePiManager: fills OSDevMgr __osPiDevMgr at 800ECE10 (active@+0, thread@+4, cmdQueue@+8, evtQueue@+C, acsQueue@+10, dma=osPiRawStartDma@+14, edma=osEPiRawStartDma@+18) and spawns a thread whose entry is __osDevMgrMain.  Named so librecomp's reimplementation runs instead of the MMIO-touching original; this was the first-boot SIGSEGV (via __createSpeedParam)
+  __createSpeedParam 800DA2FC: accepted - pimgr.c static __createSpeedParam: copies PI_BSD_DOM1/DOM2 LAT/PWD/PGS/RLS into __Dom1SpeedParam(80178140)/__Dom2SpeedParam(801781B8) latency@+5 pageSize@+6 relDuration@+7 pulse@+8 domain@+9.  Direct PI register reads - the actual faulting frame in the first-boot backtrace
+  __osPiCreateAccessQueue 800DFFC0: accepted - piacs.c: sets __osPiAccessQueueEnabled(800ED260)=1 then creates and primes the 1-slot __osPiAccessQueue(8016A8B8).  n64sym only offered __osSiCreateAccessQueue here (the SI twin is byte-for-byte similar) and the duplicate resolver dropped it
+  __osPiGetAccess 800E0010: accepted - piacs.c: lazily creates the PI access queue then blocks on it; same file, immediately after __osPiCreateAccessQueue
+  __osPiRelAccess 800E0054: accepted - piacs.c: releases the same __osPiAccessQueue(8016A8B8) token that __osPiGetAccess takes
+  osViGetNextFramebuffer 800DAB30: accepted - vigetnextframebuffer.c: __osDisableInt / return __osViNext(800ECED4)->framep(+4) / __osRestoreInt.  Game code calls it directly (from 800D2768), and librecomp owns the VI context, so the recompiled body would read an rdram copy nobody updates
+  __osViGetCurrentContext 800E0840: accepted - vimgr.c: `lui v0,0x800F / jr ra / lw v0,-0x3130(v0)` returns __osViCurr(800ECED0) - the counterpart of the __osViNext(800ECED4) that __osViSwapContext(800E0850) loads
+  __osPackReadData 800DB010: accepted - contreaddata.c static helper (n64sym: contreaddata_text_0110): zero-fills the PIF block at 8016A6E0..8016A71C and lays down the 0x01/0x04/0x01 read-controller commands
+
+== stubbed (unnamed, must not execute) ==
+  (none)
+
 == runtime-critical names ==
   osRecvMesg             800D8D00   verified   call-graph anchor (segment_map.md §b.1/§b.2)
   osSendMesg             800D95F0   verified   tests mq->validCount(+8) against mq->msgCount(+0x10) (queue-full test)
@@ -29,7 +42,7 @@
   osSetEventMesg         800DA6F0   verified   indexes an 8-byte-per-entry table by event<<3, stores mq@+0/msg@+4; table base is __osEventStateTab 8016A620
   osVirtualToPhysical    800D70A0   verified   KSEG0/KSEG1 range test + 0x1FFFFFFF mask
 
-== accepted (226) ==
+== accepted (234) ==
   boot         800D3A80  osViSetYScale [reimplemented]
   boot         800D3B40  osViSetMode [reimplemented]
   boot         800D3BB0  osViSetSpecialFeatures [reimplemented]
@@ -108,6 +121,8 @@
   boot         800D9DD0  osWritebackDCacheAll [reimplemented]
   boot         800D9E00  osViBlack [reimplemented]
   boot         800D9E70  _bcopy
+  boot         800DA180  osCreatePiManager [reimplemented]
+  boot         800DA2FC  __createSpeedParam [ignored]
   boot         800DA370  osCreateViManager [reimplemented]
   boot         800DA4F0  viMgrMain [ignored]
   boot         800DA680  osViSetEvent [reimplemented]
@@ -117,12 +132,14 @@
   boot         800DA91C  osSpTaskLoad [reimplemented]
   boot         800DAAAC  osSpTaskStartGo [reimplemented]
   boot         800DAAF0  osViGetCurrentFramebuffer [reimplemented]
+  boot         800DAB30  osViGetNextFramebuffer [reimplemented]
   boot         800DAB70  osViSwapBuffer [reimplemented]
   boot         800DABC0  osContInit [reimplemented]
   boot         800DAD30  __osContGetInitData [ignored]
   boot         800DAE00  __osPackRequestData [ignored]
   boot         800DAF00  osContStartReadData [reimplemented]
   boot         800DAF84  osContGetReadData [reimplemented]
+  boot         800DB010  __osPackReadData [ignored]
   boot         800DB0E0  osContStartQuery [reimplemented]
   boot         800DB164  osContGetQuery [reimplemented]
   boot         800DB190  __osMotorAccess [reimplemented]
@@ -195,10 +212,14 @@
   boot         800DFE20  alAuxBusPull
   boot         800DFF00  alSaveParam
   boot         800DFF34  alSavePull
+  boot         800DFFC0  __osPiCreateAccessQueue [ignored]
+  boot         800E0010  __osPiGetAccess [ignored]
+  boot         800E0054  __osPiRelAccess [ignored]
   boot         800E0080  osGetThreadPri [reimplemented]
   boot         800E00A0  osPiRawStartDma [ignored]
   boot         800E0180  osEPiRawStartDma [reimplemented]
   boot         800E03B0  __osDevMgrMain [ignored]
+  boot         800E0840  __osViGetCurrentContext [ignored]
   boot         800E0850  __osViSwapContext [ignored]
   boot         800E0B50  osGetCount [reimplemented]
   boot         800E0B60  __osSpSetStatus [ignored]

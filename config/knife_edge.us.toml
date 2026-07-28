@@ -6,7 +6,7 @@ symbols_file_path = "knife_edge.us.syms.toml"
 rom_file_path = "../build/knife_edge.z64"
 output_func_path = "../generated/us"
 functions_per_output_file = 50
-recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\nextern void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);\nextern void unload_overlays(int32_t ram_addr, uint32_t size);\n#ifdef __cplusplus\n}\n#endif"
+recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n#ifdef __cplusplus\n}\n#endif"
 
 [patches]
 stubs = []
@@ -111,4 +111,82 @@ renamed = [
 
 [[patches.hook]]
 func = "func_800D1D10"
-text = "unload_overlays((int32_t)ctx->r5, (uint32_t)ctx->r6); load_overlays(((uint32_t)ctx->r4) & 0x1FFFFFFF, (int32_t)ctx->r5, (uint32_t)ctx->r6);"
+text = "ke_overlay_dma(((uint32_t)ctx->r4) & 0x1FFFFFFF, (int32_t)ctx->r5, (uint32_t)ctx->r6);"
+
+[[patches.hook]]
+# polling loop 800CD7B4..800CD7BC (find_functions.find_spin_loops)
+func = "func_800CD710"
+before_vram = 0x800CD7B4
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 800D2B58..800D2B58 (find_functions.find_spin_loops)
+func = "func_800D2B40"
+before_vram = 0x800D2B58
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 8017B11C..8017B124 (find_functions.find_spin_loops)
+func = "func_8017B0C0_03D600"
+before_vram = 0x8017B11C
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 8017B120..8017B130 (find_functions.find_spin_loops)
+func = "func_8017B0C0_041650"
+before_vram = 0x8017B120
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 801DC380..801DC390 (find_functions.find_spin_loops)
+func = "func_801DC320_0BA450"
+before_vram = 0x801DC380
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 801E0320..801E0328 (find_functions.find_spin_loops)
+func = "func_801E02C0_0BA450"
+before_vram = 0x801E0320
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 8017DA58..8017DA60 (find_functions.find_spin_loops)
+func = "func_8017DA00_0EF7C0"
+before_vram = 0x8017DA58
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 8017BB14..8017BB1C (find_functions.find_spin_loops)
+func = "func_8017BAA4_0F4810"
+before_vram = 0x8017BB14
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 8017E0DC..8017E0E4 (find_functions.find_spin_loops)
+func = "func_8017E07C_111CC0"
+before_vram = 0x8017E0DC
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 8017B6B4..8017B6BC (find_functions.find_spin_loops)
+func = "func_8017B650_1199D0"
+before_vram = 0x8017B6B4
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 8017B134..8017B144 (find_functions.find_spin_loops)
+func = "func_8017B0C0_12C2F0"
+before_vram = 0x8017B134
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 8017BEF0..8017BEF8 (find_functions.find_spin_loops)
+func = "func_8017BE90_12C2F0"
+before_vram = 0x8017BEF0
+text = "yield_self_1ms(rdram);"
+
+[[patches.hook]]
+# polling loop 801DC380..801DC388 (find_functions.find_spin_loops)
+func = "func_801DC320_4D5FC0"
+before_vram = 0x801DC380
+text = "yield_self_1ms(rdram);"

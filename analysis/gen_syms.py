@@ -51,6 +51,11 @@ REL_ROM = "../build/knife_edge.z64"
 REL_OUT = "../generated/us"
 
 
+# Extra busy-wait yield hooks, for loops find_functions.find_spin_loops() does
+# not recognise.  Entries are (segment name, function vram, hook vram, why).
+EXTRA_SPIN_YIELD_HOOKS = []
+
+
 def hexint(v):
     return tomlkit.value("0x%08X" % v)
 
@@ -90,6 +95,7 @@ def main(argv=None):
     sections = tomlkit.aot()
 
     used_names = {}
+    stub_names = {}       # (segment, vram) -> emitted symbol name
     stats = []
     entry_ok = False
 
@@ -126,6 +132,7 @@ def main(argv=None):
                 raise SystemExit("duplicate symbol name %s (%s and %s)" %
                                  (nm, used_names[nm], seg["name"]))
             used_names[nm] = seg["name"]
+            stub_names[(seg["name"], vram)] = nm
 
             if vram == ENTRYPOINT and rom == 0x1000:
                 entry_ok = True
@@ -180,8 +187,11 @@ def main(argv=None):
         "#ifdef __cplusplus\n"
         'extern "C" {\n'
         "#endif\n"
-        "extern void load_overlays(uint32_t rom, int32_t ram_addr, uint32_t size);\n"
-        "extern void unload_overlays(int32_t ram_addr, uint32_t size);\n"
+        "/* src/main/register_overlays.cpp - whole-section overlay tracking. */\n"
+        "extern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n"
+        "/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n"
+        "   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\n"
+        "extern void yield_self_1ms(uint8_t* rdram);\n"
         "#ifdef __cplusplus\n"
         "}\n"
         "#endif"
@@ -197,8 +207,21 @@ def main(argv=None):
     to_rename = sorted(n for n in used_names
                        if n not in known and not n.startswith("func_"))
 
+    # OS-level functions that must not execute but that stage 2 could not name
+    # (ident_libultra.STUB_FUNCS).  N64Recomp emits an empty body for each, so
+    # the symbol still exists for jal resolution but the original MMIO-touching
+    # code never runs.
     patches = tomlkit.table()
-    patches["stubs"] = tomlkit.array()
+    stub_arr = tomlkit.array()
+    stub_arr.multiline(True)
+    for s in names_doc.get("stubs", []):
+        vram = int(s["vram"], 16)
+        nm = stub_names.get((s["segment"], vram))
+        if nm is None:
+            raise SystemExit("stub target %s %s has no emitted symbol"
+                             % (s["segment"], s["vram"]))
+        stub_arr.append(nm)
+    patches["stubs"] = stub_arr
     patches["ignored"] = tomlkit.array()
     ren = tomlkit.array()
     ren.multiline(True)
@@ -211,14 +234,64 @@ def main(argv=None):
     # funnel for every ROM->RAM DMA (segment_map.md). Registering the range with
     # librecomp before the copy is fine - the lookup tables never read rdram.
     # devAddr is masked in case it is KSEG1/phys-based rather than a raw ROM offset.
+    # ke_overlay_dma() wraps librecomp's unload_overlays/load_overlays pair so the
+    # unload range is grown to whole-section granularity; see
+    # src/main/register_overlays.cpp and analysis/docs/boot-debug.md.
     hook = tomlkit.table()
     hook["func"] = "func_800D1D10"
     hook["text"] = (
-        "unload_overlays((int32_t)ctx->r5, (uint32_t)ctx->r6); "
-        "load_overlays(((uint32_t)ctx->r4) & 0x1FFFFFFF, (int32_t)ctx->r5, (uint32_t)ctx->r6);"
+        "ke_overlay_dma(((uint32_t)ctx->r4) & 0x1FFFFFFF, "
+        "(int32_t)ctx->r5, (uint32_t)ctx->r6);"
     )
     hooks = tomlkit.aot()
     hooks.append(hook)
+
+    # Busy-wait yield hooks (analysis/docs/boot-debug.md).
+    #
+    # ultramodern schedules game threads cooperatively: messages posted from
+    # native threads (VI retrace, SP/DP done, PI) sit in an external queue and
+    # are only drained when a *game* thread calls osSendMesg/osRecvMesg/osJamMesg
+    # or blocks.  A recompiled thread that spins on a memory flag therefore
+    # deadlocks the whole runtime - on hardware the same loop is preempted by
+    # the RCP interrupt handler, which has no equivalent here.
+    #
+    # N64Recomp only rewrites the unconditional `b .` form into pause_self(), so
+    # the conditional form needs an explicit hook.  yield_self_1ms() drains the
+    # external queue (waiting at most 1 ms) and hands execution to a higher
+    # priority ready thread, which is what the interrupt would have done.
+    #
+    # The loops come from find_functions.find_spin_loops(); the hook goes at the
+    # top of the loop body so it runs once per iteration.  Functions whose name
+    # puts them in reimplemented_funcs/ignored_funcs are skipped: N64Recomp
+    # emits no body for them, so there is nothing to hook (and librecomp's own
+    # implementation blocks properly).
+    spins = []
+    for seg in funcs["segments"]:
+        for sl in seg.get("spin_loops", []):
+            spins.append((seg["name"], sl["func"], sl["target"], sl["branch"]))
+    for segname, func_vram, hook_vram, branch_vram in spins:
+        nm = stub_names.get((segname, func_vram))
+        if nm is None or nm in sets["reimplemented_funcs"] or nm in sets["ignored_funcs"]:
+            continue
+        h = tomlkit.table()
+        h.add(tomlkit.comment(
+            "polling loop %08X..%08X (find_functions.find_spin_loops)"
+            % (hook_vram, branch_vram)))
+        h["func"] = nm
+        h["before_vram"] = hexint(hook_vram)
+        h["text"] = "yield_self_1ms(rdram);"
+        hooks.append(h)
+    for segname, func_vram, hook_vram, why in EXTRA_SPIN_YIELD_HOOKS:
+        nm = stub_names.get((segname, func_vram))
+        if nm is None:
+            raise SystemExit("spin-yield hook target %s %08X is not an emitted "
+                             "function" % (segname, func_vram))
+        h = tomlkit.table()
+        h.add(tomlkit.comment(why))
+        h["func"] = nm
+        h["before_vram"] = hexint(hook_vram)
+        h["text"] = "yield_self_1ms(rdram);"
+        hooks.append(h)
     patches["hook"] = hooks
     cfg_path = os.path.join(args.config_dir, CONFIG_NAME)
     with open(cfg_path, "w") as fh:

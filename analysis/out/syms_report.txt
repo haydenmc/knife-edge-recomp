@@ -1,5 +1,5 @@
 section              rom      functions  named  rejected
-boot                 001000       565    226         0
+boot                 001000       565    234         0
 seg_02FC30           02FC30        22      0         0
 seg_03D600           03D600         7      0         0
 seg_041650           041650         9      0         0
@@ -21,6 +21,6 @@ boot_bss             02DB50         0      0         0
 
 total sections : 19
 total functions: 1115
-named functions: 226
+named functions: 234
 wrote /workspaces/knife-edge-recomp/config/knife_edge.us.syms.toml
 wrote /workspaces/knife-edge-recomp/config/knife_edge.us.toml
