@@ -1,0 +1,248 @@
+name: build
+
+# Repo policy (see README.md "Repository policy" and analysis/docs/build-notes.md):
+# reverse-engineered *functional* code is committed (generated/us/*.c/*.cpp,
+# config/*.toml) — only the ROM and asset/data dumps are excluded (.gitignore).
+# That means this workflow compiles committed sources only: no ROM fetch, no
+# secrets, no decryption step. See the `regen-verify` job at the bottom for
+# the (deliberately non-default) job that needs an actual ROM.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      rom_path:
+        description: >-
+          Absolute path to a Knife Edge (USA) ROM ALREADY PRESENT on the
+          runner's filesystem. Leave empty to just run the normal build/smoke
+          job. Only used by the regen-verify job below, and only on a
+          self-hosted runner you control — see that job's comments.
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Compile the project from committed sources (no ROM involved) and prove the
+  # resulting binary is a well-formed executable via a no-ROM smoke test.
+  # ---------------------------------------------------------------------------
+  build:
+    name: build (ubuntu-latest, clang/ninja)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Same package set as .devcontainer/devcontainer.json's postCreateCommand
+      # (minus the python/venv bits, which only the analysis pipeline needs and
+      # which this workflow never runs).
+      - name: Install toolchain + runtime deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            cmake ninja-build clang lld pkg-config \
+            libsdl2-dev libx11-dev libvulkan-dev vulkan-tools \
+            glslang-tools spirv-tools mesa-vulkan-drivers xvfb
+
+      - name: Compiler / tool versions
+        run: |
+          clang --version
+          cmake --version
+          ninja --version
+
+      # Cache keys are pinned to the vendored submodules' actual checked-out
+      # commits (not a content hash of their trees, which would be expensive
+      # to compute over rt64's ~400MB checkout) so a submodule bump correctly
+      # busts the cache.
+      - name: Resolve submodule commits for cache keys
+        id: submodules
+        run: |
+          echo "n64recomp=$(git -C deps/N64Recomp rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "runtime=$(git -C deps/N64ModernRuntime rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "rt64=$(git -C deps/rt64 rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # ---------------------------------------------------------------------
+      # Host tools: N64Recomp / RSPRecomp (built from deps/N64Recomp).
+      # The top-level CMakeLists.txt imports these by path from
+      # deps/N64Recomp/build/{N64Recomp,RSPRecomp} (see its
+      # N64RECOMP_HOST_TOOL/RSPRECOMP_HOST_TOOL cache vars) — build them at
+      # that exact path so the main configure step finds them without any
+      # CMakeLists.txt changes.
+      # ---------------------------------------------------------------------
+      - name: Cache N64Recomp host tools
+        id: cache-host-tools
+        uses: actions/cache@v4
+        with:
+          path: deps/N64Recomp/build
+          key: n64recomp-host-${{ runner.os }}-clang19-${{ steps.submodules.outputs.n64recomp }}
+
+      - name: Configure N64Recomp host tools
+        run: |
+          cmake -S deps/N64Recomp -B deps/N64Recomp/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
+
+      - name: Build N64Recomp + RSPRecomp
+        run: ninja -C deps/N64Recomp/build N64Recomp RSPRecomp
+
+      # ---------------------------------------------------------------------
+      # Main project: KnifeEdgeRecompiled, built against the committed
+      # N64Recomp output in generated/us/ (KE_GENERATED_DIR).
+      # ---------------------------------------------------------------------
+      - name: Compute main build cache key
+        id: buildkey
+        run: |
+          src_hash="${{ hashFiles('CMakeLists.txt', 'src/**', 'generated/us/**', 'config/**') }}"
+          key="build-${{ runner.os }}-clang19-${{ steps.submodules.outputs.n64recomp }}-${{ steps.submodules.outputs.runtime }}-${{ steps.submodules.outputs.rt64 }}-$src_hash"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+      - name: Cache main build directory
+        id: cache-build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: ${{ steps.buildkey.outputs.key }}
+          restore-keys: |
+            build-${{ runner.os }}-clang19-
+
+      - name: Configure KnifeEdgeRecompiled
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
+            -DKE_GENERATED_DIR="${{ github.workspace }}/generated/us" \
+            -DN64RECOMP_HOST_TOOL="${{ github.workspace }}/deps/N64Recomp/build/N64Recomp" \
+            -DRSPRECOMP_HOST_TOOL="${{ github.workspace }}/deps/N64Recomp/build/RSPRecomp"
+
+      - name: Build KnifeEdgeRecompiled
+        run: ninja -C build
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KnifeEdgeRecompiled-linux
+          path: build/KnifeEdgeRecompiled
+          if-no-files-found: error
+
+      # ---------------------------------------------------------------------
+      # No-ROM smoke test.
+      #
+      # Verified locally (see analysis/docs/build-notes.md workflow and the
+      # session that authored this file): src/main/main.cpp resolves the ROM
+      # question *before* SDL/RT64 ever initialize a window
+      # (recomp::is_rom_valid(...) is checked ahead of recomp::start()), so
+      # on a plain headless runner with no DISPLAY set, SDL_ShowSimpleMessageBox
+      # fails immediately (no video target), exit_error() falls through to its
+      # stderr fprintf, and the process exits via
+      # ultramodern::error_handling::quick_exit(EXIT_FAILURE) — no Xvfb
+      # needed for this particular check. (Xvfb *is* installed above, matching
+      # the devcontainer, but deliberately unused here: testing showed that
+      # running this same no-ROM path under a live Xvfb + DISPLAY makes
+      # SDL_ShowSimpleMessageBox draw a real modal message box and block
+      # indefinitely waiting for a click that will never come — exactly the
+      # hang a smoke test must avoid. A GitHub-hosted runner has no DISPLAY by
+      # default, which is the fast/correct path here.)
+      - name: Smoke test (no ROM -> clean failure, not a crash)
+        run: |
+          set +e
+          out="$(env -u DISPLAY -u SDL_VIDEODRIVER timeout 15 ./build/KnifeEdgeRecompiled 2>&1)"
+          status=$?
+          set -e
+          echo "$out"
+          echo "exit status: $status"
+
+          # Assert a *graceful* failure, not a specific message. Which error
+          # fires first depends on the runner's SDL/Vulkan situation: with no
+          # DISPLAY, SDL may select the "offscreen" driver and fail the Vulkan
+          # check before the ROM check is reached. Both paths funnel through
+          # exit_error -> quick_exit(EXIT_FAILURE), so status 1 is the signal
+          # that matters; anything else means a hang or a crash.
+          if [ "$status" -eq 124 ]; then
+            echo "::error::binary hung with no ROM (timeout); expected a clean exit"
+            exit 1
+          fi
+          if [ "$status" -ge 128 ]; then
+            echo "::error::binary died from signal $((status - 128)) (crash); expected a clean exit"
+            exit 1
+          fi
+          if [ "$status" -ne 1 ]; then
+            echo "::error::expected exit status 1 (EXIT_FAILURE), got $status"
+            exit 1
+          fi
+          echo "OK: binary is well-formed and fails cleanly without a ROM."
+
+  # ---------------------------------------------------------------------------
+  # Regenerate the recompiled output from an actual ROM and diff it against
+  # what's committed in generated/us/. This is the CI-shaped version of the
+  # developer recipe documented in README.md ("Regenerating from a ROM").
+  #
+  # This job is INTENTIONALLY not part of the normal push/pull_request build:
+  # per repo policy the ROM is never committed and is not provided to hosted
+  # runners as a secret (see the top-of-file comment and README.md). It only
+  # runs when someone explicitly dispatches this workflow AND supplies
+  # `rom_path` pointing at a ROM that already exists on the runner — which in
+  # practice means a self-hosted runner you control, not a GitHub-hosted one.
+  # Dispatching without `rom_path` set (the default) skips it entirely.
+  # ---------------------------------------------------------------------------
+  regen-verify:
+    name: "regen-verify (manual dispatch only, needs a local ROM)"
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rom_path != '' }}
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install toolchain deps + python venv (analysis pipeline)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake ninja-build clang lld g++ pkg-config python3-pip python3-venv
+          python3 -m venv .venv
+          .venv/bin/pip install -q rabbitizer capstone tomlkit
+
+      - name: Build n64sym (analysis pipeline's identification oracle)
+        run: make -C deps/n64sym
+
+      - name: Build N64Recomp host tool
+        run: |
+          cmake -S deps/N64Recomp -B deps/N64Recomp/build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
+          ninja -C deps/N64Recomp/build N64Recomp
+
+      - name: Ingest the ROM (normalize to build/knife_edge.z64)
+        run: |
+          mkdir -p build
+          .venv/bin/python analysis/byteswap.py "${{ github.event.inputs.rom_path }}" build/knife_edge.z64
+
+      - name: Regenerate symbols + config (make -C analysis)
+        run: make -C analysis
+
+      - name: Run N64Recomp (writes straight into generated/us per config/knife_edge.us.toml)
+        run: deps/N64Recomp/build/N64Recomp config/knife_edge.us.toml
+
+      - name: Diff regenerated output against committed generated/us
+        run: |
+          if ! git diff --exit-code -- generated/us config; then
+            echo "::error::regenerating from the ROM produced output that differs from" \
+                 "what's committed in generated/us or config/ — see the diff above." \
+                 "Either the analysis pipeline changed behavior or the committed" \
+                 "output is stale; investigate before merging."
+            exit 1
+          fi
+          echo "OK: regenerated output is byte-identical to what's committed."
