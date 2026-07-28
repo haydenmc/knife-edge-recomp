@@ -17,8 +17,8 @@
 // ke_view_height() below, entirely on the host side -- no recompiled
 // instruction is altered.
 //
-// NOT part of the "enhanced" profile yet (src/main/config.cpp): pending the
-// project owner's hands-on verification on real hardware-adjacent footage.
+// Part of the "enhanced" profile's curated set (src/main/config.cpp),
+// promoted after the project owner's hands-on verification.
 
 #include <atomic>
 #include <cstdint>

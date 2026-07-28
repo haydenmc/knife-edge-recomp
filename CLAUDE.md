@@ -29,11 +29,10 @@ and *faithful*, see `analysis/docs/enhancements.md` candidates table).
 Enhancement work has started. Shipped, in the `enhanced` profile, verified
 headless: `high_resolution` (render 3D at window resolution via RT64) and
 `widescreen` (expand FOV to window aspect). Owner verified both on the host
-GPU, including no widescreen edge pop-in. Also shipped: `full_height`
-(removes the in-mission 320×200 letterbox — an uncrop; see
-`analysis/docs/letterbox-full-height.md` for the RE), **not** in `enhanced`
-yet pending the owner's hands-on check (results screens, later stages,
-cutscene framing). Known vanilla-only cosmetic issue found during that RE:
+GPU, including no widescreen edge pop-in. Also shipped and owner-verified hands-on: `full_height` (removes the
+in-mission 320×200 letterbox — an uncrop; see
+`analysis/docs/letterbox-full-height.md` for the RE), promoted into
+`enhanced`. Known vanilla-only cosmetic issue found during that RE:
 RT64 renders the letterbox bands in the scene fill color instead of black
 (scissor not honored on a fill rect) — candidate upstream report, doc §4.
 Agreed order for the rest: gamepad support → mouse aim → Flatpak → high
@@ -166,8 +165,5 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
 4. Enhancements not yet started, in agreed order (see Status): gamepad support,
    mouse aim, Flatpak packaging, high framerate. High-score persistence
    deferred (see candidates).
-5. Owner hands-on GPU check of `full_height` (results screens, stages beyond
-   1, cutscene framing) — then promote it into the `enhanced` set (one line
-   in `config.cpp` + docs).
-6. RT64 letterbox-band color bug (vanilla-only cosmetic; see
+5. RT64 letterbox-band color bug (vanilla-only cosmetic; see
    `letterbox-full-height.md` §4) — decide whether to report upstream.

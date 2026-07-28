@@ -246,6 +246,7 @@ kerecomp::EnhancementFlags kerecomp::effective_enhancements(const Config& cfg) {
             flags.input_latching = true;
             flags.high_resolution = true;
             flags.widescreen = true;
+            flags.full_height = true;
             return flags;
         }
         case Profile::Custom:

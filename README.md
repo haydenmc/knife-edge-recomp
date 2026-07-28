@@ -167,13 +167,11 @@ commented defaults on first run. It selects a **profile**:
   behavior. This is what every other section of this README assumes.
 - `enhanced` — a curated set of opt-in quality-of-life changes: currently
   `input_latching` (see Controls above), `high_resolution` (renders the 3D
-  scene at window resolution through RT64 instead of native 320x240), and
+  scene at window resolution through RT64 instead of native 320x240),
   `widescreen` (expands the 3D field of view to the window's aspect ratio
-  instead of 4:3-pillarboxing it).
-- `custom` — reads individual `[enhancements]` flags from the file, including
-  `full_height` (removes the in-mission 20-line letterbox, revealing the full
-  320x240 frame) — not part of `enhanced` yet, pending hands-on hardware
-  verification.
+  instead of 4:3-pillarboxing it), and `full_height` (removes the in-mission
+  20-line letterbox, revealing the full 320x240 frame).
+- `custom` — reads individual `[enhancements]` flags from the file.
 
 Two CLI flags, and nothing else config-related:
 

@@ -99,9 +99,7 @@ Config load_config(int argc, char** argv, const std::filesystem::path& app_folde
 // The enhancement set actually in effect for cfg.profile:
 //   Vanilla  -> EnhancementFlags{} (everything off)
 //   Enhanced -> the curated set (input_latching = true, high_resolution = true,
-//               widescreen = true). full_height is deliberately NOT included
-//               yet, pending the project owner's hands-on hardware
-//               verification -- see analysis/docs/enhancements.md.
+//               widescreen = true, full_height = true)
 //   Custom   -> cfg.enhancements verbatim
 EnhancementFlags effective_enhancements(const Config& cfg);
 
