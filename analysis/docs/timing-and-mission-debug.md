@@ -330,6 +330,42 @@ press x; sleep 12        # -> mission
 DISPLAY=:99 import -window root /tmp/f.png
 ```
 
+### 3.1 Input-method interference (found while play-testing on KDE)
+
+Because the game samples the controller once per game frame, a keypress must be
+held for at least one frame (~67 ms) to be seen — which is fine for a human but
+puts held keys in the path of desktop "hold a key for the accent/IME picker"
+features. On KDE those popups were swallowing holds outright.
+
+The cause is on our side: **SDL2 enables text input during video init**, so the
+window gets an input-method context (XIM/ibus/fcitx on X11, `text-input-v3` on
+Wayland) even though the game never accepts text. The IME then consumes held
+keys, and its popup takes focus, so `SDL_GetKeyboardState()` stops reflecting
+what the player is holding.
+
+`create_window` in `src/main/main.cpp` now calls `SDL_StopTextInput()` right
+after `SDL_CreateWindow` and logs the transition. Verified under Xvfb/X11:
+
+```
+SDL video driver: x11
+SDL text input (IME): on at window creation, off now
+```
+
+i.e. SDL really did leave it on. This does not affect `SDL_GetKeyboardState`,
+which is what `get_input` reads — menus and gameplay were re-driven to stage 1
+afterwards and `scripts/smoke_test.sh` still passes.
+
+Two things this does *not* cover, if a desktop still intercepts holds:
+
+* a compositor-level grab that never delivers the key to the application at all
+  (test with `XMODIFIERS=@im=none QT_IM_MODULE= GTK_IM_MODULE=` in the
+  environment; if that helps, the input method is still in the path);
+* the underlying "a tap shorter than one frame is invisible" property, which is
+  faithful to console (the N64 controller is also sampled once per frame) but is
+  what makes scripted `xdotool key` taps unreliable. Latching presses between
+  reads in `get_input` would remove it, at the cost of being more forgiving than
+  hardware — deliberately not done.
+
 ### Open
 
 0. **The target frame rate rests on two agreeing estimates, not a console

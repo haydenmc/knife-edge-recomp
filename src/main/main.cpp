@@ -119,6 +119,22 @@ namespace {
         SDL_SetWindowFullscreen(window, 0);
 #endif
 
+        // SDL2 enables text input during video init, which attaches an input
+        // method (XIM/ibus/fcitx on X11, text-input-v3 on Wayland) to this
+        // window. The game never accepts text, and an active IME is actively
+        // harmful here: a desktop that shows a long-press character/IME picker
+        // swallows held keys and its popup takes focus, at which point
+        // SDL_GetKeyboardState() stops reflecting what the player is holding.
+        // Holds matter because the game samples the controller once per game
+        // frame (~15 Hz, see analysis/docs/timing-and-mission-debug.md).
+        const bool ime_was_active = SDL_IsTextInputActive() == SDL_TRUE;
+        if (ime_was_active) {
+            SDL_StopTextInput();
+        }
+        std::fprintf(stdout, "SDL text input (IME): %s at window creation, %s now\n",
+                     ime_was_active ? "on" : "off",
+                     SDL_IsTextInputActive() == SDL_TRUE ? "on" : "off");
+
         SDL_SysWMinfo wm_info;
         SDL_VERSION(&wm_info.version);
         SDL_GetWindowWMInfo(window, &wm_info);

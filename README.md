@@ -153,6 +153,13 @@ Keyboard only for now (see `src/main/main.cpp`); no gamepad support yet.
 | L / R shoulder | Q / E |
 | Control stick | W A S D |
 
+The game samples the controller once per game frame (~15 Hz — see
+`analysis/docs/timing-and-mission-debug.md`), the same as on console, so a key
+has to be held for a frame to register. The window disables SDL's text input
+so a desktop input method cannot swallow those holds; if your desktop still
+intercepts held keys, try running with `XMODIFIERS=@im=none QT_IM_MODULE=
+GTK_IM_MODULE=` to take the input method out of the path entirely.
+
 ## Regenerating from a ROM
 
 Recompiler output is not committed, so a playable build always regenerates it.
