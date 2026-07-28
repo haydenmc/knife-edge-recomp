@@ -26,13 +26,16 @@ Not yet verified: full campaign completion; `--profile enhanced` input latching
 by hand; high-score persistence across runs (analyzed — almost certainly absent
 and *faithful*, see `analysis/docs/enhancements.md` candidates table).
 
-Enhancement work has started. `high_resolution` (render 3D at window
-resolution via RT64) shipped and is in the `enhanced` profile — verified
-headless (A/B screenshots, ~3x distinct colors), owner hands-on GPU check
-pending. Agreed order for the rest: gamepad support → widescreen → mouse aim
-→ Flatpak → high framerate. Rationale: gamepad before mouse aim (both touch
-`get_input`'s axis path; gamepad is the simpler pattern-setter), widescreen
-rides the config→GraphicsConfig plumbing hi-res built, high framerate last
+Enhancement work has started. Shipped, both in the `enhanced` profile and
+verified headless with A/B screenshots, owner hands-on GPU check pending for
+both: `high_resolution` (render 3D at window resolution via RT64) and
+`widescreen` (expand FOV to window aspect; widescreen was pulled ahead of
+gamepad because it rides the same config→GraphicsConfig seam and batches
+into the same hands-on session). The widescreen hands-on check must
+specifically watch for edge pop-in — the game culls for a 4:3 frustum.
+Agreed order for the rest: gamepad support → mouse aim → Flatpak → high
+framerate. Rationale: gamepad before mouse aim (both touch `get_input`'s
+axis path; gamepad is the simpler pattern-setter), high framerate last
 because it is the deepest timing-sensitive cut, Flatpak once the config
 surface stops churning. Mouse aim caveat: reticle updates at game rate
 (~15 Hz pad sampling) regardless of input smoothness — fully smooth aim is
@@ -158,6 +161,7 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
 4. Enhancements not yet started, in agreed order (see Status): gamepad support,
-   widescreen, mouse aim, Flatpak packaging, high framerate. High-score
-   persistence deferred (see candidates).
-5. Owner hands-on GPU check of `high_resolution` (see Status).
+   mouse aim, Flatpak packaging, high framerate. High-score persistence
+   deferred (see candidates).
+5. Owner hands-on GPU check of `high_resolution` and `widescreen` (see
+   Status; for widescreen, watch the widened edges for pop-in).
