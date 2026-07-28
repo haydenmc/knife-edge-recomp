@@ -482,8 +482,8 @@ transition, the score accumulation in `func_800CC4D0`, the stage counter at
 `0x8011D1BC`, the intermission screen `func_800CC8D0` and a second load into the
 shared `0x801D21F0` slot all work.
 
-**One latent hazard was found and is deliberately left unfixed.** Two of five
-forced completions died with
+**One latent hazard was found and has since been fixed (implemented
+2026-07-28).** Two of five forced completions died with
 
 ```
 Failed to find function at 0x8019CF84
@@ -499,18 +499,109 @@ main thread can leave the loop and reach `func_800CC8D0`'s first DMA while the
 pointer is still live. On hardware that is harmless: `func_800CC8D0`'s four
 images only reach `0x8018DBF0`, so the bytes at `0x8019CF84` are *not*
 overwritten and the callback stays valid for the frame or so until it retires
-itself. `ke_overlay_dma()` in `src/main/register_overlays.cpp`, however, grows
-the unload to whole-section granularity and drops all of `seg_1501A0`
-(`0x8016D6F0..0x801A0C50`), so that still-intact code becomes unresolvable.
+itself. `ke_overlay_dma()` in `src/main/register_overlays.cpp` used to grow
+the unload to whole-section granularity and drop all of `seg_1501A0`
+(`0x8016D6F0..0x801A0C50`), so that still-intact code became unresolvable.
 
-The fix would be to re-register a section this DMA only *partially* covers,
-before loading the incoming sections so theirs win for any address both claim.
-It is not applied because the fault has only ever been produced by the forced
-trigger above — a natural completion sets up the mission-end audio, which
-changes the interleaving — and because re-registering makes an address in the
-overwritten head resolve to the old section's function instead of the new bytes.
-If `Failed to find function at 0x8019CF84` is ever seen in normal play, that is
-the change to make.
+**The fix**, in `src/main/register_overlays.cpp`: `ke_overlay_dma()` still has
+to grow the *librecomp-facing* unload to whole-section granularity (librecomp's
+`unload_overlays()` aborts on anything less), but it no longer discards every
+function of a section that gets dropped that way. After librecomp erases the
+section, whichever of its functions lie entirely outside `[new_start, new_end)`
+— the byte range the incoming DMA actually writes, not the grown range — are
+re-inserted into librecomp's function map (`add_loaded_function()`) via a
+distinct per-function trampoline, so the tail keeps resolving to the real,
+unmodified code exactly as it would on hardware.
+
+*Straddle boundary.* A function survives only if its **entire** `[fstart,
+fend)` misses the written range: `fend <= new_start || fstart >= new_end`. A
+function that starts in the surviving tail but runs past `new_end` (impossible
+in this game, since every load shares its target section's own base address,
+but not assumed) or one that starts inside the written range and is therefore
+partially overwritten is destroyed either way, because comparing the *whole*
+range is strictly stronger than comparing just `fstart` — it degrades to "does
+`fstart` fall inside `[new_start, new_end)`" exactly when `new_start` equals
+the section's own base (this game's case), and stays correct if that ever
+stopped holding. Off-by-one here would mean resolving a function whose tail
+half is now the new overlay's bytes.
+
+*Staying loud.* librecomp has no API to remove a single function-map entry
+(only whole sections), which matters for two things the fix also had to cover:
+logging when a surviving function is actually invoked (not merely resolvable —
+most survivors are never called), and correctly dropping a survivor if a
+*later* DMA finally covers it too. Both ride on the same mechanism: each
+re-inserted function gets its own trampoline (1024 of them, generated at
+compile time via a template index, since `recomp_func_t` carries no per-call
+identity) instead of the real pointer directly. A trampoline is a small state
+machine, flippable in place after publication:
+- **Call** — forwards to the real function; the first time it actually runs it
+  prints `[overlays] executing stale-tail function 0x%08X from displaced
+  section (rom 0x%06X) - hardware-faithful but worth knowing` once per
+  displacement event (a shared flag per event, not per function, so a section
+  with many surviving functions doesn't spam if several of them get called).
+- **Tombstone** — a later DMA's `[new_start, new_end)` now overlaps this
+  function; the trampoline is flipped to reproduce `get_function()`'s own
+  `Failed to find function at 0x%08X` fatal diagnostic, so the address can
+  never silently resolve to code that has since actually been overwritten.
+  This is checked on every `ke_overlay_dma()` call independent of whatever
+  else it displaces, so repeated partial displacement of the same original
+  section (survive, then get partially covered again, then partially covered
+  a third time, …) keeps working.
+
+**Verification.** The forced-completion scaffold above (six writes +
+`func_800D1680()`, armed off the `0x801D21F0` mission-slot DMA and fired N
+frames later from `ke_gfx_task_end()`) was rebuilt temporarily to exercise
+this, then completely removed again (`grep -rn "scaffold" src/` returns
+nothing). Across 18 forced-completion runs, `Failed to find function` — the
+hazard this fix targets — occurred **zero times**, including in the runs where
+the exact race was hit: in 2 of those 18, the mission loop lost the
+self-deregistration race and `0x8019CF84` really was called after
+`seg_1501A0` was partially displaced, and both times the
+`[overlays] executing stale-tail function 0x8019CF84 from displaced section
+(rom 0x1501A0) ...` line fired exactly once, followed by the real,
+now-resolvable callback body executing (in the other ~9 runs that reached the
+mission slot DMA, the callback had already deregistered itself before the
+race window, same as the original 2026-07-28 sample — this remains an
+intermittent race, not a deterministic one). Several runs were lost to two
+things unrelated to this fix, both worth recording so they aren't re-diagnosed
+as regressions later: (1) a subset of headless runs never reached the mission
+screen at all — the same xdotool-tap-reliability flakiness §3.1 already
+documents; (2) longer xdotool-driven sessions occasionally hit
+`dbus_connection_unref(): assertion "connection != NULL" failed`, an abort
+inside libdbus itself, reproducible even with the scaffold entirely absent and
+correlated with `xdotool windowfocus`/keyboard-event volume rather than with
+anything in this fix — almost certainly SDL2's screensaver-inhibit path
+misbehaving when no D-Bus session bus exists in this container (there is
+none here). Neither affects `scripts/smoke_test.sh` (no `xdotool` involved),
+which passed before and after this change, including a 90 s run.
+
+**A second, separate issue was discovered by this fix, not caused by it, and
+is out of scope for it.** In the 2 runs where `0x8019CF84` was actually
+invoked post-displacement, the real callback body ran correctly (per the fix)
+and submitted one display list — and RT64's HLE microcode auto-detection could
+not identify it (`Unable to find a matching GBI in the current database. This
+game is not supported in HLE.`), after which the process segfaulted. Root
+cause, purely from reading (no `deps/` changes made): `getGBIForUCode()` in
+`deps/rt64/src/gbi/rt64_gbi.cpp` returns `nullptr` on a
+detection miss; `Interpreter::processDisplayLists()` in
+`deps/rt64/src/hle/rt64_interpreter.cpp` only guards the
+resulting null `hleGBI` with `assert(hleGBI != nullptr)`, which is compiled
+out in this (release, `NDEBUG`) build, so it falls through to dereferencing a
+null pointer. This code path was previously unreachable in this project: the
+old whole-section-drop behaviour meant `0x8019CF84` either aborted at
+`get_function` first (2/5 in the original sample) or was never called post-
+displacement at all (3/5) — nothing ever got far enough to submit a display
+list built from a genuinely stale-tail call, so this RT64 gap has been latent
+and unexercised until now. Whether hardware would also render one glitched
+frame here or whether the display list is subtly wrong for a reason specific
+to how this scaffold forces completion (skipping whatever a natural
+mission-end sequence, notably the mission-end audio setup mentioned above,
+would otherwise have quiesced first) is open. Fixing it would mean touching
+`deps/rt64`, which is out of scope here (`register_overlays.cpp` is the
+documented and correct place for the actual §4.2 fix, and this project's
+constraints exclude `deps/` changes); if `Unable to find a matching GBI`
+followed by a crash is ever seen from a natural mission completion, this is
+the lead to start from.
 
 ### 4.3 Diagnostic lesson
 
