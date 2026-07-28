@@ -43,8 +43,11 @@
 #include "librecomp/rsp.hpp"
 
 #include "audio.h"
+#include "config.h"
 #include "rt64_render_context.h"
 #include "support.h"
+
+#include <atomic>
 
 namespace kerecomp {
     // Defined in register_overlays.cpp.
@@ -151,17 +154,6 @@ namespace {
 #endif
     }
 
-    // Pumps the SDL event queue. Runs once per iteration of recomp::start()'s
-    // main loop regardless of whether a game is running.
-    void update_gfx(void*) {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                ultramodern::quit();
-            }
-        }
-    }
-
     // ---- input -------------------------------------------------------------
     // Minimal but real: without this the game stops on its "THERE ARE NO
     // CONTROLLERS ATTACHED" screen forever, because osContInit (HLE'd by
@@ -172,8 +164,71 @@ namespace {
     constexpr uint16_t BTN_L = 0x0020, BTN_R = 0x0010;
     constexpr uint16_t BTN_CU = 0x0008, BTN_CD = 0x0004, BTN_CL = 0x0002, BTN_CR = 0x0001;
 
+    struct Binding { SDL_Scancode key; uint16_t mask; };
+    constexpr Binding bindings[] = {
+        { SDL_SCANCODE_X,      BTN_A },     { SDL_SCANCODE_Z,     BTN_B },
+        { SDL_SCANCODE_LSHIFT, BTN_Z },     { SDL_SCANCODE_RETURN, BTN_START },
+        { SDL_SCANCODE_UP,     BTN_DU },    { SDL_SCANCODE_DOWN,  BTN_DD },
+        { SDL_SCANCODE_LEFT,   BTN_DL },    { SDL_SCANCODE_RIGHT, BTN_DR },
+        { SDL_SCANCODE_Q,      BTN_L },     { SDL_SCANCODE_E,     BTN_R },
+        { SDL_SCANCODE_I,      BTN_CU },    { SDL_SCANCODE_K,     BTN_CD },
+        { SDL_SCANCODE_J,      BTN_CL },    { SDL_SCANCODE_L,     BTN_CR },
+    };
+
+    uint16_t sample_buttons(const Uint8* keys) {
+        uint16_t held = 0;
+        for (const Binding& b : bindings) {
+            if (keys[b.key]) {
+                held |= b.mask;
+            }
+        }
+        return held;
+    }
+
+    // enhancements.input_latching (analysis/docs/enhancements.md). Set once
+    // at startup from the resolved config, before recomp::start() -- read
+    // from exactly one call site each in update_gfx() and get_input() below,
+    // per the "one flag read, not scattered ifs" structure the design calls
+    // for. Vanilla (false) leaves both functions doing exactly what they did
+    // before this flag existed: raw per-read sampling.
+    std::atomic<bool> input_latching_enabled{false};
+    // Accumulates buttons pressed since the last get_input() call. Only
+    // written/read when input_latching_enabled is set; update_gfx() ORs
+    // fresh presses in (it runs once per host render-loop iteration, far
+    // more often than the game's ~15 Hz controller read), and get_input()
+    // drains it into the buttons it returns.
+    std::atomic<uint16_t> latched_buttons{0};
+
     void poll_input() {
         SDL_PumpEvents();
+    }
+
+    // Pumps the SDL event queue. Runs once per iteration of recomp::start()'s
+    // main loop regardless of whether a game is running -- i.e. far more
+    // often than get_input() below, which is what makes it the right place
+    // to sample for press-latching (see input_latching_enabled above).
+    void update_gfx(void*) {
+        const bool latching = input_latching_enabled.load(std::memory_order_relaxed);
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                ultramodern::quit();
+            }
+            // Latch from key-down EVENTS, not from polled keyboard state. SDL
+            // queues every press, so a tap that goes down and up between two
+            // polls is still captured; polling state can only ever sample, and
+            // would miss exactly the short taps latching exists to rescue.
+            // event.key.repeat is ignored - auto-repeat adds nothing here.
+            else if (latching && event.type == SDL_KEYDOWN && event.key.repeat == 0) {
+                const SDL_Scancode sc = event.key.keysym.scancode;
+                for (const Binding& b : bindings) {
+                    if (b.key == sc) {
+                        latched_buttons.fetch_or(b.mask, std::memory_order_relaxed);
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     bool get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
@@ -184,21 +239,14 @@ namespace {
         if (keys == nullptr) {
             return false;
         }
-        struct Binding { SDL_Scancode key; uint16_t mask; };
-        static const Binding bindings[] = {
-            { SDL_SCANCODE_X,      BTN_A },     { SDL_SCANCODE_Z,     BTN_B },
-            { SDL_SCANCODE_LSHIFT, BTN_Z },     { SDL_SCANCODE_RETURN, BTN_START },
-            { SDL_SCANCODE_UP,     BTN_DU },    { SDL_SCANCODE_DOWN,  BTN_DD },
-            { SDL_SCANCODE_LEFT,   BTN_DL },    { SDL_SCANCODE_RIGHT, BTN_DR },
-            { SDL_SCANCODE_Q,      BTN_L },     { SDL_SCANCODE_E,     BTN_R },
-            { SDL_SCANCODE_I,      BTN_CU },    { SDL_SCANCODE_K,     BTN_CD },
-            { SDL_SCANCODE_J,      BTN_CL },    { SDL_SCANCODE_L,     BTN_CR },
-        };
-        uint16_t held = 0;
-        for (const Binding& b : bindings) {
-            if (keys[b.key]) {
-                held |= b.mask;
-            }
+        uint16_t held = sample_buttons(keys);
+        if (input_latching_enabled.load(std::memory_order_relaxed)) {
+            // Press-latch: OR everything pressed since the last read into what
+            // we return now, then clear so the next read starts fresh. Vanilla
+            // (flag off) never touches latched_buttons at all, so this is a
+            // pure no-op there -- the raw sample above is exactly what used to
+            // be returned.
+            held |= latched_buttons.exchange(0, std::memory_order_relaxed);
         }
         *buttons = held;
         *x = (keys[SDL_SCANCODE_D] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_A] ? 1.0f : 0.0f);
@@ -267,7 +315,20 @@ int main(int argc, char** argv) {
 
     kerecomp::log_build_info();
 
-    recomp::register_config_path(kerecomp::get_app_folder_path());
+    // Config surface (analysis/docs/enhancements.md): profile + enhancement
+    // flags + fidelity tuning, loaded from <app folder>/config.toml (or
+    // --config's path), CLI/env overrides applied. Logged right after the
+    // build stamp so a bug report self-identifies its config too.
+    std::filesystem::path app_folder = kerecomp::get_app_folder_path();
+    kerecomp::Config config = kerecomp::load_config(argc, argv, app_folder);
+    std::fprintf(stdout, "%s\n", kerecomp::describe_config(config).c_str());
+    std::fflush(stdout);
+
+    kerecomp::EnhancementFlags enhancements = kerecomp::effective_enhancements(config);
+    input_latching_enabled.store(enhancements.input_latching, std::memory_order_relaxed);
+    kerecomp::set_rcp_frame_ms_tuning(config.tuning.rcp_frame_ms);
+
+    recomp::register_config_path(app_folder);
 
     // TODO: rom_hash/save_type/game_id are placeholders until the ROM has
     // been analyzed enough to fill them in for real:

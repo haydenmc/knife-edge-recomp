@@ -30,4 +30,11 @@ namespace kerecomp {
     // Writes the commit this binary was built from to stdout at startup, so a
     // bug report identifies an exact tree. See src/main/build_info.h.in.
     void log_build_info();
+
+    // ---- tuning (analysis/docs/enhancements.md, src/main/rcp_timing.cpp) ----
+    // Sets the config-file-derived RCP frame-time budget, in milliseconds
+    // (tuning.rcp_frame_ms; 0 = no override). Implemented in rcp_timing.cpp.
+    // The KE_RCP_FRAME_MS env var still takes precedence when set. Call once,
+    // before recomp::start(), with the resolved kerecomp::Config's value.
+    void set_rcp_frame_ms_tuning(double ms);
 }

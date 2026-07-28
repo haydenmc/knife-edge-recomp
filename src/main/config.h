@@ -1,0 +1,91 @@
+#pragma once
+
+// Enhancement-flag / profile configuration (analysis/docs/enhancements.md).
+//
+// The policy: every deviation from the original game's behavior is a
+// runtime-toggleable "enhancement", off by default, so the game stays
+// available as a faithful regression baseline ("vanilla") at all times.
+// This header is the config surface for that policy; src/main/main.cpp reads
+// it once at startup and wires the resulting flags into the input backend
+// (press-latching) and src/main/rcp_timing.cpp (the RCP frame-time tuning
+// knob).
+//
+// Precedence, matching analysis/docs/enhancements.md: CLI > env > config file
+// > built-in defaults. The only CLI flags are --profile <name> and
+// --config <path>; the only env var is KE_RCP_FRAME_MS (unchanged from
+// before this file existed), which src/main/rcp_timing.cpp still reads
+// directly and which wins over tuning.rcp_frame_ms from the file.
+
+#include <filesystem>
+#include <string>
+
+namespace kerecomp {
+
+// Which set of enhancements is active. "vanilla" and "enhanced" are curated,
+// named baselines; "custom" reads [enhancements] from the config file
+// individually. See effective_enhancements() below.
+enum class Profile {
+    Vanilla,
+    Enhanced,
+    Custom,
+};
+
+// Runtime-toggleable behavioral deviations from the original game. Every
+// field defaults to off/faithful, so a default-constructed EnhancementFlags
+// is always a safe fallback (it's exactly what "vanilla" resolves to).
+struct EnhancementFlags {
+    // Latches a key press between controller reads so a tap shorter than one
+    // game frame (~67 ms -- the game samples the pad at ~15 Hz, see
+    // analysis/docs/timing-and-mission-debug.md 3.1) still registers on the
+    // next read. Vanilla (off) samples raw state per read, same as hardware.
+    bool input_latching = false;
+};
+
+// Fidelity knobs -- NOT enhancements. These approximate a real-hardware
+// mechanism (here, how long the RCP takes to render a frame; see
+// src/main/rcp_timing.cpp) rather than changing behavior on purpose.
+struct TuningFlags {
+    // Overrides the modelled RCP frame-time budget, in milliseconds.
+    // 0 = built-in model (59.733 ms). Distinct from the KE_RCP_FRAME_MS env
+    // var, whose own 0 explicitly disables pacing -- that existing meaning is
+    // preserved unchanged in rcp_timing.cpp; this file-derived value never
+    // disables pacing, it only opts out of overriding the built-in default.
+    double rcp_frame_ms = 0.0;
+};
+
+struct Config {
+    Profile profile = Profile::Vanilla;
+    // Only consulted when profile == Custom; effective_enhancements() below
+    // ignores this field for Vanilla/Enhanced.
+    EnhancementFlags enhancements;
+    TuningFlags tuning;
+};
+
+// Resolves the full config for this run:
+//   1. Parses argv for --profile <name> and --config <path> (no other flags).
+//   2. Loads TOML from --config's path, or <app_folder>/config.toml if
+//      --config wasn't given.
+//   3. If that file doesn't exist, creates it with commented vanilla
+//      defaults and returns vanilla defaults.
+//   4. If the file exists but fails to parse, warns to stderr once and falls
+//      back to vanilla defaults. Never throws or crashes.
+//   5. Unknown keys anywhere in the file are collected and warned about once
+//      (not per-key spam), then ignored.
+//   6. --profile (if given) overrides [profile].active from the file.
+// KE_RCP_FRAME_MS is deliberately NOT resolved here -- src/main/rcp_timing.cpp
+// still reads it directly and applies it with higher precedence than
+// tuning.rcp_frame_ms, so that existing behavior/log line is untouched.
+Config load_config(int argc, char** argv, const std::filesystem::path& app_folder);
+
+// The enhancement set actually in effect for cfg.profile:
+//   Vanilla  -> EnhancementFlags{} (everything off)
+//   Enhanced -> the curated set (currently just input_latching = true)
+//   Custom   -> cfg.enhancements verbatim
+EnhancementFlags effective_enhancements(const Config& cfg);
+
+// One-line startup summary ("profile: vanilla" or
+// "profile: custom (input_latching=on, rcp_frame_ms=55.0)"), logged right
+// after the build stamp so a bug report self-identifies its config too.
+std::string describe_config(const Config& cfg);
+
+} // namespace kerecomp

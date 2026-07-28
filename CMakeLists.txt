@@ -267,6 +267,7 @@ configure_file(${CMAKE_SOURCE_DIR}/src/main/build_info.h.in
 add_executable(KnifeEdgeRecompiled
     ${CMAKE_SOURCE_DIR}/src/main/main.cpp
     ${CMAKE_SOURCE_DIR}/src/main/audio.cpp
+    ${CMAKE_SOURCE_DIR}/src/main/config.cpp
     ${CMAKE_SOURCE_DIR}/src/main/support.cpp
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/main/rcp_timing.cpp
@@ -327,11 +328,17 @@ if (APPLE)
     target_link_libraries(KnifeEdgeRecompiled PRIVATE ${CMAKE_DL_LIBS} Threads::Threads SDL2::SDL2)
 endif()
 
+# tomlplusplus is vendored by deps/N64ModernRuntime/N64Recomp/lib/tomlplusplus
+# and already built as part of the add_subdirectory(deps/N64ModernRuntime)
+# above (N64Recomp/RSPRecomp use it for their own config.toml format); reused
+# here (src/main/config.cpp) instead of vendoring a second TOML parser -- see
+# analysis/docs/enhancements.md.
 target_link_libraries(KnifeEdgeRecompiled PRIVATE
     RecompiledFuncs
     librecomp
     ultramodern
     rt64
+    tomlplusplus::tomlplusplus
 )
 
 set_property(TARGET KnifeEdgeRecompiled PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")

@@ -160,6 +160,33 @@ so a desktop input method cannot swallow those holds; if your desktop still
 intercepts held keys, try running with `XMODIFIERS=@im=none QT_IM_MODULE=
 GTK_IM_MODULE=` to take the input method out of the path entirely.
 
+## Configuration
+
+Settings live in `<app folder>/config.toml` (the `ke_recomp_data/` directory
+mentioned above, next to wherever you run the binary from), created with
+commented defaults on first run. It selects a **profile**:
+
+- `vanilla` (default) — every enhancement off, faithful to original hardware
+  behavior. This is what every other section of this README assumes.
+- `enhanced` — a curated set of opt-in quality-of-life changes.
+- `custom` — reads individual `[enhancements]` flags from the file.
+
+Two CLI flags, and nothing else config-related:
+
+```sh
+./build/KnifeEdgeRecompiled --rom /path/to/knife_edge.z64 --profile enhanced
+./build/KnifeEdgeRecompiled --config /path/to/other-config.toml
+```
+
+`--profile` overrides `[profile] active` from the file; `--config` points at
+a config file somewhere other than the default location. A missing file is
+created with defaults; a malformed one falls back to vanilla defaults with a
+warning on stderr rather than failing to start. The active profile and any
+non-default flags are logged on startup right after the build stamp, so a
+bug report identifies its config along with its build. See
+`analysis/docs/enhancements.md` for the full policy, the current flag table,
+and how future enhancements get added.
+
 ## Regenerating from a ROM
 
 Recompiler output is not committed, so a playable build always regenerates it.
@@ -223,7 +250,9 @@ recipe, not as something that runs on every push.
 - `src/main/` — runtime entry point (`main.cpp`), RT64 renderer wiring
   (`rt64_render_context.{h,cpp}`), overlay registration
   (`register_overlays.cpp`), the RCP frame-time model that sets the game's
-  speed (`rcp_timing.cpp`), small platform helpers (`support.{h,cpp}`).
+  speed (`rcp_timing.cpp`), small platform helpers (`support.{h,cpp}`), the
+  enhancement-flag/profile config loader (`config.{h,cpp}` — see
+  "Configuration" above and `analysis/docs/enhancements.md`).
 - `src/stub_game/` — placeholder game code used when no ROM/generated code is
   unset, so the executable always links and runs even without a ROM-derived
   build.

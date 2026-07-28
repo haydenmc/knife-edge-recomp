@@ -41,12 +41,23 @@
 // i.e. 15 fps, which is exactly the ~4x that was reported.
 //
 // KE_RCP_FRAME_MS overrides it (0 disables the pacing entirely).
+//
+// tuning.rcp_frame_ms in config.toml (analysis/docs/enhancements.md) is a
+// second, lower-precedence source for the same budget: set via
+// kerecomp::set_rcp_frame_ms_tuning() from main() before the runtime starts,
+// it applies only when KE_RCP_FRAME_MS is unset. Its meaning is deliberately
+// not identical to the env var's: config's 0 means "no override, use the
+// built-in 59.733 ms model" (there's no way to spell "explicitly disable
+// pacing" in the config file), whereas the env var's existing 0-disables-it
+// behavior is preserved exactly as it was for this wedge-fix logic.
 
 #include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstdint>
+
+#include "support.h"
 
 // ultramodern/src/scheduling.cpp. Waits up to 1 ms for an external message,
 // delivers it, then hands execution to any higher-priority ready thread. This
@@ -60,10 +71,20 @@ namespace {
     // 2,800,000 OSTime counts / 46.875 MHz.
     constexpr double default_frame_ms = 2800000.0 / 46875.0;
 
+    // Set by kerecomp::set_rcp_frame_ms_tuning() (called from main(), before
+    // recomp::start()) from the resolved config file's tuning.rcp_frame_ms.
+    // 0 = no file override. Read only by frame_budget_ms()'s one-time init,
+    // which runs well after main() has had the chance to set this.
+    std::atomic<double> tuning_frame_ms{0.0};
+
     double frame_budget_ms() {
         static const double value = []() {
-            const char* env = std::getenv("KE_RCP_FRAME_MS");
             double ms = default_frame_ms;
+            double file_ms = tuning_frame_ms.load(std::memory_order_relaxed);
+            if (file_ms > 0.0) {
+                ms = file_ms;
+            }
+            const char* env = std::getenv("KE_RCP_FRAME_MS");
             if (env != nullptr) {
                 char* end = nullptr;
                 double parsed = std::strtod(env, &end);
@@ -166,4 +187,8 @@ extern "C" void ke_gfx_task_end(uint8_t* rdram) {
 extern "C" void ke_rcp_idle_wait(uint8_t* rdram) {
     idle_wait_seen.store(clock_type::now(), std::memory_order_relaxed);
     yield_self_1ms(rdram);
+}
+
+void kerecomp::set_rcp_frame_ms_tuning(double ms) {
+    tuning_frame_ms.store(ms, std::memory_order_relaxed);
 }
