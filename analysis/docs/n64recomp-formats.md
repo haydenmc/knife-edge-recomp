@@ -108,6 +108,10 @@ output_function_name = "aspMain"
   boot proc 0x800CD6B0; stack top 0x80126A60.
 - Second dense code region in ROM ≈ 0x151000–0x180000 (mapping: see
   analysis/out/segment_map.md once generated).
-- Ucodes: F3DEX 2.05 fifo + F3DLX.Rej 2.05 fifo (gfx); audio ucode TBD.
+- Ucodes: F3DEX 2.05 fifo + F3DLX.Rej 2.05 fifo (gfx, HLE'd by RT64); audio is
+  stock libultra `aspMain` — ROM 0x23EC0, 0xE20 bytes, IMEM base 0x1080, data at
+  ROM 0x2D060; boot loader is `rspboot` at ROM 0x23DF0 (0xD0). Recompiled via
+  `config/aspMain.us.toml` → `generated/us/rsp/aspMain.cpp`; see
+  `analysis/docs/audio.md`.
 - n64sym (deps/n64sym) gives seed libultra names from a synthesized RAM image but
   has false positives — validate before trusting.

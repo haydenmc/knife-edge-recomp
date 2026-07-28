@@ -164,9 +164,14 @@ internally, so this was the first non-graphics task the game submitted.
 **Fix** (`src/main/main.cpp`): unknown task types now get a no-op ucode that
 returns `RspExitReason::Broke`, i.e. the RSP "finishes" and librecomp sends the
 SP-done message the game is blocked on. No samples are produced - audio output
-is not wired up at all yet - but the game is no longer killed. The real fix is
-an RSPRecomp pass over the audio microcode
-(`analysis/docs/n64recomp-formats.md`, "audio ucode TBD").
+is not wired up at all yet - but the game is no longer killed.
+
+**Superseded 2026-07-28** by `analysis/docs/audio.md`: the audio ucode is the
+stock libultra `aspMain` (ROM `0x23EC0`, 0xE20 bytes, IMEM `0x1080`), it is now
+recompiled by RSPRecomp (`config/aspMain.us.toml` ->
+`generated/us/rsp/aspMain.cpp`) and `get_rsp_microcode` returns it for
+`M_AUDTASK`. The no-op above is kept only as the fallback for task types that
+are neither `M_GFXTASK` nor `M_AUDTASK` (this game submits no such task).
 
 ---
 
@@ -202,14 +207,13 @@ Screenshots from a headless Xvfb run (`DISPLAY=:99 import -window root`):
 They are left outside the repo on purpose: rendered frames are game assets, and
 `.gitignore` keeps ROM/asset material out of the tree.
 
-**Next blocker: no audio.** Every `M_AUDTASK` is swallowed by the no-op ucode
-above and `ultramodern::audio_callbacks_t` is still empty. That needs (a) an
-RSPRecomp config for Knife Edge's audio microcode - the ucode blobs sit at the
-end of the boot segment, past `rspbootTextStart` (0x800E51F0), and are not yet
-identified in `analysis/out/segment_map.md` - and (b) an SDL audio sink wired
-into `audio_callbacks`.
+**Audio: done (2026-07-28).** See `analysis/docs/audio.md`. `aspMain` is
+recompiled and dispatched for `M_AUDTASK`, and `src/main/audio.cpp` implements
+`ultramodern::audio_callbacks_t` on SDL2. A 40 s headless capture yields 41.6 s
+of 32 kHz stereo PCM, peak 8274, RMS 740, 99.6 % non-zero, spectral flatness
+0.0044.
 
-Secondary, in rough priority order:
+Remaining, in rough priority order:
 
 1. Gameplay has not been reached - the headless harness has no way to press
    Start, so the title/attract loop was never advanced past. Expect further

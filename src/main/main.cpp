@@ -40,7 +40,9 @@
 #endif
 
 #include "librecomp/game.hpp"
+#include "librecomp/rsp.hpp"
 
+#include "audio.h"
 #include "rt64_render_context.h"
 #include "support.h"
 
@@ -53,6 +55,13 @@ namespace kerecomp {
 // Defined in src/stub_game/recomp_entrypoint.c today; will come from
 // KE_GENERATED_DIR once the ROM has been run through N64Recomp.
 extern "C" void recomp_entrypoint(uint8_t* rdram, recomp_context* ctx);
+
+// generated/us/rsp/aspMain.cpp -- RSPRecomp output for Knife Edge's audio
+// microcode (stock libultra aspMain). See config/aspMain.us.toml.
+// KE_HAVE_ASPMAIN is defined by CMake only when that file is in the build.
+#if defined(KE_HAVE_ASPMAIN)
+extern RspUcodeFunc aspMain;
+#endif
 
 namespace {
     // librecomp's init() registers every code section whose ROM range falls in
@@ -190,28 +199,35 @@ namespace {
         return { ultramodern::input::Device::None, ultramodern::input::Pak::None };
     }
 
-    // Audio microcode stand-in. Consuming the task without producing samples is
-    // audibly wrong but structurally correct: the RSP "finishes" and librecomp's
-    // task_thread_func sends the SP-done message the game is blocked on. The
-    // real fix is an RSPRecomp pass over the audio ucode (see
-    // analysis/docs/n64recomp-formats.md - "audio ucode TBD").
-    RspExitReason skip_audio_task(uint8_t*, uint32_t) {
+    // Fallback for task types we have no microcode for. Consuming the task
+    // without doing anything is structurally correct: the RSP "finishes" and
+    // librecomp's task_thread_func sends the SP-done message the game is
+    // blocked on. Returning nullptr instead would make librecomp abort the
+    // process.
+    RspExitReason skip_unknown_task(uint8_t*, uint32_t) {
         return RspExitReason::Broke;
     }
 
     // RT64 handles F3DEX/F3DLX graphics tasks (M_GFXTASK) internally via
     // RT64Context::send_dl, so this is only consulted for other task types.
-    // Returning nullptr makes librecomp abort the process, so unknown types get
-    // the no-op above rather than killing the run.
+    // Knife Edge only ever submits M_GFXTASK and M_AUDTASK (the audio task is
+    // built in the boot segment at 0x800CDDC0; see analysis/docs/audio.md).
     RspUcodeFunc* get_rsp_microcode(const OSTask* task) {
-        static bool warned[8] = {};
         uint32_t type = task->t.type;
+
+#if defined(KE_HAVE_ASPMAIN)
+        if (type == M_AUDTASK) {
+            return aspMain;
+        }
+#endif
+
+        static bool warned[8] = {};
         if (type < 8 && !warned[type]) {
             warned[type] = true;
             std::fprintf(stderr,
                 "No RSP microcode registered for task type %u; skipping these tasks\n", type);
         }
-        return skip_audio_task;
+        return skip_unknown_task;
     }
 }
 
@@ -286,10 +302,14 @@ int main(int argc, char** argv) {
         .update_gfx = update_gfx,
     };
 
-    // TODO: audio, input, events, threads and error-handling callbacks are
-    // all optional (librecomp null-checks each field individually) and left
-    // unset for this skeleton. Wire these up alongside the ROM picker.
-    ultramodern::audio_callbacks_t audio_callbacks {};
+    // Audio sink (src/main/audio.cpp). Opens the SDL audio device now so the
+    // callbacks are live before the game's audio thread starts; if there is no
+    // usable device this returns an empty callback set and the runtime stays
+    // silent instead of failing.
+    ultramodern::audio_callbacks_t audio_callbacks = kerecomp::init_audio(48000);
+
+    // TODO: events and threads callbacks are optional (librecomp null-checks
+    // each field individually) and left unset for this skeleton.
     ultramodern::input::callbacks_t input_callbacks {
         .poll_input = poll_input,
         .get_input = get_input,
@@ -347,6 +367,8 @@ int main(int argc, char** argv) {
         .error_handling_callbacks = error_handling_callbacks,
         .threads_callbacks = threads_callbacks,
     });
+
+    kerecomp::shutdown_audio();
 
     return EXIT_SUCCESS;
 }

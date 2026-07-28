@@ -128,11 +128,27 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/src/stub_game/recomp_entrypoint.
 # ---------------------------------------------------------------------------
 # Main executable
 # ---------------------------------------------------------------------------
+# Recompiled RSP microcode (RSPRecomp output, e.g. generated/us/rsp/aspMain.cpp).
+# Kept out of the RecompiledFuncs glob above because it is C++ and, unlike the
+# CPU code, needs SSE4.1 for librecomp's rsp_vu_impl.hpp vector backend.
+set(KE_RSP_SOURCES "")
+if (KE_GENERATED_DIR)
+    file(GLOB KE_RSP_SOURCES "${KE_GENERATED_DIR}/rsp/*.cpp")
+    if (KE_RSP_SOURCES)
+        message(STATUS "Knife Edge: compiling recompiled RSP microcode from ${KE_GENERATED_DIR}/rsp")
+    else()
+        message(STATUS "Knife Edge: no RSP microcode found in ${KE_GENERATED_DIR}/rsp "
+                       "(run RSPRecomp on config/aspMain.us.toml)")
+    endif()
+endif()
+
 add_executable(KnifeEdgeRecompiled
     ${CMAKE_SOURCE_DIR}/src/main/main.cpp
+    ${CMAKE_SOURCE_DIR}/src/main/audio.cpp
     ${CMAKE_SOURCE_DIR}/src/main/support.cpp
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/main/rt64_render_context.cpp
+    ${KE_RSP_SOURCES}
 )
 
 target_include_directories(KnifeEdgeRecompiled PRIVATE
@@ -151,6 +167,12 @@ target_include_directories(KnifeEdgeRecompiled PRIVATE
 # "funcs.h"), which live either in KE_GENERATED_DIR or in src/stub_game/.
 set_source_files_properties(${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp PROPERTIES
     INCLUDE_DIRECTORIES "${KE_OVERLAYS_DIR}")
+
+if (KE_RSP_SOURCES)
+    # Lets src/main/main.cpp reference `aspMain` only when it has actually been
+    # generated, so the stub configuration still links.
+    target_compile_definitions(KnifeEdgeRecompiled PRIVATE KE_HAVE_ASPMAIN)
+endif()
 
 if (CMAKE_SIZEOF_VOID_P EQUAL 8 AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
     target_compile_options(KnifeEdgeRecompiled PRIVATE -march=nehalem -fno-strict-aliasing -fms-extensions)
