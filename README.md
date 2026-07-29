@@ -22,8 +22,8 @@ Not yet verified: full campaign completion, and high-score persistence across
 runs (analyzed and almost certainly absent — which is *faithful*, since the
 game only probes for a Controller Pak; see `analysis/docs/enhancements.md`).
 
-Not yet built: widescreen, high framerate, mouse aim, gamepad support, and
-packaging. The configuration system that these will hang off is in place —
+Not yet built: high framerate, mouse aim, and packaging. The
+configuration system that these will hang off is in place —
 `vanilla` is the default profile and the regression baseline (see
 "Configuration" below and `analysis/docs/enhancements.md`).
 
@@ -137,7 +137,11 @@ CI's smoke test checks — see below).
 
 ### Controls
 
-Keyboard only for now (see `src/main/main.cpp`); no gamepad support yet.
+Keyboard, and any SDL-recognized game controller — both work at once, and a
+gamepad can be hot-plugged in or out at any time. If more than one pad is
+connected, they all act as controller 1 (buttons OR'd together, sticks
+summed), so whichever pad happens to be in hand works with no pad-selection
+step.
 
 | N64 input | Key |
 |---|---|
@@ -149,6 +153,20 @@ Keyboard only for now (see `src/main/main.cpp`); no gamepad support yet.
 | C-Up / C-Down / C-Left / C-Right | I / K / J / L |
 | L / R shoulder | Q / E |
 | Control stick | W A S D |
+
+| N64 input | Gamepad |
+|---|---|
+| A | A |
+| B | B |
+| Z | Either trigger |
+| Start | Start |
+| D-pad Up/Down/Left/Right | D-pad |
+| C-Up / C-Down / C-Left / C-Right | Right stick |
+| L / R shoulder | Left / right bumper |
+| Control stick | Left stick |
+
+Custom gamepad mappings can be supplied the standard SDL way, via the
+`SDL_GAMECONTROLLERCONFIG` environment variable.
 
 The game samples the controller once per game frame (~15 Hz — see
 `analysis/docs/timing-and-mission-debug.md`), the same as on console, so a key

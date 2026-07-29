@@ -48,7 +48,10 @@
 #include "rt64_render_context.h"
 #include "support.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
+#include <unordered_map>
 
 namespace kerecomp {
     // Defined in register_overlays.cpp.
@@ -159,7 +162,8 @@ namespace {
     // Minimal but real: without this the game stops on its "THERE ARE NO
     // CONTROLLERS ATTACHED" screen forever, because osContInit (HLE'd by
     // librecomp) reports zero devices when get_connected_device_info is unset.
-    // Keyboard only for now; a proper remappable binding UI is still TODO.
+    // Keyboard plus any SDL-recognized gamepad; a proper remappable binding UI
+    // is still TODO.
     constexpr uint16_t BTN_A = 0x8000, BTN_B = 0x4000, BTN_Z = 0x2000, BTN_START = 0x1000;
     constexpr uint16_t BTN_DU = 0x0800, BTN_DD = 0x0400, BTN_DL = 0x0200, BTN_DR = 0x0100;
     constexpr uint16_t BTN_L = 0x0020, BTN_R = 0x0010;
@@ -185,6 +189,33 @@ namespace {
         }
         return held;
     }
+
+    // Digital gamepad buttons, mirroring `bindings` above. Shared by the
+    // per-iteration sampler and by controller-button latching further down.
+    struct PadBinding { SDL_GameControllerButton button; uint16_t mask; };
+    constexpr PadBinding pad_bindings[] = {
+        { SDL_CONTROLLER_BUTTON_A,             BTN_A },     { SDL_CONTROLLER_BUTTON_B,              BTN_B },
+        { SDL_CONTROLLER_BUTTON_START,          BTN_START },
+        { SDL_CONTROLLER_BUTTON_LEFTSHOULDER,   BTN_L },     { SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,  BTN_R },
+        { SDL_CONTROLLER_BUTTON_DPAD_UP,        BTN_DU },    { SDL_CONTROLLER_BUTTON_DPAD_DOWN,      BTN_DD },
+        { SDL_CONTROLLER_BUTTON_DPAD_LEFT,      BTN_DL },    { SDL_CONTROLLER_BUTTON_DPAD_RIGHT,     BTN_DR },
+    };
+
+    // Open SDL_GameController handles, keyed by joystick instance id. Every
+    // SDL_GameController* call (open/close/get-state) happens only here in
+    // update_gfx(), on the thread that pumps SDL events -- get_input() runs
+    // on a separate ~15 Hz controller-read thread and never touches SDL
+    // gamepad state directly, only the atomics below, same division of labor
+    // as input_latching_enabled/latched_buttons.
+    std::unordered_map<SDL_JoystickID, SDL_GameController*> open_controllers;
+
+    // Combined state of every open pad, published once per update_gfx()
+    // iteration and consumed by get_input(). Multiple pads deliberately all
+    // act as N64 controller 1 -- buttons OR'd, stick contributions summed --
+    // so whichever pad is in hand works, with no pad-selection step.
+    std::atomic<uint16_t> pad_buttons{0};
+    std::atomic<float> pad_stick_x{0.0f};
+    std::atomic<float> pad_stick_y{0.0f};
 
     // enhancements.input_latching (analysis/docs/enhancements.md). Set once
     // at startup from the resolved config, before recomp::start() -- read
@@ -229,7 +260,95 @@ namespace {
                     }
                 }
             }
+            // SDL2 delivers ADDED for every controller already connected at
+            // SDL_Init time too, so this is also startup enumeration -- no
+            // separate pass needed. `which` is a device index here.
+            else if (event.type == SDL_CONTROLLERDEVICEADDED) {
+                SDL_GameController* gc = SDL_GameControllerOpen(event.cdevice.which);
+                if (gc != nullptr) {
+                    const SDL_JoystickID id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gc));
+                    open_controllers[id] = gc;
+                    // SDL_GameControllerName can return NULL for a nameless device.
+                    const char* name = SDL_GameControllerName(gc);
+                    std::fprintf(stdout, "Gamepad connected: %s\n", name != nullptr ? name : "(unnamed)");
+                }
+            }
+            // `which` is a joystick instance id here (unlike ADDED above).
+            else if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
+                auto it = open_controllers.find(event.cdevice.which);
+                if (it != open_controllers.end()) {
+                    const char* name = SDL_GameControllerName(it->second);
+                    std::fprintf(stdout, "Gamepad disconnected: %s\n", name != nullptr ? name : "(unnamed)");
+                    SDL_GameControllerClose(it->second);
+                    open_controllers.erase(it);
+                }
+            }
+            // Digital buttons only -- axis-derived inputs (Z via triggers, C
+            // via the right stick) aren't latched. A human trigger pull
+            // comfortably spans the game's ~67 ms read interval, unlike the
+            // short taps latching exists to rescue, so there's nothing to
+            // catch there and latching would just add stale state to drain.
+            else if (latching && event.type == SDL_CONTROLLERBUTTONDOWN) {
+                const auto button = static_cast<SDL_GameControllerButton>(event.cbutton.button);
+                for (const PadBinding& b : pad_bindings) {
+                    if (b.button == button) {
+                        latched_buttons.fetch_or(b.mask, std::memory_order_relaxed);
+                        break;
+                    }
+                }
+            }
         }
+
+        // Sample every open pad and publish the combined state (see
+        // open_controllers/pad_buttons above for the threading rationale and
+        // the multi-pad-as-controller-1 rationale).
+        uint16_t buttons = 0;
+        float stick_x = 0.0f;
+        float stick_y = 0.0f;
+        for (const auto& [id, gc] : open_controllers) {
+            for (const PadBinding& b : pad_bindings) {
+                if (SDL_GameControllerGetButton(gc, b.button)) {
+                    buttons |= b.mask;
+                }
+            }
+
+            // Either trigger fires Z -- this is a rail shooter, the trigger is
+            // the natural fire control, and a simple threshold is enough (no
+            // need to expose analog trigger depth to the game).
+            if (SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16384 ||
+                SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16384) {
+                buttons |= BTN_Z;
+            }
+
+            // Right stick -> C buttons, digital thresholds at 0.4 of full
+            // scale. SDL's Y axis is down-positive, so negative Y is C-up.
+            constexpr Sint16 c_threshold = 13107; // 0.4 * 32767, rounded down
+            const Sint16 rx = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTX);
+            const Sint16 ry = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTY);
+            if (rx < -c_threshold) buttons |= BTN_CL;
+            if (rx >  c_threshold) buttons |= BTN_CR;
+            if (ry < -c_threshold) buttons |= BTN_CU;
+            if (ry >  c_threshold) buttons |= BTN_CD;
+
+            // Left stick -> N64 stick. Radial (not per-axis) deadzone: below
+            // 0.15 magnitude the stick contributes nothing; above it, travel
+            // is rescaled so the deadzone edge maps to 0 and full deflection
+            // still maps to 1. A per-axis deadzone would clip diagonals
+            // unevenly, which a radial one avoids.
+            float lx = std::clamp(SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f, -1.0f, 1.0f);
+            float ly = std::clamp(SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f, -1.0f, 1.0f);
+            ly = -ly; // SDL's Y is down-positive; match the keyboard binding's W=+1 (up-positive) convention.
+            constexpr float deadzone = 0.15f;
+            const float mag = std::sqrt(lx * lx + ly * ly);
+            if (mag >= deadzone) {
+                const float scale = std::min((mag - deadzone) / (1.0f - deadzone), 1.0f) / mag;
+                stick_x += lx * scale;
+                stick_y += ly * scale;
+            }
+        }
+        pad_buttons.store(buttons, std::memory_order_relaxed);
+        pad_stick_x.store(std::clamp(stick_x, -1.0f, 1.0f), std::memory_order_relaxed);
+        pad_stick_y.store(std::clamp(stick_y, -1.0f, 1.0f), std::memory_order_relaxed);
     }
 
     bool get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
@@ -240,7 +359,7 @@ namespace {
         if (keys == nullptr) {
             return false;
         }
-        uint16_t held = sample_buttons(keys);
+        uint16_t held = sample_buttons(keys) | pad_buttons.load(std::memory_order_relaxed);
         if (input_latching_enabled.load(std::memory_order_relaxed)) {
             // Press-latch: OR everything pressed since the last read into what
             // we return now, then clear so the next read starts fresh. Vanilla
@@ -250,8 +369,10 @@ namespace {
             held |= latched_buttons.exchange(0, std::memory_order_relaxed);
         }
         *buttons = held;
-        *x = (keys[SDL_SCANCODE_D] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_A] ? 1.0f : 0.0f);
-        *y = (keys[SDL_SCANCODE_W] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_S] ? 1.0f : 0.0f);
+        const float kx = (keys[SDL_SCANCODE_D] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_A] ? 1.0f : 0.0f);
+        const float ky = (keys[SDL_SCANCODE_W] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_S] ? 1.0f : 0.0f);
+        *x = std::clamp(kx + pad_stick_x.load(std::memory_order_relaxed), -1.0f, 1.0f);
+        *y = std::clamp(ky + pad_stick_y.load(std::memory_order_relaxed), -1.0f, 1.0f);
         return true;
     }
 

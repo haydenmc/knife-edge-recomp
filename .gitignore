@@ -10,6 +10,9 @@
 # The reviewable source of truth is config/knife_edge.us.syms.toml.
 /generated/
 
+# Runtime app data (user config, saves, ROM cache) created next to the binary.
+/ke_recomp_data/
+
 # Tooling noise
 .venv/
 __pycache__/
