@@ -241,16 +241,16 @@ result is clamped to the measured rails (§5) so the target cannot wind up past
 a reticle that has stopped following. `window_h` is republished by
 `update_gfx()` each pass so a resize is tracked rather than assumed.
 
-**Lead cap.** After the rails clamp, the target is further clamped to within
-±20 units (one game frame's maximum travel, §3) of the current reticle
-position. Without this, a fast flick left the target hundreds of units ahead
-and the reticle visibly tail-chased it at its game-capped 20 units/frame for
-up to half a second after the hand had stopped — the owner's first hands-on
-report. With the cap, the reticle tracks at full speed while the mouse moves
-and stops within one frame (~37 ms) of the mouse stopping; flick travel the
-reticle cannot match is dropped rather than queued (standard speed-capped-
-pointer behavior — the hand covers more distance than the reticle on a slam,
-and the player naturally re-aims).
+The target is deliberately **not** clamped to the reticle's per-frame reach.
+A fast flick therefore leaves the target far ahead and the reticle visibly
+chases it at its game-capped 20 units/frame (§3) for up to ~half a second — a
+"linear tween" toward where the mouse stopped. **A one-frame lead cap was
+tried (bbbcbc8) and reverted (owner decision, 2026-07-29):** it made the
+reticle stop with the hand, but a flick's excess travel was dropped rather
+than queued, and in play "quick flicks almost get ignored" felt substantially
+worse than the tail-chase. The tail-chase is also honest: the reticle's speed
+limit is the game's own design — a pad player slamming the stick moves it
+exactly as fast. Do not re-propose the cap without new evidence about feel.
 
 **Deadbeat law**, per axis, once the gates pass:
 
