@@ -76,7 +76,8 @@ integrator via the stick — the full RE and controller design are in
 the measured deflection→step curve, and the three-layer gate that keeps it
 inert outside missions) and `"velocity"` (FPS-style fallback). Also
 `mouse_invert_y` (the game aims flight-inverted; default un-inverts).
-Click captures / Esc releases; L/R/M buttons → A/B/Z (first cut). Verified
+Click captures / Esc releases; L/R/M buttons → Z/A/B (owner-specified
+after hands-on; Z = left click is the fire button). Verified
 headless including a closed-loop tracking test (zero overshoot) and a
 0/5938 menu-safety re-measurement; **owner hands-on pending** (positional
 vs velocity A/B, sensitivity default, which button should fire, and §9.1's
@@ -214,7 +215,8 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    containerized builds, Flatpak packaging, high framerate. High-score
    persistence deferred (see candidates).
 5. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
-   fire-button mapping, `mouse-aim.md` §9.1 inert-aim watch-item).
+   `mouse-aim.md` §9.1 inert-aim watch-item). Buttons settled: L/R/M →
+   Z/A/B, owner-specified.
 6. Gamepad: hotplug mid-game unverified (everything else owner-verified);
    `[input]` stick knobs shipped, owner feel-check pending.
 7. Upstream: owner decided (2026-07-29) **not** to pursue a N64ModernRuntime

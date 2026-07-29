@@ -175,12 +175,9 @@ clamped), and mouse buttons map to N64 buttons:
 
 | N64 input | Mouse |
 |---|---|
-| A | Left click |
-| B | Right click |
-| Z | Middle click |
-
-That mapping is a first cut, not yet confirmed hands-on — which button
-should fire the vulcan is still open.
+| Z | Left click |
+| A | Right click |
+| B | Middle click |
 
 There are two ways mouse motion can be turned into aim, chosen with the
 `[input]` table's `mouse_mode` key:

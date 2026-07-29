@@ -286,11 +286,10 @@ namespace {
     std::atomic<float> mouse_accum_x{0.0f};
     std::atomic<float> mouse_accum_y{0.0f};
 
-    // Mouse-button state while captured, mapped to N64 buttons below (A/B/Z
-    // -- see the SDL_MOUSEBUTTONDOWN/UP handling in update_gfx() for the
-    // mapping and the "first cut, pending owner hands-on" caveat). Set/
-    // cleared from button-down/up events, OR'd into get_input()'s `held`
-    // alongside pad_buttons.
+    // Mouse-button state while captured, mapped to N64 buttons below (L/R/M
+    // -> Z/A/B, owner-specified -- see the SDL_MOUSEBUTTONDOWN/UP handling
+    // in update_gfx()). Set/cleared from button-down/up events, OR'd into
+    // get_input()'s `held` alongside pad_buttons.
     std::atomic<uint16_t> mouse_buttons{0};
 
     void poll_input() {
@@ -386,14 +385,14 @@ namespace {
                     mouse_captured.store(true, std::memory_order_relaxed);
                     std::fprintf(stdout, "Mouse captured (Esc releases)\n");
                 } else {
-                    // Left/right/middle -> A/B/Z. First cut pending owner
-                    // hands-on; which button is the vulcan isn't pinned down
-                    // yet.
+                    // Left/right/middle -> Z/A/B, owner-specified after
+                    // hands-on play (2026-07-29). Must match the BUTTONUP
+                    // mapping below.
                     uint16_t mask = 0;
                     switch (event.button.button) {
-                        case SDL_BUTTON_LEFT:   mask = BTN_A; break;
-                        case SDL_BUTTON_RIGHT:  mask = BTN_B; break;
-                        case SDL_BUTTON_MIDDLE: mask = BTN_Z; break;
+                        case SDL_BUTTON_LEFT:   mask = BTN_Z; break;
+                        case SDL_BUTTON_RIGHT:  mask = BTN_A; break;
+                        case SDL_BUTTON_MIDDLE: mask = BTN_B; break;
                         default: break;
                     }
                     if (mask != 0) {
@@ -411,9 +410,9 @@ namespace {
             else if (event.type == SDL_MOUSEBUTTONUP) {
                 uint16_t mask = 0;
                 switch (event.button.button) {
-                    case SDL_BUTTON_LEFT:   mask = BTN_A; break;
-                    case SDL_BUTTON_RIGHT:  mask = BTN_B; break;
-                    case SDL_BUTTON_MIDDLE: mask = BTN_Z; break;
+                    case SDL_BUTTON_LEFT:   mask = BTN_Z; break;
+                    case SDL_BUTTON_RIGHT:  mask = BTN_A; break;
+                    case SDL_BUTTON_MIDDLE: mask = BTN_B; break;
                     default: break;
                 }
                 if (mask != 0) {
