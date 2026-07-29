@@ -181,9 +181,52 @@ though this project doesn't use mods yet) — `main()` calls
   Zelda64Recomp later, since the two repos' N64ModernRuntime pins have
   drifted.
 
-## Dependency quirks / workarounds (no submodule patches needed)
+## Patching a pinned submodule (`patches/`)
 
-Nothing in `deps/` needed patching — everything below is a CMake
+Almost nothing in `deps/` needs patching — see the next section, and the
+project rule of thumb in `CLAUDE.md` ("prefer fixing on our side over patching
+`deps/`"). Exactly one change does not have a seam on our side:
+**`patches/n64modernruntime-orderly-shutdown.patch`**, which stops and joins
+the game's own threads before `recomp::start()` frees RDRAM. Everything that
+needed changing (the scheduler's yield points, the thread registry, the
+teardown order in `recomp::start()`) is inside librecomp/ultramodern, between
+the point the gfx thread returns and the point `main()` regains control.
+
+**How it is carried.** `deps/N64ModernRuntime` stays pinned at its upstream
+SHA and the fix lives as an *uncommitted working-tree modification* of the
+submodule. The reviewable source of truth is the patch file; the submodule
+pointer in this repo still names a commit that exists upstream. Committing a
+local submodule commit instead would leave a dangling SHA that nobody else
+could fetch — a clone would fail at `git submodule update`.
+
+**How it is applied.** Top-level `CMakeLists.txt` calls
+`ke_apply_dep_patch()` at configure time, just before
+`add_subdirectory(deps/N64ModernRuntime ...)`. It is idempotent:
+
+1. `git apply --reverse --check` succeeds → already applied, do nothing.
+2. otherwise `git apply --check` succeeds → apply it.
+3. otherwise `FATAL_ERROR` — the submodule has diverged from the SHA the
+   patch was written against. Recover with
+   `git -C deps/N64ModernRuntime checkout -- .` and re-run cmake, or
+   regenerate with `git -C deps/N64ModernRuntime diff > patches/...`.
+
+So a fresh clone + `cmake -B build` gets the fix automatically, and a
+developer who edits the submodule by hand is told rather than silently
+overruled.
+
+**Keeping it honest.** `git -C deps/N64ModernRuntime diff` must always be
+byte-identical to the patch file. If you change the deps code, regenerate the
+patch in the same commit.
+
+**This is temporary.** The patch is written as an upstream PR would be —
+generic naming, no Knife Edge specifics, comments explaining the mechanism —
+because upstream (N64Recomp/N64ModernRuntime) has no fix for this and should
+have one. When it lands upstream, bump the submodule and delete both the patch
+file and the `ke_apply_dep_patch()` call.
+
+## Dependency quirks / workarounds (no other submodule patches needed)
+
+Nothing else in `deps/` needed patching — everything below is a CMake
 cache-variable set from the top-level `CMakeLists.txt`, which is the
 sanctioned way to influence a vendored subdirectory without touching it.
 

@@ -48,14 +48,22 @@ mid-game is the one unexercised path. Stick-response knobs shipped
 input shaping, not enhancements, active in every profile. Owner hands-on
 feel check pending.
 
-Shutdown segfault on quit: **fixed** (628ced4). Root cause was librecomp's
+Shutdown segfault on quit: **fixed properly**. Root cause was librecomp's
 `recomp::start()` munmap'ing RDRAM while the game's `osCreateThread`
 threads still run recompiled code (our 1 ms spin-yield hooks re-touch RDRAM
-constantly, making it deterministic). Fix is on our side:
-`RT64Context::shutdown()` flushes audio/stdio and `_Exit(0)`s at the last
-coherent moment — safe while `save_type` is `SaveType::None`; **revisit if
-the virtual Controller Pak candidate ever lands**. Two upstream report
-candidates fell out: the librecomp unmap-while-threads-live defect, and
+constantly, making it deterministic). The original fix (628ced4) was an
+`_Exit(0)` from `RT64Context::shutdown()`; that has been **removed** and
+replaced by a real orderly teardown in the runtime —
+`ultramodern::terminate_game_threads()` sets a termination flag, every yield
+point (`check_running_queue`, `wait_for_resumed`, the external-message waits)
+throws `thread_terminated` once it is set, and the game's host threads are
+joined before RDRAM is freed. `main()` returns normally again, so the
+`save_type == SaveType::None` caveat is gone. The change lives in
+`deps/N64ModernRuntime`, carried as
+`patches/n64modernruntime-orderly-shutdown.patch` and applied at cmake
+configure time — see `analysis/docs/build-notes.md`, "Patching a pinned
+submodule". Written as an upstream PR would be; **drop the patch when
+upstream takes it**. One upstream report candidate remains from this work:
 RT64's bundled nativefiledialog aborting on an unguarded
 `dbus_connection_unref` when no session bus exists (container-only; masked
 the segfault until repro ran under `dbus-run-session`).
@@ -194,7 +202,8 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    persistence deferred (see candidates).
 5. Gamepad: hotplug mid-game unverified (everything else owner-verified);
    `[input]` stick knobs shipped, owner feel-check pending.
-6. Upstream report candidates: RT64 letterbox-band color bug (vanilla-only
-   cosmetic; `letterbox-full-height.md` §4); librecomp teardown
-   unmap-while-threads-live (see Status, fixed on our side in 628ced4);
+6. Upstream: submit `patches/n64modernruntime-orderly-shutdown.patch` as a
+   N64ModernRuntime PR (owner decision on fork vs. patch-carry; drop the
+   patch file once merged). Report candidates: RT64 letterbox-band color
+   bug (vanilla-only cosmetic; `letterbox-full-height.md` §4);
    RT64-bundled nativefiledialog null-dbus abort (container-only).

@@ -1,0 +1,380 @@
+diff --git a/librecomp/src/recomp.cpp b/librecomp/src/recomp.cpp
+index ea17675..a702c0e 100644
+--- a/librecomp/src/recomp.cpp
++++ b/librecomp/src/recomp.cpp
+@@ -823,12 +823,30 @@ void recomp::start(const recomp::Configuration& cfg) {
+ 
+     graphics_shutdown_ready.signal();
+ 
+-    game_thread.join();
++    // Release the event threads first: the gfx thread is the one that tears the
++    // renderer down, and it must be fully down before the game stops running,
++    // since the game threads are what keep the data it is still working from
++    // alive.
+     ultramodern::join_event_threads();
++
++    // Nothing has stopped the game itself so far -- quitting only sets `exited`,
++    // which the game's own threads never look at. Stop them and wait for them
++    // to unwind now, while RDRAM and everything else they use is still valid.
++    // This must happen before the deallocation below: the game's threads read
++    // and write RDRAM continuously, so freeing it out from under them faults.
++    const bool game_threads_stopped = ultramodern::terminate_game_threads();
++
++    // The thread the game was started on is not one of the threads the registry
++    // tracks (it has no OSThread), but it observes the same termination flag.
++    game_thread.join();
+     ultramodern::join_thread_cleaner_thread();
+     ultramodern::join_saving_thread();
+-    
+-    // Free rdram.
++
++    // Free rdram, unless a game thread that is still running might be using it.
++    if (!game_threads_stopped) {
++        return;
++    }
++
+     bool free_failed;
+ #ifdef _WIN32
+     // VirtualFree returns zero on failure.
+diff --git a/ultramodern/include/ultramodern/ultramodern.hpp b/ultramodern/include/ultramodern/ultramodern.hpp
+index 46aea61..e0eee58 100644
+--- a/ultramodern/include/ultramodern/ultramodern.hpp
++++ b/ultramodern/include/ultramodern/ultramodern.hpp
+@@ -1,6 +1,7 @@
+ #ifndef __ultramodern_HPP__
+ #define __ultramodern_HPP__
+ 
++#include <atomic>
+ #include <thread>
+ #include <cassert>
+ #include <stdexcept>
+@@ -76,6 +77,11 @@ void enqueue_external_message_src(PTR(OSMesgQueue) mq, OSMesg msg, bool jam, Eve
+ void enqueue_external_message(PTR(OSMesgQueue) mq, OSMesg msg, bool jam, bool requeue_if_blocked);
+ void wait_for_external_message(RDRAM_ARG1);
+ void wait_for_external_message_timed(RDRAM_ARG1, u32 millis);
++// Wakes a single thread that is blocked in wait_for_external_message(). Only
++// meaningful during termination: the posted message is never delivered, because
++// every consumer of the external message queue checks for termination before it
++// looks at what it dequeued. See terminate_game_threads().
++void post_external_message_wakeup();
+ 
+ // Thread scheduling.
+ void check_running_queue(RDRAM_ARG1);
+@@ -85,6 +91,46 @@ void schedule_running_thread(RDRAM_ARG PTR(OSThread) t);
+ void cleanup_thread(UltraThreadContext* thread_context);
+ struct thread_terminated : std::exception {};
+ 
++// Orderly termination of the game's threads.
++//
++// Game threads are cooperatively scheduled and, being the recompiled output of
++// a game that never expected to exit, they never return on their own: they are
++// either parked on their own semaphore, blocked waiting for an external
++// message, or running recompiled code that will come back to one of those two
++// states. Nothing in a normal quit stops them, so without this they keep
++// reading and writing RDRAM while the runtime tears itself down and frees it.
++//
++// They are stopped by making every point at which a game thread can block or
++// yield throw `thread_terminated` once the flag below is set. That exception
++// unwinds out of recompiled code exactly as osDestroyThread's self-destroy
++// already does, and is caught by the thread wrapper.
++//
++// The flag is written exactly once and read on the scheduler's hot path, so
++// reads are relaxed: nothing is published through it, and a thread that
++// observes it late merely terminates one yield later.
++extern std::atomic_bool game_threads_terminating;
++
++inline bool is_terminating() {
++    return game_threads_terminating.load(std::memory_order_relaxed);
++}
++
++// Throws `thread_terminated` if termination has begun. Callers must place this
++// so that no RDRAM access can happen between the check and the throw.
++inline void check_terminating() {
++    if (is_terminating()) {
++        throw thread_terminated{};
++    }
++}
++
++// Sets the termination flag, wakes every game thread until none is left
++// running, and joins their host threads. Call it while everything the game
++// threads use (RDRAM above all) is still valid.
++//
++// Returns false if a game thread could not be stopped before the internal
++// deadline expired -- which can only happen if it is spinning without ever
++// reaching a yield point -- in which case the caller must not free RDRAM.
++bool terminate_game_threads();
++
+ enum class ThreadPriority {
+     Low,
+     Normal,
+diff --git a/ultramodern/src/mesgqueue.cpp b/ultramodern/src/mesgqueue.cpp
+index 9944a02..c96a173 100644
+--- a/ultramodern/src/mesgqueue.cpp
++++ b/ultramodern/src/mesgqueue.cpp
+@@ -37,10 +37,21 @@ void ultramodern::enqueue_external_message(PTR(OSMesgQueue) mq, OSMesg msg, bool
+ 
+ bool do_send(RDRAM_ARG PTR(OSMesgQueue) mq_, OSMesg msg, bool jam, bool block);
+ 
++void ultramodern::post_external_message_wakeup() {
++    // A message with a null queue. It is never delivered: the three consumers
++    // below all check for termination before they use what they dequeued, and
++    // this is only ever posted once termination has begun.
++    external_messages.enqueue({ NULLPTR, NULLPTR, false, false });
++}
++
+ void dequeue_external_messages(RDRAM_ARG1) {
+     QueuedMessage to_send;
+     std::vector<QueuedMessage> requeued_messages{};
+     while (external_messages.try_dequeue(to_send)) {
++        // Terminating: stop before the dequeued message is used, so that a
++        // wakeup posted by terminate_game_threads() is never delivered and no
++        // further RDRAM access happens on this thread.
++        ultramodern::check_terminating();
+         if (!do_send(PASS_RDRAM to_send.mq, to_send.mesg, to_send.jam, false) && to_send.requeue_if_blocked) {
+             requeued_messages.push_back(to_send);
+         }
+@@ -53,6 +64,9 @@ void dequeue_external_messages(RDRAM_ARG1) {
+ void ultramodern::wait_for_external_message(RDRAM_ARG1) {
+     QueuedMessage to_send;
+     external_messages.wait_dequeue(to_send);
++    // See dequeue_external_messages(). This is also the point at which a thread
++    // blocked here indefinitely leaves, woken by post_external_message_wakeup().
++    ultramodern::check_terminating();
+     if (!do_send(PASS_RDRAM to_send.mq, to_send.mesg, to_send.jam, false) && to_send.requeue_if_blocked) {
+         external_messages.enqueue(to_send);
+     }
+@@ -61,6 +75,7 @@ void ultramodern::wait_for_external_message(RDRAM_ARG1) {
+ void ultramodern::wait_for_external_message_timed(RDRAM_ARG u32 millis) {
+     QueuedMessage to_send;
+     if (external_messages.wait_dequeue_timed(to_send, std::chrono::milliseconds{millis})) {
++        ultramodern::check_terminating();
+         if (!do_send(PASS_RDRAM to_send.mq, to_send.mesg, to_send.jam, false) && to_send.requeue_if_blocked) {
+             external_messages.enqueue(to_send);
+         }
+diff --git a/ultramodern/src/scheduling.cpp b/ultramodern/src/scheduling.cpp
+index a22f747..cea6ccb 100644
+--- a/ultramodern/src/scheduling.cpp
++++ b/ultramodern/src/scheduling.cpp
+@@ -16,6 +16,13 @@ void swap_to_thread(RDRAM_ARG OSThread *to) {
+ }
+ 
+ void ultramodern::check_running_queue(RDRAM_ARG1) {
++    // Terminating: leave before touching RDRAM. This is the single point every
++    // yield funnels through -- pause_self/yield_self/yield_self_1ms below, the
++    // message queue calls, osStartThread and osSetThreadPri -- so a game thread
++    // running recompiled code cannot get past its next scheduling point once
++    // termination has begun. Costs one relaxed atomic load otherwise.
++    ultramodern::check_terminating();
++
+     // Check if there are any threads in the running queue.
+     if (!thread_queue_empty(PASS_RDRAM running_queue)) {
+         // Check if the highest priority thread in the queue is higher priority than the current thread.
+diff --git a/ultramodern/src/threads.cpp b/ultramodern/src/threads.cpp
+index 6e3ed18..faafc5f 100644
+--- a/ultramodern/src/threads.cpp
++++ b/ultramodern/src/threads.cpp
+@@ -1,7 +1,10 @@
++#include <algorithm>
+ #include <cstdio>
++#include <mutex>
+ #include <thread>
+ #include <cassert>
+ #include <string>
++#include <vector>
+ 
+ #include "ultramodern/ultra64.h"
+ #include "ultramodern/ultramodern.hpp"
+@@ -150,8 +153,68 @@ void ultramodern::set_native_thread_name(const std::string& name) {
+ void ultramodern::set_native_thread_priority(ThreadPriority pri) {}
+ #endif
+ 
++// ---------------------------------------------------------------------------
++// Registry of live game threads, used to shut them down in an orderly way. See
++// the comment on ultramodern::terminate_game_threads in ultramodern.hpp.
++// ---------------------------------------------------------------------------
++
++std::atomic_bool ultramodern::game_threads_terminating = false;
++
++namespace {
++    // Guards everything in this block, and is also held while the termination
++    // flag is set so that "flag is set" and "registry contents" are consistent
++    // with each other for a thread that is being created or destroyed. Only
++    // taken on thread creation and destruction, never on a scheduling path.
++    std::mutex game_thread_mutex;
++
++    // Contexts of game threads whose thread function has not returned yet, i.e.
++    // exactly the threads that may still access RDRAM.
++    std::vector<UltraThreadContext*> live_game_threads;
++
++    // Contexts of game threads that finished during termination. The thread
++    // cleaner has already stopped by then, so terminate_game_threads() joins
++    // and deletes these itself.
++    std::vector<UltraThreadContext*> terminated_game_threads;
++
++    // Registers a new game thread and spawns its host thread, both under the
++    // lock that guards the termination flag. Doing them together is what makes
++    // it impossible to spawn a game thread after terminate_game_threads() has
++    // decided which threads it has to wait for. Returns false if termination
++    // has already begun, in which case nothing was spawned.
++    template <typename F>
++    bool register_and_start_game_thread(UltraThreadContext* context, F&& thread_body) {
++        std::lock_guard lock{ game_thread_mutex };
++        if (ultramodern::is_terminating()) {
++            return false;
++        }
++        context->host_thread = std::thread{ std::forward<F>(thread_body) };
++        live_game_threads.push_back(context);
++        return true;
++    }
++
++    // Deregisters a game thread that has finished running. Returns true if the
++    // context was handed to terminate_game_threads() to join, false if the
++    // caller should dispose of it the normal way (the thread cleaner).
++    bool deregister_game_thread(UltraThreadContext* context) {
++        std::lock_guard lock{ game_thread_mutex };
++        live_game_threads.erase(
++            std::remove(live_game_threads.begin(), live_game_threads.end(), context),
++            live_game_threads.end());
++        if (ultramodern::is_terminating()) {
++            terminated_game_threads.push_back(context);
++            return true;
++        }
++        return false;
++    }
++}
++
+ void wait_for_resumed(RDRAM_ARG UltraThreadContext* thread_context) {
+     thread_context->running.wait();
++    // Terminating: this wake came from terminate_game_threads(), not from the
++    // scheduler. Leave before dereferencing anything in RDRAM -- the OSThread
++    // this thread would read below is not guaranteed to still be meaningful
++    // once the game is being torn down.
++    ultramodern::check_terminating();
+     // If this thread's context was replaced by another thread or deleted, destroy it again from its own context.
+     // This will trigger thread cleanup instead.
+     if (TO_PTR(OSThread, ultramodern::this_thread())->context != thread_context) {
+@@ -224,7 +287,19 @@ static void _thread_func(RDRAM_ARG PTR(OSThread) self_, PTR(thread_func_t) entry
+     // so mark this thread as destroyed and run the next queued thread.
+     if (self->context == thread_context) {
+         self->context = nullptr;
+-        run_next_thread(PASS_RDRAM1);
++        // Don't hand execution on during termination: every other game thread
++        // is being torn down at the same time, so there may legitimately be no
++        // thread left to run, and there is nothing left to run it for.
++        if (!ultramodern::is_terminating()) {
++            run_next_thread(PASS_RDRAM1);
++        }
++    }
++
++    // No further RDRAM access happens on this thread past this point, which is
++    // what deregistering announces to terminate_game_threads().
++    if (deregister_game_thread(thread_context)) {
++        // Termination owns this context now and will join this host thread.
++        return;
+     }
+ 
+     // Dispose of this thread now that it's completed or terminated.
+@@ -263,7 +338,13 @@ extern "C" void osCreateThread(RDRAM_ARG PTR(OSThread) t_, OSId id, PTR(thread_f
+     // Pass the context as an argument to the thread function to ensure that it can't get cleared before the thread captures its value.
+     UltraThreadContext* context = new UltraThreadContext{};
+     t->context = context;
+-    context->host_thread = std::thread{_thread_func, PASS_RDRAM t_, entrypoint, arg, t->context};
++    if (!register_and_start_game_thread(context, [=]() { _thread_func(PASS_RDRAM t_, entrypoint, arg, context); })) {
++        // The game is shutting down. The caller is a game thread on its way out
++        // too, so terminate it rather than starting anything new.
++        t->context = nullptr;
++        delete context;
++        throw ultramodern::thread_terminated{};
++    }
+ 
+     // Wait until the thread is initialized to indicate that it's ready to be started.
+     context->initialized.wait();
+@@ -369,3 +450,88 @@ void ultramodern::cleanup_thread(UltraThreadContext *cur_context) {
+ void ultramodern::join_thread_cleaner_thread() {
+     thread_cleaner_thread.join();
+ }
++
++bool ultramodern::terminate_game_threads() {
++    using namespace std::chrono_literals;
++
++    {
++        // Setting the flag under the lock is what gives the loop below its
++        // termination argument: from here on, a game thread can only be
++        // registered by another game thread that is itself still registered
++        // (osCreateThread rejects the call otherwise), so an empty registry
++        // really does mean "no game thread can appear any more".
++        std::lock_guard lock{ game_thread_mutex };
++        ultramodern::game_threads_terminating.store(true, std::memory_order_relaxed);
++    }
++
++    // Wake every game thread repeatedly until none is left running. A single
++    // broadcast is not enough: a thread that was between two blocking points
++    // when it was woken consumes the wakeup without ever waiting on it, and a
++    // thread that has not reached a termination check yet can still be part way
++    // through a scheduling operation.
++    //
++    // The deadline exists because a game thread that busy-waits without ever
++    // reaching a yield point can never be woken at all. Giving up is reported
++    // to the caller so that it can decline to free memory those threads are
++    // still using; hanging forever would be worse than leaking.
++    constexpr auto termination_deadline = 5s;
++    const auto give_up_at = std::chrono::steady_clock::now() + termination_deadline;
++    size_t unstoppable = 0;
++
++    while (true) {
++        std::vector<UltraThreadContext*> live;
++        {
++            std::lock_guard lock{ game_thread_mutex };
++            live = live_game_threads;
++        }
++        if (live.empty()) {
++            break;
++        }
++        if (std::chrono::steady_clock::now() >= give_up_at) {
++            unstoppable = live.size();
++            break;
++        }
++        for (UltraThreadContext* context : live) {
++            // A parked thread is blocked on its own semaphore in
++            // wait_for_resumed(), which checks for termination on wake.
++            context->running.signal();
++            // The thread that currently holds execution may instead be blocked
++            // on the external message queue; post one wakeup per live thread so
++            // that there is always at least one for whoever is waiting there.
++            ultramodern::post_external_message_wakeup();
++        }
++        std::this_thread::sleep_for(1ms);
++    }
++
++    // Every thread that unwound during termination left its context here for us
++    // rather than for the thread cleaner (which stops as soon as the runtime is
++    // exiting, and so cannot be relied on at this point).
++    std::vector<UltraThreadContext*> finished;
++    {
++        std::lock_guard lock{ game_thread_mutex };
++        finished.swap(terminated_game_threads);
++    }
++    for (UltraThreadContext* context : finished) {
++        context->host_thread.join();
++        delete context;
++    }
++
++    // A thread that happened to finish on its own after the cleaner stopped but
++    // before termination began is sitting in the cleaner's queue with nobody
++    // left to join it. Take those too.
++    UltraThreadContext* leftover;
++    while (deleted_threads.try_dequeue(leftover)) {
++        leftover->host_thread.join();
++        delete leftover;
++    }
++
++    if (unstoppable != 0) {
++        fprintf(stderr,
++            "[Shutdown] %zu game thread(s) could not be stopped; leaving their memory allocated\n",
++            unstoppable);
++        return false;
++    }
++
++    debug_printf("[Shutdown] Stopped and joined %zu game thread(s)\n", finished.size());
++    return true;
++}

@@ -184,6 +184,43 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     set(NFD_PORTAL ON CACHE BOOL "" FORCE)
 endif()
 
+# ---------------------------------------------------------------------------
+# Local patches to pinned submodules (analysis/docs/build-notes.md, "Patching
+# a pinned submodule"). Applied at configure time, idempotently, so the
+# submodule can stay at its upstream SHA with the fix as a working-tree change.
+# ---------------------------------------------------------------------------
+function(ke_apply_dep_patch repo patch)
+    if (NOT EXISTS "${repo}/.git")
+        message(STATUS "Knife Edge: ${repo} is not a git checkout, skipping ${patch}")
+        return()
+    endif()
+    execute_process(COMMAND ${GIT_EXECUTABLE} -C "${repo}" apply --reverse --check "${patch}"
+                    RESULT_VARIABLE already_applied ERROR_QUIET OUTPUT_QUIET)
+    if (already_applied EQUAL 0)
+        return() # Already in the working tree.
+    endif()
+    execute_process(COMMAND ${GIT_EXECUTABLE} -C "${repo}" apply --check "${patch}"
+                    RESULT_VARIABLE can_apply ERROR_QUIET OUTPUT_QUIET)
+    if (NOT can_apply EQUAL 0)
+        message(FATAL_ERROR
+            "Cannot apply ${patch} to ${repo}: it neither applies cleanly nor is "
+            "already applied.\n"
+            "The submodule has diverged from the SHA the patch was written against. "
+            "Reset it with 'git -C ${repo} checkout -- .' and re-run cmake, or "
+            "regenerate the patch with 'git -C ${repo} diff > ${patch}'.")
+    endif()
+    message(STATUS "Knife Edge: applying ${patch} to ${repo}")
+    execute_process(COMMAND ${GIT_EXECUTABLE} -C "${repo}" apply "${patch}"
+                    RESULT_VARIABLE applied)
+    if (NOT applied EQUAL 0)
+        message(FATAL_ERROR "Failed to apply ${patch} to ${repo}")
+    endif()
+endfunction()
+
+find_package(Git QUIET REQUIRED)
+ke_apply_dep_patch("${CMAKE_SOURCE_DIR}/deps/N64ModernRuntime"
+                   "${CMAKE_SOURCE_DIR}/patches/n64modernruntime-orderly-shutdown.patch")
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/deps/rt64 ${CMAKE_BINARY_DIR}/rt64)
 add_subdirectory(${CMAKE_SOURCE_DIR}/deps/N64ModernRuntime ${CMAKE_BINARY_DIR}/N64ModernRuntime)
 
