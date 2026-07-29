@@ -744,8 +744,23 @@ namespace {
                 target_x = std::clamp(target_x, -128.0f, 128.0f);
                 target_y = std::clamp(target_y, -84.0f, 84.0f);
 
-                mouse_x = mouse_stick_axis(mouse_step_for_error(target_x - static_cast<float>(reticle.x)));
-                mouse_y = mouse_stick_axis(mouse_step_for_error(target_y - static_cast<float>(reticle.y)));
+                // Cap how far the target may LEAD the reticle to one game
+                // frame's maximum travel (20 units/frame, measured). The
+                // reticle's speed is game-capped, so an unbounded target
+                // turns a fast flick into a visible half-second tail-chase
+                // after the hand has stopped (owner-reported). With the cap,
+                // the reticle tracks at full speed while the mouse moves and
+                // stops within one frame of the mouse stopping; the excess
+                // travel of a flick the reticle can't match is dropped, not
+                // queued -- standard speed-capped-pointer behavior.
+                constexpr float max_lead = 20.0f;
+                const float rx = static_cast<float>(reticle.x);
+                const float ry = static_cast<float>(reticle.y);
+                target_x = std::clamp(target_x, rx - max_lead, rx + max_lead);
+                target_y = std::clamp(target_y, ry - max_lead, ry + max_lead);
+
+                mouse_x = mouse_stick_axis(mouse_step_for_error(target_x - rx));
+                mouse_y = mouse_stick_axis(mouse_step_for_error(target_y - ry));
             }
         } else {
             // Velocity mapping: full deflection at 500 px/s of mouse travel at

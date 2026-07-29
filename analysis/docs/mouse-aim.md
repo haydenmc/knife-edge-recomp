@@ -241,6 +241,17 @@ result is clamped to the measured rails (§5) so the target cannot wind up past
 a reticle that has stopped following. `window_h` is republished by
 `update_gfx()` each pass so a resize is tracked rather than assumed.
 
+**Lead cap.** After the rails clamp, the target is further clamped to within
+±20 units (one game frame's maximum travel, §3) of the current reticle
+position. Without this, a fast flick left the target hundreds of units ahead
+and the reticle visibly tail-chased it at its game-capped 20 units/frame for
+up to half a second after the hand had stopped — the owner's first hands-on
+report. With the cap, the reticle tracks at full speed while the mouse moves
+and stops within one frame (~37 ms) of the mouse stopping; flick travel the
+reticle cannot match is dropped rather than queued (standard speed-capped-
+pointer behavior — the hand covers more distance than the reticle on a slam,
+and the player naturally re-aims).
+
 **Deadbeat law**, per axis, once the gates pass:
 
 ```
