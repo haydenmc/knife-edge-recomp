@@ -39,9 +39,20 @@ Gamepad support shipped (2026-07-29) — deliberately **not** an enhancement
 flag: host input-device support like the keyboard mapping, always on, no
 config keys. SDL_GameController with hotplug, all pads act as controller 1,
 0.15 radial deadzone, either trigger → Z, right stick → C. Verified headless
-(build + smoke test only — no pad hardware reaches the container); **owner
-hands-on pass still pending** (stick aim/deadzone feel, trigger fire,
-right-stick C-buttons, hotplug mid-game).
+(build + smoke test — no pad hardware reaches the container) and owner
+hands-on (2026-07-29, Xbox Elite 2 via xone): connect line, stick aim,
+trigger fire, right-stick C-buttons, A/B/Start all correct. Hotplug
+mid-game is the one unexercised path. Follow-up in flight: stick-response
+knobs (`[input]` config section — `stick_deadzone`/`stick_curve`/
+`stick_sensitivity`, defaults reproducing shipped behavior; host input
+shaping, not enhancements, active in every profile).
+
+Known defect (2026-07-29, under investigation): Ctrl-C shutdown segfaults
+on the owner's host (crash in RT64 `setVertexCommon` reading
+RDRAM-relative memory — a teardown-order race) and the quit path hangs
+headless in the container (process outlives SIGINT by 5+ s). Likely one
+teardown-ordering story; SDL turns SIGINT into SDL_QUIT →
+`ultramodern::quit()`.
 
 Agreed order for the rest: mouse aim → containerized builds → Flatpak →
 high framerate. Rationale: gamepad before mouse aim (both touch
@@ -175,7 +186,9 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
 4. Enhancements not yet started, in agreed order (see Status): mouse aim,
    containerized builds, Flatpak packaging, high framerate. High-score
    persistence deferred (see candidates).
-5. Gamepad support: owner hands-on verification pending (see Status for the
-   checklist).
-6. RT64 letterbox-band color bug (vanilla-only cosmetic; see
+5. Gamepad: hotplug mid-game unverified (everything else owner-verified);
+   stick-response `[input]` knobs designed, implementation pending.
+6. Shutdown segfault/hang on quit (see Status) — root-cause investigation
+   in progress.
+7. RT64 letterbox-band color bug (vanilla-only cosmetic; see
    `letterbox-full-height.md` §4) — decide whether to report upstream.
