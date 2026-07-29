@@ -20,6 +20,14 @@ namespace kerecomp {
     // subsystem isn't available (e.g. running headless).
     void show_error_message_box(const char* title, const char* message);
 
+    // ---- shutdown ----------------------------------------------------------
+    // Ends the process once the renderer has been torn down. Called from
+    // kerecomp::renderer::RT64Context::shutdown(), which is the last point in
+    // a quit at which the process is still in a safe state -- see the comment
+    // at that call site (src/main/rt64_render_context.cpp) for why the rest of
+    // recomp::start()'s teardown must not be allowed to run.
+    [[noreturn]] void exit_after_renderer_shutdown();
+
     // ---- pacing instrumentation (analysis/docs/timing-and-mission-debug.md) --
     // Off unless KE_PERF is set in the environment. When on, one line per
     // second is written to stderr with the measured VI retrace rate and the

@@ -305,6 +305,35 @@ void kerecomp::renderer::RT64Context::shutdown() {
     if (app != nullptr) {
         app->end();
     }
+
+    // End the process here rather than returning and letting recomp::start()
+    // finish its teardown.
+    //
+    // ultramodern::quit() only sets `exited`; it does not stop the threads the
+    // game created with osCreateThread. Those keep running recompiled code
+    // throughout the whole shutdown, and recomp::start() ends with
+    // `munmap(rdram, allocation_size)` (deps/N64ModernRuntime/librecomp/src/
+    // recomp.cpp, end of recomp::start) -- so RDRAM is unmapped while its
+    // users are still live. It is not a narrow race either: every one of this
+    // game's busy-wait loops is hooked with yield_self_1ms() (config/
+    // knife_edge.us.toml [[patches.hook]] entries; see the spin-yield section
+    // of analysis/gen_syms.py), and that waits on the external message queue
+    // with a 1 ms *timeout*, so a parked game thread re-enters
+    // ultramodern::check_running_queue() -- which dereferences RDRAM to read
+    // OSThread::priority -- within 1 ms of any moment, forever. The result is
+    // a reliable SIGSEGV in "Game Thread 3" a millisecond after the unmap.
+    //
+    // This function is the last moment at which the process is still coherent:
+    // the renderer is fully torn down, and everything recomp::start() does
+    // afterwards (joining the remaining runtime threads, freeing RDRAM) is
+    // bookkeeping the OS does for free at process exit. There is no seam
+    // further along -- the unsafe steps are inside librecomp, between the
+    // point the gfx thread returns and the point main() regains control.
+    //
+    // Safe for this game specifically because it has no save file
+    // (GameEntry::save_type is SaveType::None in main.cpp), so librecomp's
+    // saving thread owns nothing that still needs flushing.
+    kerecomp::exit_after_renderer_shutdown();
 }
 
 bool kerecomp::renderer::RT64Context::update_config(const ultramodern::renderer::GraphicsConfig& old_config, const ultramodern::renderer::GraphicsConfig& new_config) {

@@ -1,5 +1,6 @@
 #include "support.h"
 
+#include "audio.h"
 #include "build_info.h"
 
 #include <atomic>
@@ -30,6 +31,19 @@ void kerecomp::show_error_message_box(const char* title, const char* message) {
     if (SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, message, nullptr) != 0) {
         std::fprintf(stderr, "[%s] %s\n", title, message);
     }
+}
+
+void kerecomp::exit_after_renderer_shutdown() {
+    // main() would normally do this once recomp::start() returned; that return
+    // deliberately never happens now (see the call site).
+    kerecomp::shutdown_audio();
+    std::fflush(nullptr);
+
+    // _Exit, not exit(): the game's own threads are still alive and still
+    // executing recompiled code, so running static destructors (SDL, RT64,
+    // librecomp) would pull global state out from under them for exactly the
+    // same reason the teardown we are skipping would.
+    std::_Exit(EXIT_SUCCESS);
 }
 
 namespace {
