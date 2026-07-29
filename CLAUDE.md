@@ -42,10 +42,11 @@ config keys. SDL_GameController with hotplug, all pads act as controller 1,
 (build + smoke test — no pad hardware reaches the container) and owner
 hands-on (2026-07-29, Xbox Elite 2 via xone): connect line, stick aim,
 trigger fire, right-stick C-buttons, A/B/Start all correct. Hotplug
-mid-game is the one unexercised path. Follow-up in flight: stick-response
-knobs (`[input]` config section — `stick_deadzone`/`stick_curve`/
-`stick_sensitivity`, defaults reproducing shipped behavior; host input
-shaping, not enhancements, active in every profile).
+mid-game is the one unexercised path. Stick-response knobs shipped
+(3d355d7): `[input]` config section — `stick_deadzone`/`stick_curve`/
+`stick_sensitivity`, defaults bit-identical to shipped behavior; host
+input shaping, not enhancements, active in every profile. Owner hands-on
+feel check pending.
 
 Shutdown segfault on quit: **fixed** (628ced4). Root cause was librecomp's
 `recomp::start()` munmap'ing RDRAM while the game's `osCreateThread`
@@ -192,7 +193,7 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    containerized builds, Flatpak packaging, high framerate. High-score
    persistence deferred (see candidates).
 5. Gamepad: hotplug mid-game unverified (everything else owner-verified);
-   stick-response `[input]` knobs designed, implementation pending.
+   `[input]` stick knobs shipped, owner feel-check pending.
 6. Upstream report candidates: RT64 letterbox-band color bug (vanilla-only
    cosmetic; `letterbox-full-height.md` §4); librecomp teardown
    unmap-while-threads-live (see Status, fixed on our side in 628ced4);
