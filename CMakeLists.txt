@@ -290,7 +290,12 @@ if (GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
                     OUTPUT_VARIABLE KE_BUILD_COMMIT
                     OUTPUT_STRIP_TRAILING_WHITESPACE
                     ERROR_QUIET)
-    execute_process(COMMAND "${GIT_EXECUTABLE}" status --porcelain
+    # --ignore-submodules=dirty: deps/N64ModernRuntime is *always* dirty by
+    # design (patches/ applied at configure time, see ke_apply_dep_patch), and
+    # flagging that would make every build read "(modified working tree)"
+    # forever, destroying the flag's diagnostic value. A changed submodule
+    # *pointer* still counts as dirty; only submodule content is ignored.
+    execute_process(COMMAND "${GIT_EXECUTABLE}" status --porcelain --ignore-submodules=dirty
                     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
                     OUTPUT_VARIABLE KE_GIT_STATUS
                     ERROR_QUIET)
