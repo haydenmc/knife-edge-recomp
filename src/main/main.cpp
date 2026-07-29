@@ -217,6 +217,15 @@ namespace {
     std::atomic<float> pad_stick_x{0.0f};
     std::atomic<float> pad_stick_y{0.0f};
 
+    // config.input.stick_* (analysis/docs/enhancements.md is the enhancement
+    // doc; these are NOT enhancements -- see InputTuning in config.h). Set
+    // once at startup from the resolved config, same pattern as
+    // input_latching_enabled below, and read once per update_gfx() sampling
+    // pass (not per pad) into locals that shape the radial deadzone below.
+    std::atomic<float> stick_deadzone{0.15f};
+    std::atomic<float> stick_curve{1.0f};
+    std::atomic<float> stick_sensitivity{1.0f};
+
     // enhancements.input_latching (analysis/docs/enhancements.md). Set once
     // at startup from the resolved config, before recomp::start() -- read
     // from exactly one call site each in update_gfx() and get_input() below,
@@ -305,6 +314,11 @@ namespace {
         uint16_t buttons = 0;
         float stick_x = 0.0f;
         float stick_y = 0.0f;
+        // Loaded once per sampling pass, not per pad -- config.input.stick_*
+        // (see the atomics above).
+        const float deadzone = stick_deadzone.load(std::memory_order_relaxed);
+        const float curve = stick_curve.load(std::memory_order_relaxed);
+        const float sensitivity = stick_sensitivity.load(std::memory_order_relaxed);
         for (const auto& [id, gc] : open_controllers) {
             for (const PadBinding& b : pad_bindings) {
                 if (SDL_GameControllerGetButton(gc, b.button)) {
@@ -331,17 +345,30 @@ namespace {
             if (ry >  c_threshold) buttons |= BTN_CD;
 
             // Left stick -> N64 stick. Radial (not per-axis) deadzone: below
-            // 0.15 magnitude the stick contributes nothing; above it, travel
-            // is rescaled so the deadzone edge maps to 0 and full deflection
-            // still maps to 1. A per-axis deadzone would clip diagonals
-            // unevenly, which a radial one avoids.
+            // `deadzone` magnitude the stick contributes nothing; above it,
+            // travel is rescaled so the deadzone edge maps to 0 and full
+            // deflection still maps to 1. A per-axis deadzone would clip
+            // diagonals unevenly, which a radial one avoids. Shaping order
+            // after that rescale is curve (response exponent) -> sensitivity
+            // (post-curve multiplier) -> clamp to full deflection; see
+            // InputTuning in config.h. `mag > deadzone` (strictly, was `>=`)
+            // plus `mag > 0` below guard the division by zero when deadzone
+            // is 0 -- this only changes behavior exactly on the boundary
+            // mag == deadzone > 0, a measure-zero case in practice.
             float lx = std::clamp(SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTX) / 32767.0f, -1.0f, 1.0f);
             float ly = std::clamp(SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_LEFTY) / 32767.0f, -1.0f, 1.0f);
             ly = -ly; // SDL's Y is down-positive; match the keyboard binding's W=+1 (up-positive) convention.
-            constexpr float deadzone = 0.15f;
             const float mag = std::sqrt(lx * lx + ly * ly);
-            if (mag >= deadzone) {
-                const float scale = std::min((mag - deadzone) / (1.0f - deadzone), 1.0f) / mag;
+            if (mag > deadzone && mag > 0.0f) {
+                const float mag_norm = std::min((mag - deadzone) / (1.0f - deadzone), 1.0f);
+                float shaped = mag_norm;
+                // Guard keeps the default (curve == 1.0) path bit-identical
+                // to the pre-tuning code (no pow() call at all).
+                if (curve != 1.0f) {
+                    shaped = std::pow(mag_norm, curve);
+                }
+                shaped = std::min(shaped * sensitivity, 1.0f);
+                const float scale = shaped / mag;
                 stick_x += lx * scale;
                 stick_y += ly * scale;
             }
@@ -450,6 +477,14 @@ int main(int argc, char** argv) {
     input_latching_enabled.store(enhancements.input_latching, std::memory_order_relaxed);
     kerecomp::set_rcp_frame_ms_tuning(config.tuning.rcp_frame_ms);
     kerecomp::set_full_height_enhancement(enhancements.full_height);
+
+    // config.input (analysis-doc terminology aside, NOT an enhancement -- see
+    // InputTuning in config.h). Stored once here, same pattern as
+    // input_latching_enabled above; update_gfx()'s sampling pass loads these
+    // once per pass, not per pad.
+    stick_deadzone.store(static_cast<float>(config.input.stick_deadzone), std::memory_order_relaxed);
+    stick_curve.store(static_cast<float>(config.input.stick_curve), std::memory_order_relaxed);
+    stick_sensitivity.store(static_cast<float>(config.input.stick_sensitivity), std::memory_order_relaxed);
 
     // enhancements.high_resolution / .widescreen (analysis/docs/enhancements.md).
     // Must be set before recomp::start() below spins up the gfx thread, since

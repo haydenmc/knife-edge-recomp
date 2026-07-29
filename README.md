@@ -175,6 +175,9 @@ so a desktop input method cannot swallow those holds; if your desktop still
 intercepts held keys, try running with `XMODIFIERS=@im=none QT_IM_MODULE=
 GTK_IM_MODULE=` to take the input method out of the path entirely.
 
+Analog-stick deadzone, response curve, and sensitivity can be tuned via the
+`[input]` table — see "Configuration" below.
+
 ## Configuration
 
 Settings live in `<app folder>/config.toml` (the `ke_recomp_data/` directory
@@ -206,6 +209,18 @@ non-default flags are logged on startup right after the build stamp, so a
 bug report identifies its config along with its build. See
 `analysis/docs/enhancements.md` for the full policy, the current flag table,
 and how future enhancements get added.
+
+The `[input]` table tunes how the host analog stick maps to the N64 stick
+range. It applies in every profile, vanilla included — it's host input-device
+shaping, not a change to game behavior, so it isn't gated by `--profile`.
+Out-of-range values are clamped to the ranges below, with a warning on
+stderr.
+
+| Key | Default | Range | Meaning |
+|---|---|---|---|
+| `stick_deadzone` | `0.15` | `0.0`–`0.9` | Radial stick travel around center that's ignored. |
+| `stick_curve` | `1.0` | `0.25`–`4.0` | Response exponent applied after the deadzone rescale; `>1.0` gives finer control near center without changing full deflection. |
+| `stick_sensitivity` | `1.0` | `0.1`–`3.0` | Multiplier applied after the curve; `>1.0` reaches full deflection before the stick is maxed out, `<1.0` caps below full deflection. |
 
 ## Regenerating from a ROM
 

@@ -72,12 +72,24 @@ struct TuningFlags {
     double rcp_frame_ms = 0.0;
 };
 
+// Analog-stick response shaping -- host input-device tuning, NOT enhancements
+// (the pad itself is not an enhancement either; see the gamepad commit).
+// Applies in every profile, vanilla included: it shapes how the host stick
+// maps to the N64 stick range, never what the game does with the result.
+struct InputTuning {
+    double stick_deadzone = 0.15;     // radial, [0.0, 0.9]
+    double stick_curve = 1.0;         // response exponent, [0.25, 4.0]
+    double stick_sensitivity = 1.0;   // post-curve multiplier, [0.1, 3.0]
+};
+
 struct Config {
     Profile profile = Profile::Vanilla;
     // Only consulted when profile == Custom; effective_enhancements() below
     // ignores this field for Vanilla/Enhanced.
     EnhancementFlags enhancements;
     TuningFlags tuning;
+    // Read regardless of profile, like tuning above -- see InputTuning.
+    InputTuning input;
 };
 
 // Resolves the full config for this run:
@@ -91,6 +103,9 @@ struct Config {
 //   5. Unknown keys anywhere in the file are collected and warned about once
 //      (not per-key spam), then ignored.
 //   6. --profile (if given) overrides [profile].active from the file.
+//   7. [input] values outside their documented ranges are clamped, each with
+//      its own single stderr warning naming the key, the given value, and
+//      the clamped value.
 // KE_RCP_FRAME_MS is deliberately NOT resolved here -- src/main/rcp_timing.cpp
 // still reads it directly and applies it with higher precedence than
 // tuning.rcp_frame_ms, so that existing behavior/log line is untouched.
@@ -106,6 +121,8 @@ EnhancementFlags effective_enhancements(const Config& cfg);
 // One-line startup summary ("profile: vanilla" or
 // "profile: custom (input_latching=on, rcp_frame_ms=55.0)"), logged right
 // after the build stamp so a bug report self-identifies its config too.
+// Any [input] field left at its default is omitted; a tuned stick appears as
+// e.g. "stick_deadzone=0.10" regardless of profile.
 std::string describe_config(const Config& cfg);
 
 } // namespace kerecomp

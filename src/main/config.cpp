@@ -1,5 +1,6 @@
 #include "config.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 #include <string_view>
@@ -15,11 +16,27 @@
 namespace {
     using kerecomp::Config;
     using kerecomp::EnhancementFlags;
+    using kerecomp::InputTuning;
     using kerecomp::Profile;
     using kerecomp::TuningFlags;
 
     void warn(const std::string& message) {
         std::fprintf(stderr, "[config] warning: %s\n", message.c_str());
+    }
+
+    // Clamps an [input] value to [lo, hi], warning once (naming the key, the
+    // given value, and the clamped value) if it was out of range.
+    double clamp_input_value(const char* key, double value, double lo, double hi) {
+        if (value < lo || value > hi) {
+            double clamped = std::clamp(value, lo, hi);
+            char buf[192];
+            std::snprintf(buf, sizeof(buf),
+                "input.%s = %g is out of range [%g, %g]; clamping to %g",
+                key, value, lo, hi, clamped);
+            warn(buf);
+            return clamped;
+        }
+        return value;
     }
 
     const char* profile_name(Profile p) {
@@ -73,7 +90,24 @@ namespace {
         "# Fidelity knobs, NOT enhancements -- see src/main/rcp_timing.cpp.\n"
         "# 0 = built-in model (59.733 ms/frame). The KE_RCP_FRAME_MS environment\n"
         "# variable still overrides this when set.\n"
-        "rcp_frame_ms = 0.0\n";
+        "rcp_frame_ms = 0.0\n"
+        "\n"
+        "[input]\n"
+        "# Analog-stick response shaping -- host input-device tuning, NOT\n"
+        "# enhancements. Applies in every profile, vanilla included: it shapes how\n"
+        "# the host stick maps to the N64 stick range, never what the game does\n"
+        "# with the result. Out-of-range values are clamped, with a warning.\n"
+        "# Radial deadzone: stick travel below this magnitude is ignored. Range\n"
+        "# [0.0, 0.9].\n"
+        "stick_deadzone = 0.15\n"
+        "# Response curve exponent applied after the deadzone rescale. 1.0 is\n"
+        "# linear; >1.0 gives finer control near center without changing full\n"
+        "# deflection. Range [0.25, 4.0].\n"
+        "stick_curve = 1.0\n"
+        "# Multiplier applied after the curve. >1.0 reaches full deflection\n"
+        "# before the stick is maxed out; <1.0 caps below full deflection.\n"
+        "# Range [0.1, 3.0].\n"
+        "stick_sensitivity = 1.0\n";
 
     // Parses argv for --profile <name> and --config <path> only, matching
     // main.cpp's existing minimal --rom parsing style.
@@ -104,7 +138,7 @@ namespace {
 
         for (auto&& [key, value] : tbl) {
             std::string_view k = key.str();
-            if (k != "profile" && k != "enhancements" && k != "tuning") {
+            if (k != "profile" && k != "enhancements" && k != "tuning" && k != "input") {
                 unknown.emplace_back(k);
             }
         }
@@ -172,6 +206,29 @@ namespace {
             // is an easy typo for `0.0` and there's no reason to reject it).
             if (auto v = (*tuning_tbl)["rcp_frame_ms"].value<double>()) {
                 cfg.tuning.rcp_frame_ms = *v;
+            }
+        }
+
+        // [input] is read regardless of profile.active, like [tuning] above
+        // and unlike [enhancements] -- see InputTuning in config.h.
+        if (const toml::table* input_tbl = tbl["input"].as_table()) {
+            for (auto&& [key, value] : *input_tbl) {
+                std::string_view k = key.str();
+                if (k != "stick_deadzone" && k != "stick_curve" && k != "stick_sensitivity") {
+                    unknown.emplace_back(std::string("input.") + std::string(k));
+                }
+            }
+            // A non-numeric value is left at its InputTuning default, same as
+            // rcp_frame_ms above; an in-range numeric value is used as-is,
+            // an out-of-range one is clamped with a single warning.
+            if (auto v = (*input_tbl)["stick_deadzone"].value<double>()) {
+                cfg.input.stick_deadzone = clamp_input_value("stick_deadzone", *v, 0.0, 0.9);
+            }
+            if (auto v = (*input_tbl)["stick_curve"].value<double>()) {
+                cfg.input.stick_curve = clamp_input_value("stick_curve", *v, 0.25, 4.0);
+            }
+            if (auto v = (*input_tbl)["stick_sensitivity"].value<double>()) {
+                cfg.input.stick_sensitivity = clamp_input_value("stick_sensitivity", *v, 0.1, 3.0);
             }
         }
 
@@ -274,6 +331,25 @@ std::string kerecomp::describe_config(const Config& cfg) {
     if (cfg.tuning.rcp_frame_ms > 0.0) {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "rcp_frame_ms=%.1f", cfg.tuning.rcp_frame_ms);
+        parts.emplace_back(buf);
+    }
+
+    // [input] applies regardless of profile, so these are checked against
+    // InputTuning's own defaults rather than folded into `effective` above.
+    constexpr InputTuning default_input{};
+    if (cfg.input.stick_deadzone != default_input.stick_deadzone) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "stick_deadzone=%.2f", cfg.input.stick_deadzone);
+        parts.emplace_back(buf);
+    }
+    if (cfg.input.stick_curve != default_input.stick_curve) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "stick_curve=%.2f", cfg.input.stick_curve);
+        parts.emplace_back(buf);
+    }
+    if (cfg.input.stick_sensitivity != default_input.stick_sensitivity) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "stick_sensitivity=%.2f", cfg.input.stick_sensitivity);
         parts.emplace_back(buf);
     }
 
