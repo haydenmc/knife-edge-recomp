@@ -35,11 +35,21 @@ in-mission 320×200 letterbox — an uncrop; see
 `enhanced`. Known vanilla-only cosmetic issue found during that RE:
 RT64 renders the letterbox bands in the scene fill color instead of black
 (scissor not honored on a fill rect) — candidate upstream report, doc §4.
-Agreed order for the rest: gamepad support → mouse aim → Flatpak → high
-framerate. Rationale: gamepad before mouse aim (both touch `get_input`'s
-axis path; gamepad is the simpler pattern-setter), high framerate last
-because it is the deepest timing-sensitive cut, Flatpak once the config
-surface stops churning. Mouse aim caveat: reticle updates at game rate
+Gamepad support shipped (2026-07-29) — deliberately **not** an enhancement
+flag: host input-device support like the keyboard mapping, always on, no
+config keys. SDL_GameController with hotplug, all pads act as controller 1,
+0.15 radial deadzone, either trigger → Z, right stick → C. Verified headless
+(build + smoke test only — no pad hardware reaches the container); **owner
+hands-on pass still pending** (stick aim/deadzone feel, trigger fire,
+right-stick C-buttons, hotplug mid-game).
+
+Agreed order for the rest: mouse aim → containerized builds → Flatpak →
+high framerate. Rationale: gamepad before mouse aim (both touch
+`get_input`'s axis path; gamepad was the simpler pattern-setter),
+containerized builds before Flatpak (a reproducible container build is the
+substrate the Flatpak manifest reuses), Flatpak once the config surface
+stops churning, high framerate last because it is the deepest
+timing-sensitive cut. Mouse aim caveat: reticle updates at game rate
 (~15 Hz pad sampling) regardless of input smoothness — fully smooth aim is
 coupled to the high-framerate work.
 
@@ -162,8 +172,10 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    confounded by the title screen auto-advancing and cannot decide it.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
-4. Enhancements not yet started, in agreed order (see Status): gamepad support,
-   mouse aim, Flatpak packaging, high framerate. High-score persistence
-   deferred (see candidates).
-5. RT64 letterbox-band color bug (vanilla-only cosmetic; see
+4. Enhancements not yet started, in agreed order (see Status): mouse aim,
+   containerized builds, Flatpak packaging, high framerate. High-score
+   persistence deferred (see candidates).
+5. Gamepad support: owner hands-on verification pending (see Status for the
+   checklist).
+6. RT64 letterbox-band color bug (vanilla-only cosmetic; see
    `letterbox-full-height.md` §4) — decide whether to report upstream.
