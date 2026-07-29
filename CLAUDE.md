@@ -85,11 +85,29 @@ watch-item: aim going inert in any untested in-mission variant). Reticle
 updates at game rate (~26.7 Hz at current budget) regardless of mouse
 smoothness — fully smooth aim is coupled to the high-framerate work.
 
-Agreed order for the rest: containerized builds → Flatpak → high
-framerate. Rationale: containerized builds before Flatpak (a reproducible
-container build is the substrate the Flatpak manifest reuses), Flatpak
-once the config surface stops churning, high framerate last because it is
-the deepest timing-sensitive cut.
+Containerized build shipped (2026-07-29): `containers/Containerfile`
+(`debian:trixie-slim`, matching the devcontainer's base image so there's no
+toolchain drift) plus `scripts/container_build.sh`, the one script both CI
+and local dev use to build in it. `.github/workflows/build.yml`'s three jobs
+were rewritten to call it instead of each carrying its own inline
+apt-get/cmake recipe. Design in `analysis/docs/build-notes.md`,
+"Containerized build" — build-dir isolation (`*-container` suffix, never
+shares an object dir with a host build), ROM-as-mount-never-in-image, the
+podman/SELinux run flags lifted from `.devcontainer`'s proven ones, and a
+`.venv`-shadowing tmpfs mount that stops a host-built venv the bind-mounted
+repo might carry from being silently preferred over the container's own.
+Verification is **static only** — `bash -n`, a YAML parse, and package-list
+cross-checking against the existing CI jobs/devcontainer/`smoke_test.sh` —
+because this devcontainer has no container runtime at all (no docker, no
+podman: we're already inside a container). Nothing here has actually been
+built or run in an image yet; that's the next thing needed from the owner's
+host (see Open items).
+
+Agreed order for the rest: Flatpak → high framerate (containerized builds
+were the item ahead of Flatpak — a reproducible container build is the
+substrate the Flatpak manifest reuses — and are now done pending the
+owner's host verification above). High framerate last because it is the
+deepest timing-sensitive cut.
 
 RCP frame budget: **36.5 ms** (~24.6 measured game fps), tuned by the owner
 against real N64 gameplay footage. This replaced an earlier 59.733 ms figure
@@ -113,6 +131,10 @@ candidate enhancement.
   so `--rom` is optional. Controls table in README.
 - `./scripts/smoke_test.sh` — headless boot check (alive + real video + non-silent
   audio). Requires a ROM; CI uses a no-ROM well-formedness check instead.
+- Containerized build (no local toolchain install needed, docker or podman):
+  `./scripts/container_build.sh --rom <path>` — output in `build-container/`.
+  Same script CI runs; `--help` for the rest of its flags. See
+  `analysis/docs/build-notes.md`, "Containerized build".
 - Live diagnosis of a running/hung game: `scripts/capture_wedge_state.sh` and
   `scripts/capture_voice_state.sh` (they locate the process and game RAM
   themselves). Env: `KE_PERF=1` (VI/s + frames/s), `KE_AUDIO_DUMP=<path>` (PCM).
@@ -211,9 +233,9 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    confounded by the title screen auto-advancing and cannot decide it.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
-4. Enhancements not yet started, in agreed order (see Status):
-   containerized builds, Flatpak packaging, high framerate. High-score
-   persistence deferred (see candidates).
+4. Enhancements not yet started, in agreed order (see Status): Flatpak
+   packaging, high framerate. High-score persistence deferred (see
+   candidates).
 5. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
    `mouse-aim.md` §9.1 inert-aim watch-item). Buttons settled: L/R/M →
    Z/A/B, owner-specified.
@@ -226,3 +248,10 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    letterbox-band color bug (vanilla-only cosmetic;
    `letterbox-full-height.md` §4); RT64-bundled nativefiledialog null-dbus
    abort (container-only).
+8. Containerized build: owner verification on a real host with docker or
+   podman actually installed (this devcontainer has neither, so
+   `containers/Containerfile` and `scripts/container_build.sh` have only
+   been verified statically — syntax/YAML checks and package-list
+   cross-referencing, never an actual image build or container run). Also
+   unverified: the `regen-verify` job's containerized form on the owner's
+   self-hosted (podman) runner.

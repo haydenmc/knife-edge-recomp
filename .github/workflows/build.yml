@@ -7,6 +7,15 @@ name: build
 # That means this workflow compiles committed sources only: no ROM fetch, no
 # secrets, no decryption step. See the `regen-verify` job at the bottom for
 # the (deliberately non-default) job that needs an actual ROM.
+#
+# All three jobs below build through containers/Containerfile via
+# scripts/container_build.sh — the same script a developer runs locally (see
+# README.md "Building", Option C, and analysis/docs/build-notes.md
+# "Containerized build"). There is deliberately no separate inline
+# apt-get/cmake recipe here: the Containerfile is the one place the
+# toolchain is defined, so CI and local dev can never drift apart. GitHub's
+# hosted ubuntu-latest runners ship docker preinstalled, which is all these
+# jobs need on the host side.
 
 on:
   push:
@@ -34,32 +43,12 @@ jobs:
     name: build (stub, no ROM)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      CC: clang
-      CXX: clang++
 
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      # Same package set as .devcontainer/devcontainer.json's postCreateCommand
-      # (minus the python/venv bits, which only the analysis pipeline needs and
-      # which this workflow never runs).
-      - name: Install toolchain + runtime deps
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            cmake ninja-build clang lld pkg-config \
-            libsdl2-dev libx11-dev libvulkan-dev vulkan-tools \
-            glslang-tools spirv-tools mesa-vulkan-drivers xvfb
-
-      - name: Compiler / tool versions
-        run: |
-          clang --version
-          cmake --version
-          ninja --version
 
       # Cache keys are pinned to the vendored submodules' actual checked-out
       # commits (not a content hash of their trees, which would be expensive
@@ -73,118 +62,77 @@ jobs:
           echo "rt64=$(git -C deps/rt64 rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # ---------------------------------------------------------------------
-      # Host tools: N64Recomp / RSPRecomp (built from deps/N64Recomp).
-      # The top-level CMakeLists.txt imports these by path from
-      # deps/N64Recomp/build/{N64Recomp,RSPRecomp} (see its
-      # N64RECOMP_HOST_TOOL/RSPRECOMP_HOST_TOOL cache vars) — build them at
-      # that exact path so the main configure step finds them without any
-      # CMakeLists.txt changes.
+      # Host tools: N64Recomp / RSPRecomp (built from deps/N64Recomp), inside
+      # the container, into deps/N64Recomp/build-container (see
+      # scripts/container_build.sh — this directory is deliberately distinct
+      # from deps/N64Recomp/build/, which is what a native/devcontainer host
+      # build uses; the two must never share object dirs since they're built
+      # with different toolchains). Cache key includes the Containerfile's
+      # hash (in place of the old literal "clang19" tag) so any toolchain
+      # change in the image busts this cache too, not just a submodule bump.
       # ---------------------------------------------------------------------
       - name: Cache N64Recomp host tools
         id: cache-host-tools
         uses: actions/cache@v4
         with:
-          path: deps/N64Recomp/build
-          key: n64recomp-host-${{ runner.os }}-clang19-${{ steps.submodules.outputs.n64recomp }}
-
-      - name: Configure N64Recomp host tools
-        run: |
-          cmake -S deps/N64Recomp -B deps/N64Recomp/build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
-
-      - name: Build N64Recomp + RSPRecomp
-        run: ninja -C deps/N64Recomp/build N64Recomp RSPRecomp
+          path: deps/N64Recomp/build-container
+          key: n64recomp-host-${{ runner.os }}-${{ hashFiles('containers/Containerfile') }}-${{ steps.submodules.outputs.n64recomp }}
 
       # ---------------------------------------------------------------------
       # Main project: KnifeEdgeRecompiled, built WITHOUT a ROM. With no
-      # KE_ROM/KE_GENERATED_DIR, CMake compiles src/stub_game/ instead of
-      # recompiled game code, so this job validates everything that is not
-      # ROM-derived (runtime shim, RT64, librecomp, ultramodern, audio,
-      # input) with no secrets and works for pull requests from forks.
+      # KE_ROM, CMake compiles src/stub_game/ instead of recompiled game
+      # code, so this job validates everything that is not ROM-derived
+      # (runtime shim, RT64, librecomp, ultramodern, audio, input) with no
+      # secrets and works for pull requests from forks.
       # ---------------------------------------------------------------------
       - name: Compute main build cache key
         id: buildkey
         run: |
           src_hash="${{ hashFiles('CMakeLists.txt', 'src/**', 'config/**') }}"
-          key="build-${{ runner.os }}-clang19-${{ steps.submodules.outputs.n64recomp }}-${{ steps.submodules.outputs.runtime }}-${{ steps.submodules.outputs.rt64 }}-$src_hash"
+          key="build-${{ runner.os }}-${{ hashFiles('containers/Containerfile') }}-${{ steps.submodules.outputs.n64recomp }}-${{ steps.submodules.outputs.runtime }}-${{ steps.submodules.outputs.rt64 }}-$src_hash"
           echo "key=$key" >> "$GITHUB_OUTPUT"
 
       - name: Cache main build directory
         id: cache-build
         uses: actions/cache@v4
         with:
-          path: build
+          path: build-container
           key: ${{ steps.buildkey.outputs.key }}
           restore-keys: |
-            build-${{ runner.os }}-clang19-
-
-      - name: Configure KnifeEdgeRecompiled
-        run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
-            -DN64RECOMP_HOST_TOOL="${{ github.workspace }}/deps/N64Recomp/build/N64Recomp" \
-            -DRSPRECOMP_HOST_TOOL="${{ github.workspace }}/deps/N64Recomp/build/RSPRecomp"
-
-      - name: Build KnifeEdgeRecompiled
-        run: ninja -C build
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: KnifeEdgeRecompiled-linux-stub
-          path: build/KnifeEdgeRecompiled
-          if-no-files-found: error
+            build-${{ runner.os }}-${{ hashFiles('containers/Containerfile') }}-
 
       # ---------------------------------------------------------------------
-      # No-ROM smoke test.
+      # Build + no-ROM smoke test, in one step: scripts/container_build.sh
+      # --check builds host tools + KnifeEdgeRecompiled (both cached above,
+      # since they land at the exact paths cached), then launches the binary
+      # with DISPLAY/SDL_VIDEODRIVER unset under `timeout 15` and asserts
+      # exit status exactly 1 (not 124 = hang, not >=128 = crash).
       #
-      # Verified locally (see analysis/docs/build-notes.md workflow and the
-      # session that authored this file): src/main/main.cpp resolves the ROM
+      # Verified locally (see analysis/docs/build-notes.md and the session
+      # that authored this check): src/main/main.cpp resolves the ROM
       # question *before* SDL/RT64 ever initialize a window
       # (recomp::is_rom_valid(...) is checked ahead of recomp::start()), so
       # on a plain headless runner with no DISPLAY set, SDL_ShowSimpleMessageBox
       # fails immediately (no video target), exit_error() falls through to its
       # stderr fprintf, and the process exits via
       # ultramodern::error_handling::quick_exit(EXIT_FAILURE) — no Xvfb
-      # needed for this particular check. (Xvfb *is* installed above, matching
-      # the devcontainer, but deliberately unused here: testing showed that
-      # running this same no-ROM path under a live Xvfb + DISPLAY makes
-      # SDL_ShowSimpleMessageBox draw a real modal message box and block
-      # indefinitely waiting for a click that will never come — exactly the
-      # hang a smoke test must avoid. A GitHub-hosted runner has no DISPLAY by
-      # default, which is the fast/correct path here.)
-      - name: Smoke test (no ROM -> clean failure, not a crash)
-        run: |
-          set +e
-          out="$(env -u DISPLAY -u SDL_VIDEODRIVER timeout 15 ./build/KnifeEdgeRecompiled 2>&1)"
-          status=$?
-          set -e
-          echo "$out"
-          echo "exit status: $status"
+      # needed for this particular check (the container image has Xvfb for
+      # scripts/smoke_test.sh's benefit, but this check deliberately runs
+      # without it: testing showed that running this same no-ROM path under a
+      # live Xvfb + DISPLAY makes SDL_ShowSimpleMessageBox draw a real modal
+      # message box and block indefinitely waiting for a click that will
+      # never come — exactly the hang this check must avoid).
+      - name: Containerized build + no-ROM smoke test
+        env:
+          KE_CONTAINER_RUNTIME: docker # preinstalled on GitHub-hosted runners; explicit for clarity
+        run: ./scripts/container_build.sh --check
 
-          # Assert a *graceful* failure, not a specific message. Which error
-          # fires first depends on the runner's SDL/Vulkan situation: with no
-          # DISPLAY, SDL may select the "offscreen" driver and fail the Vulkan
-          # check before the ROM check is reached. Both paths funnel through
-          # exit_error -> quick_exit(EXIT_FAILURE), so status 1 is the signal
-          # that matters; anything else means a hang or a crash.
-          if [ "$status" -eq 124 ]; then
-            echo "::error::binary hung with no ROM (timeout); expected a clean exit"
-            exit 1
-          fi
-          if [ "$status" -ge 128 ]; then
-            echo "::error::binary died from signal $((status - 128)) (crash); expected a clean exit"
-            exit 1
-          fi
-          if [ "$status" -ne 1 ]; then
-            echo "::error::expected exit status 1 (EXIT_FAILURE), got $status"
-            exit 1
-          fi
-          echo "OK: binary is well-formed and fails cleanly without a ROM."
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KnifeEdgeRecompiled-linux-stub
+          path: build-container/KnifeEdgeRecompiled
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # Release build: the ONLY job that touches a ROM.
@@ -206,9 +154,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.rom_path != ''
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      CC: clang
-      CXX: clang++
 
     steps:
       - name: Checkout (with submodules)
@@ -216,16 +161,25 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install toolchain + analysis deps
+      - name: Resolve submodule commits for cache keys
+        id: submodules
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            cmake ninja-build clang lld pkg-config g++ \
-            libsdl2-dev libx11-dev libvulkan-dev vulkan-tools \
-            glslang-tools spirv-tools mesa-vulkan-drivers xvfb \
-            python3-venv
-          python3 -m venv .venv
-          .venv/bin/pip install -q rabbitizer capstone tomlkit
+          echo "n64recomp=$(git -C deps/N64Recomp rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Only the N64Recomp/RSPRecomp host-tool build is cached here, not
+      # build-container/ itself: that directory's *content* differs
+      # depending on whether -DKE_ROM was passed (this job always passes it;
+      # the build job above never does), while sharing the exact same cache
+      # key formula as the build job would. Caching it under a
+      # ROM-independent key would risk a `build` job run and a `release` job
+      # run silently colliding on the same cache slot despite configuring
+      # CMake differently. The host-tool build has no such issue — it does
+      # not depend on KE_ROM at all — so it's safe to share verbatim.
+      - name: Cache N64Recomp host tools
+        uses: actions/cache@v4
+        with:
+          path: deps/N64Recomp/build-container
+          key: n64recomp-host-${{ runner.os }}-${{ hashFiles('containers/Containerfile') }}-${{ steps.submodules.outputs.n64recomp }}
 
       # TODO(self-hosted encrypted ROM): replace/augment this with a fetch from
       # your own storage, e.g.
@@ -240,31 +194,25 @@ jobs:
           fi
           echo "path=${{ inputs.rom_path }}" >> "$GITHUB_OUTPUT"
 
-      - name: Build N64Recomp host tools
-        run: |
-          cmake -S deps/N64Recomp -B deps/N64Recomp/build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
-          ninja -C deps/N64Recomp/build N64Recomp RSPRecomp
-
       # KE_ROM makes CMake normalize the ROM, run the analysis pipeline, and
-      # invoke N64Recomp + RSPRecomp at configure time (see CMakeLists.txt).
-      - name: Configure + build (regenerates game code from the ROM)
-        run: |
-          cmake -S . -B build-release -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
-            -DKE_ROM="${{ steps.rom.outputs.path }}"
-          ninja -C build-release
+      # invoke N64Recomp + RSPRecomp at configure time (see CMakeLists.txt) —
+      # scripts/container_build.sh --rom does all of this inside the
+      # container, landing output in build-container/.
+      - name: Containerized build (regenerates game code from the ROM)
+        env:
+          KE_CONTAINER_RUNTIME: docker
+        run: ./scripts/container_build.sh --rom "${{ steps.rom.outputs.path }}"
 
-      # Fails the release if any ROM asset bytes leaked into the binary.
+      # Fails the release if any ROM asset bytes leaked into the binary. Runs
+      # directly on the runner (not in the container) since it only needs the
+      # stdlib (random, sys) and both files are readable straight off the
+      # bind-mounted build-container/ directory the container just wrote to.
       - name: Assert the binary embeds no game assets
         run: |
-          .venv/bin/python - <<'PY'
+          python3 - <<'PY'
           import random, sys
-          rom = open("build-release/knife_edge.z64", "rb").read()
-          binary = open("build-release/KnifeEdgeRecompiled", "rb").read()
+          rom = open("build-container/knife_edge.z64", "rb").read()
+          binary = open("build-container/KnifeEdgeRecompiled", "rb").read()
           random.seed(1)
           leaked = tried = 0
           for _ in range(400):
@@ -283,14 +231,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: KnifeEdgeRecompiled-linux
-          path: build-release/KnifeEdgeRecompiled
+          path: build-container/KnifeEdgeRecompiled
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # Prove the analysis pipeline is deterministic: regenerate the symbol/config
-  # metadata from an actual ROM twice and assert config/ is unchanged versus
-  # what's committed. Recompiler output itself is not committed, so there is
-  # nothing else to diff.
+  # metadata from an actual ROM and assert config/ is unchanged versus what's
+  # committed. Recompiler output itself is not committed, so there is nothing
+  # else to diff.
   #
   # This job is INTENTIONALLY not part of the normal push/pull_request build:
   # per repo policy the ROM is never committed and is not provided to hosted
@@ -299,6 +247,14 @@ jobs:
   # `rom_path` pointing at a ROM that already exists on the runner — which in
   # practice means a self-hosted runner you control, not a GitHub-hosted one.
   # Dispatching without `rom_path` set (the default) skips it entirely.
+  #
+  # KE_CONTAINER_RUNTIME is deliberately left unset here (unlike the two jobs
+  # above): this runs on a self-hosted runner, which per
+  # .devcontainer/devcontainer.json's comments is the project owner's own
+  # rootless-podman/SELinux host, not a docker one. scripts/container_build.sh
+  # auto-detects podman first, so this Just Works there; set
+  # KE_CONTAINER_RUNTIME explicitly if you point this job at a different
+  # self-hosted runner.
   # ---------------------------------------------------------------------------
   regen-verify:
     name: "regen-verify (manual dispatch only, needs a local ROM)"
@@ -311,42 +267,39 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install toolchain deps + python venv (analysis pipeline)
+      # One --exec call, all inside the container: build n64sym (the
+      # analysis pipeline's identification oracle), build the N64Recomp host
+      # tool into deps/N64Recomp/build-container, ingest the mounted ROM
+      # (mounted at /rom/rom.n64 by --rom) to build/knife_edge.z64 — that
+      # exact path because analysis/Makefile hardcodes
+      # $(ROOT)/build/knife_edge.z64, not build-container/ — regenerate
+      # config/ via `make -C analysis`, run N64Recomp against the freshly
+      # regenerated config, and diff config/ against what's committed.
+      - name: Regenerate + verify (containerized)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq cmake ninja-build clang lld g++ pkg-config python3-pip python3-venv
-          python3 -m venv .venv
-          .venv/bin/pip install -q rabbitizer capstone tomlkit
+          ./scripts/container_build.sh --rom "${{ github.event.inputs.rom_path }}" --exec '
+            set -euo pipefail
+            echo "==> building n64sym (analysis pipeline identification oracle)"
+            make -C deps/n64sym
 
-      - name: Build n64sym (analysis pipeline's identification oracle)
-        run: make -C deps/n64sym
+            echo "==> building N64Recomp host tool (deps/N64Recomp/build-container)"
+            cmake -S deps/N64Recomp -B deps/N64Recomp/build-container -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
+            ninja -C deps/N64Recomp/build-container N64Recomp
 
-      - name: Build N64Recomp host tool
-        run: |
-          cmake -S deps/N64Recomp -B deps/N64Recomp/build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
-          ninja -C deps/N64Recomp/build N64Recomp
+            echo "==> ingesting the ROM (normalize to build/knife_edge.z64)"
+            mkdir -p build
+            python3 analysis/byteswap.py /rom/rom.n64 build/knife_edge.z64
 
-      - name: Ingest the ROM (normalize to build/knife_edge.z64)
-        run: |
-          mkdir -p build
-          .venv/bin/python analysis/byteswap.py "${{ github.event.inputs.rom_path }}" build/knife_edge.z64
+            echo "==> regenerating symbols + config (make -C analysis)"
+            make -C analysis
 
-      - name: Regenerate symbols + config (make -C analysis)
-        run: make -C analysis
+            echo "==> running N64Recomp (output is a build artifact, not committed)"
+            deps/N64Recomp/build-container/N64Recomp config/knife_edge.us.toml
 
-      - name: Run N64Recomp (output is a build artifact, not committed)
-        run: deps/N64Recomp/build/N64Recomp config/knife_edge.us.toml
-
-      - name: Assert regenerated metadata matches what's committed in config/
-        run: |
-          if ! git diff --exit-code -- config; then
-            echo "::error::regenerating from the ROM produced output that differs from" \
-                 "what's committed in config/ — see the diff above." \
-                 "Either the analysis pipeline changed behavior or the committed" \
-                 "output is stale; investigate before merging."
-            exit 1
-          fi
-          echo "OK: regenerated output is byte-identical to what's committed."
+            echo "==> asserting regenerated metadata matches what is committed in config/"
+            if ! git diff --exit-code -- config; then
+              echo "::error::regenerating from the ROM produced output that differs from what is committed in config/ — see the diff above. Either the analysis pipeline changed behavior or the committed output is stale; investigate before merging."
+              exit 1
+            fi
+            echo "OK: regenerated output is byte-identical to what is committed."
+          '

@@ -22,7 +22,7 @@ Not yet verified: full campaign completion, and high-score persistence across
 runs (analyzed and almost certainly absent — which is *faithful*, since the
 game only probes for a Controller Pak; see `analysis/docs/enhancements.md`).
 
-Not yet built: high framerate, mouse aim, and packaging. The
+Not yet built: high framerate and Flatpak packaging. The
 configuration system that these will hang off is in place —
 `vanilla` is the default profile and the regression baseline (see
 "Configuration" below and `analysis/docs/enhancements.md`).
@@ -118,6 +118,28 @@ macOS and Windows should work per the top-level `CMakeLists.txt`'s
 platform branches (this mirrors Zelda64Recomp's supported set) but have not
 been exercised for this project — Linux is the actively-tested platform (see
 `analysis/docs/build-notes.md`).
+
+### Option C: containerized (any machine with docker or podman)
+
+No local toolchain install at all — everything (clang, cmake, ninja, SDL2,
+Vulkan, the analysis pipeline's Python venv, ...) lives in
+`containers/Containerfile`, built and run for you by one script:
+
+```sh
+git submodule update --init --recursive   # if not already done
+./scripts/container_build.sh --rom "/path/to/Knife Edge - Nose Gunner (USA).n64"
+```
+
+Output lands in `build-container/KnifeEdgeRecompiled` — run it on the host
+exactly as in "Running" below, no container involved at runtime. Omit
+`--rom` to build against `src/stub_game/` instead, same as Options A/B.
+
+This is exactly what CI runs (`.github/workflows/build.yml` calls the same
+script), so a container build is the closest thing to a guaranteed-green
+build available locally. See `./scripts/container_build.sh --help` for the
+rest of its flags (`--check`, `--smoke`, `--shell`, `--exec`, `--jobs`,
+`--rebuild-image`), and `analysis/docs/build-notes.md`'s "Containerized
+build" section for the design.
 
 ## Running
 

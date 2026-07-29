@@ -1,0 +1,103 @@
+# Knife Edge Recompiled — canonical container build environment.
+#
+# This file is the single source of truth for the toolchain used to build
+# this project in a container. Both CI (.github/workflows/build.yml) and
+# local development (scripts/container_build.sh) build and run this exact
+# image — there is no separate "CI image" and "dev image" to keep in sync.
+#
+# Base: debian:trixie-slim, deliberately matching the devcontainer's base
+# (mcr.microsoft.com/devcontainers/base:trixie) so there is zero toolchain
+# drift between "the environment everything has been tested in" and "the
+# environment CI/release builds run in". Keep this in sync with
+# .devcontainer/devcontainer.json's postCreateCommand until the two are
+# unified (see analysis/docs/build-notes.md, "Containerized build" ->
+# "Future: unify with .devcontainer").
+#
+# See analysis/docs/build-notes.md for the full design rationale (package
+# list provenance, build-dir isolation, ROM-as-mount-never-in-image, the
+# podman/SELinux run flags, etc).
+
+FROM debian:trixie-slim
+
+# Single apt layer: union of every package the three CI jobs and the
+# devcontainer's postCreateCommand install, minus pure dev conveniences
+# (an editor, a shell prompt, etc — none of which this image needs).
+#
+#   ca-certificates          TLS roots (git over https, pip over https)
+#   git                      submodule/safe.directory handling, build-stamp commit
+#   make, g++                deps/n64sym builds via a plain Makefile + g++
+#   cmake, ninja-build        the actual build system
+#   clang, lld                the compiler this project is built/tested with
+#   pkg-config                SDL2/Vulkan discovery
+#   libsdl2-dev, libx11-dev   windowing
+#   libvulkan-dev, vulkan-tools  Vulkan headers/loader + vulkaninfo
+#   glslang-tools, spirv-tools  RT64 shader compilation at build time
+#   mesa-vulkan-drivers        lavapipe (software Vulkan) for headless/no-GPU runs
+#   xvfb                       headless X server for scripts/smoke_test.sh
+#   imagemagick                `import`/`identify` — smoke_test.sh's frame capture
+#   bc                         smoke_test.sh's float comparison (audio nonzero %)
+#   procps                     smoke_test.sh's `ps -p $APP_PID` liveness check
+#   python3, python3-venv      the analysis pipeline (byteswap.py, gen_syms.py, ...)
+#
+# `bc` and `procps` are NOT in any of the three CI jobs' package lists or in
+# the devcontainer's postCreateCommand — no existing CI job runs
+# scripts/smoke_test.sh (it's local/self-hosted only, see that script's own
+# header comment), so the gap never surfaced there. The devcontainer's base
+# image (mcr.microsoft.com/devcontainers/base:trixie, a much fuller image
+# than debian:trixie-slim) happens to already carry both, which is exactly
+# why its postCreateCommand never needed to ask for them explicitly. Added
+# here so `scripts/container_build.sh --smoke` actually works against this
+# slim base instead of failing on a missing `ps` or `bc`.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        make \
+        g++ \
+        cmake \
+        ninja-build \
+        clang \
+        lld \
+        pkg-config \
+        libsdl2-dev \
+        libx11-dev \
+        libvulkan-dev \
+        vulkan-tools \
+        glslang-tools \
+        spirv-tools \
+        mesa-vulkan-drivers \
+        xvfb \
+        imagemagick \
+        bc \
+        procps \
+        python3 \
+        python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Analysis-pipeline Python dependencies, in a venv rather than system
+# site-packages (matches the devcontainer's .venv approach). Putting this
+# venv first on PATH (below) means plain `python3`/`python` invocations
+# anywhere in the build (CMakeLists.txt's KE_PYTHON fallback via
+# find_program(python3), analysis/Makefile, scripts/container_build.sh's
+# own inner commands) resolve to this interpreter without needing a
+# repo-relative .venv/ at all.
+RUN python3 -m venv /opt/ke-pyenv \
+    && /opt/ke-pyenv/bin/pip install --no-cache-dir rabbitizer capstone tomlkit
+
+ENV PATH=/opt/ke-pyenv/bin:$PATH
+
+# The container runs as an arbitrary uid (docker --user "$(id -u):$(id -g)",
+# podman --userns=keep-id), which typically has no passwd entry and
+# therefore no writable $HOME by default. Give it one explicitly so git,
+# pip caches, etc. have somewhere to write.
+ENV HOME=/tmp/ke-home
+RUN mkdir -p /tmp/ke-home && chmod 1777 /tmp/ke-home
+
+# No USER directive: stay root-in-image so scripts/container_build.sh's
+# --user/--userns run flags (chosen per-runtime at `docker run`/`podman run`
+# time) are what actually determines the in-container identity, not
+# whatever this Dockerfile bakes in.
+#
+# No ENTRYPOINT/CMD: scripts/container_build.sh always passes an explicit
+# command (the build, a shell, or an --exec string), so there is nothing
+# useful to default to.
+WORKDIR /work

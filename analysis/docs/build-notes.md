@@ -267,6 +267,135 @@ sanctioned way to influence a vendored subdirectory without touching it.
   directory. Renamed the config folder to `ke_recomp_data` to avoid any
   name collision with the executable.
 
+## Containerized build
+
+Added so CI and local development share one toolchain definition instead of
+three copy-pasted apt-get lists (one per CI job) plus the devcontainer's own
+fourth copy. Two files carry the whole design:
+
+- **`containers/Containerfile`** — the canonical toolchain. Base
+  `debian:trixie-slim`, chosen to match
+  `.devcontainer/devcontainer.json`'s `mcr.microsoft.com/devcontainers/base:trixie`
+  base image exactly, so there is zero toolchain drift between "the
+  environment everything has been tested in" (the devcontainer) and "the
+  environment CI/release builds run in" (this image). Single apt layer,
+  package list is the union of what the three CI jobs and the devcontainer's
+  `postCreateCommand` install, minus pure dev conveniences. Two additions
+  beyond that union that are worth flagging explicitly: `bc` and `procps`.
+  Neither appears in any existing CI job's package list or in the
+  devcontainer's `postCreateCommand`, because no existing CI job runs
+  `scripts/smoke_test.sh` (self-hosted/local only) — but that script uses
+  `ps -p $PID` (procps) and `bc -l` (the audio-nonzero-percentage float
+  compare), so `--smoke` would fail without them. The devcontainer's base
+  image is a much fuller image than `debian:trixie-slim` and evidently
+  already carries both, which is exactly why its `postCreateCommand` never
+  needed to ask for them — the gap only became visible once a truly minimal
+  base was used. A second venv (`/opt/ke-pyenv`, `pip install rabbitizer
+  capstone tomlkit`) is put first on `PATH`, so plain `python3`/`python`
+  invocations anywhere in the build resolve to it without needing a
+  repo-relative `.venv/`. No `USER`/`ENTRYPOINT`: the run-time identity and
+  command are entirely `scripts/container_build.sh`'s call, not baked into
+  the image.
+- **`scripts/container_build.sh`** — the one script both developers and CI
+  invoke. It detects a runtime (`$KE_CONTAINER_RUNTIME`, else podman, else
+  docker), builds `containers/Containerfile` into an image tagged
+  `knife-edge-build:<sha256 of the Containerfile, first 12 hex>` (so a
+  Containerfile edit always produces a new tag rather than silently reusing
+  a stale image), and runs the build inside it.
+
+**Build-dir isolation.** The container always builds into
+`deps/N64Recomp/build-container/` and `build-container/` — never
+`deps/N64Recomp/build/`, `build/`, or `build-shim/`, which is what a native
+host build (Option B) or the devcontainer (Option A) uses. This is not
+incidental: the container's clang/lld/libc are a different toolchain than
+whatever the host has, and letting the two share a CMake binary dir would
+produce a build that half-belongs to each — stale object files, an ABI
+mismatch, or a `CMakeCache.txt` pointing at compilers that no longer agree
+with each other. Every path the script writes to is named `*-container` for
+exactly this reason.
+
+**ROM handling.** The ROM is never baked into the image — the script mounts
+it read-only at `/rom/rom.n64` (`-v <abspath>:/rom/rom.n64:ro`) only when
+`--rom` is given, and only for that one container invocation (`--rm`, so
+nothing persists). This mirrors the repo-wide policy (README.md
+"Repository policy") that the ROM and anything derived from it never enters
+committed/durable storage.
+
+**A subtler .venv hazard, and how it's handled.** Both `CMakeLists.txt`
+(`KE_PYTHON` prefers `${CMAKE_SOURCE_DIR}/.venv/bin/python` over
+`find_program(python3)`) and `analysis/Makefile` (`PY :=
+$(ROOT)/.venv/bin/python`, unconditionally) hardcode a repo-relative
+`.venv/`. The container bind-mounts the *whole* repo at `/work`, so if the
+host checkout happens to carry its own `.venv/` (common on a machine that's
+also done native builds — this workspace is a live example), that host venv
+would come along for the ride and get silently preferred over the
+container's own `/opt/ke-pyenv`, even though it may be built against a
+different libc/interpreter ABI than the container's. `scripts/container_build.sh`
+handles this with a `--tmpfs /work/.venv:rw,exec,nosuid,size=16m` run flag —
+an in-container-only overlay that shadows whatever's really at the host's
+`.venv/` without touching it — and then, inside the container, symlinks
+`/work/.venv/bin/python -> /opt/ke-pyenv/bin/python`. Both hardcoded
+lookups now resolve to the container's own interpreter regardless of what
+the host's checkout contains. A clean CI checkout never has a `.venv/` at
+all (it's gitignored), so this is a no-op there; it only matters for local
+container builds against an existing working tree.
+
+**Podman/SELinux run flags.** `--userns=keep-id --security-opt label=disable`
+for podman are lifted verbatim from
+`.devcontainer/devcontainer.json`'s `runArgs`, where they're already proven
+on the project owner's rootless-podman/SELinux (Fedora) host: `keep-id`
+lines up the host uid inside the container so the mounted source is
+container-user-owned instead of root-owned, and `label=disable` opts out of
+SELinux label separation, which otherwise denies `container_t` access to
+the host's `user_home_t`-labelled source. Docker instead gets
+`--user "$(id -u):$(id -g)")`, which needs no SELinux workaround.
+
+**CI integration.** `.github/workflows/build.yml`'s three jobs each call
+`scripts/container_build.sh` instead of an inline apt-get/cmake recipe:
+`build` uses `--check` (build + the no-ROM graceful-failure assertion),
+`release` uses `--rom <path>` (build only; the asset-leak check runs
+separately, directly on the runner, since it only needs the stdlib),
+`regen-verify` uses `--rom <path> --exec '<script>'` to run the analysis
+pipeline's regen-and-diff recipe inside the container. Caching is keyed on
+`hashFiles('containers/Containerfile')` in place of the old literal
+`clang19` string, so a toolchain change (image edit) busts the cache exactly
+like a submodule bump does. The `build` and `release` jobs deliberately do
+NOT share a `build-container/` cache under the same key formula: `release`
+always configures with `-DKE_ROM=...` and `build` never does, and since the
+cache key doesn't encode that distinction, sharing it risks one job's stub
+configure silently winning the cache slot for the other's ROM-driven one.
+Only the ROM-independent `deps/N64Recomp/build-container/` (the host tools)
+is shared between them. No registry push/pull machinery was added — the
+image builds fresh (well, cached by the runner's local docker/podman image
+store within a run, but not across runs) each time; see "Future work" below.
+
+### Future: unify with `.devcontainer`
+
+`.devcontainer/devcontainer.json` was deliberately left untouched by this
+work — it's the project owner's live, daily-use environment, not something
+to risk destabilizing while the container-build design was still settling.
+It now duplicates a chunk of `containers/Containerfile`'s package list (both
+trace back to the same underlying toolchain needs) and the same
+podman/SELinux run-flag knowledge (both files cite the same rationale). The
+obvious next step, once the Containerfile has had some real mileage, is to
+point the devcontainer at the same image — e.g. `"build": {"dockerfile":
+"../containers/Containerfile"}` in `devcontainer.json` — so there is
+exactly one toolchain definition instead of two that merely agree today by
+manual upkeep.
+
+### Future: registry caching
+
+Right now every CI run builds `containers/Containerfile` from scratch (the
+apt layer costs roughly 2-4 minutes) since nothing pushes the resulting
+image anywhere durable. If CI minutes become a concern, the obvious speedup
+is to push the image to a registry (GHCR is the natural choice given this
+already lives on GitHub) tagged by the same Containerfile-hash scheme
+`scripts/container_build.sh` already uses locally, and have the workflow
+pull-if-present before falling back to building. Deliberately not done yet:
+it adds a registry-auth/push surface to a workflow that currently needs
+none, and the config surface here is still young enough that keeping the
+workflow thin seemed more valuable than the minutes saved.
+
 ## Open problems / TODOs left for later work
 
 - `N64RECOMP_HOST_TOOL`/`RSPRECOMP_HOST_TOOL` are imported by path, not
