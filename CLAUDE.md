@@ -202,8 +202,10 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    persistence deferred (see candidates).
 5. Gamepad: hotplug mid-game unverified (everything else owner-verified);
    `[input]` stick knobs shipped, owner feel-check pending.
-6. Upstream: submit `patches/n64modernruntime-orderly-shutdown.patch` as a
-   N64ModernRuntime PR (owner decision on fork vs. patch-carry; drop the
-   patch file once merged). Report candidates: RT64 letterbox-band color
-   bug (vanilla-only cosmetic; `letterbox-full-height.md` §4);
-   RT64-bundled nativefiledialog null-dbus abort (container-only).
+6. Upstream: owner decided (2026-07-29) **not** to pursue a N64ModernRuntime
+   PR for the orderly-shutdown patch — we carry it in `patches/`
+   indefinitely (an upstream *issue* with repro + patch link remains an
+   option if the owner ever wants it). Report candidates unchanged: RT64
+   letterbox-band color bug (vanilla-only cosmetic;
+   `letterbox-full-height.md` §4); RT64-bundled nativefiledialog null-dbus
+   abort (container-only).
