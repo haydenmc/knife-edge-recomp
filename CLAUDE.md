@@ -47,12 +47,17 @@ knobs (`[input]` config section — `stick_deadzone`/`stick_curve`/
 `stick_sensitivity`, defaults reproducing shipped behavior; host input
 shaping, not enhancements, active in every profile).
 
-Known defect (2026-07-29, under investigation): Ctrl-C shutdown segfaults
-on the owner's host (crash in RT64 `setVertexCommon` reading
-RDRAM-relative memory — a teardown-order race) and the quit path hangs
-headless in the container (process outlives SIGINT by 5+ s). Likely one
-teardown-ordering story; SDL turns SIGINT into SDL_QUIT →
-`ultramodern::quit()`.
+Shutdown segfault on quit: **fixed** (628ced4). Root cause was librecomp's
+`recomp::start()` munmap'ing RDRAM while the game's `osCreateThread`
+threads still run recompiled code (our 1 ms spin-yield hooks re-touch RDRAM
+constantly, making it deterministic). Fix is on our side:
+`RT64Context::shutdown()` flushes audio/stdio and `_Exit(0)`s at the last
+coherent moment — safe while `save_type` is `SaveType::None`; **revisit if
+the virtual Controller Pak candidate ever lands**. Two upstream report
+candidates fell out: the librecomp unmap-while-threads-live defect, and
+RT64's bundled nativefiledialog aborting on an unguarded
+`dbus_connection_unref` when no session bus exists (container-only; masked
+the segfault until repro ran under `dbus-run-session`).
 
 Agreed order for the rest: mouse aim → containerized builds → Flatpak →
 high framerate. Rationale: gamepad before mouse aim (both touch
@@ -188,7 +193,7 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    persistence deferred (see candidates).
 5. Gamepad: hotplug mid-game unverified (everything else owner-verified);
    stick-response `[input]` knobs designed, implementation pending.
-6. Shutdown segfault/hang on quit (see Status) — root-cause investigation
-   in progress.
-7. RT64 letterbox-band color bug (vanilla-only cosmetic; see
-   `letterbox-full-height.md` §4) — decide whether to report upstream.
+6. Upstream report candidates: RT64 letterbox-band color bug (vanilla-only
+   cosmetic; `letterbox-full-height.md` §4); librecomp teardown
+   unmap-while-threads-live (see Status, fixed on our side in 628ced4);
+   RT64-bundled nativefiledialog null-dbus abort (container-only).
