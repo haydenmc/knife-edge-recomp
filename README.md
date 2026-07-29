@@ -180,14 +180,34 @@ clamped), and mouse buttons map to N64 buttons:
 | Z | Middle click |
 
 That mapping is a first cut, not yet confirmed hands-on — which button
-should fire the vulcan is still open. Turn mouse aim off, or tune its
-sensitivity, with the `[input]` table's `mouse_aim` and
-`mouse_sensitivity` keys — see "Configuration" below. One honest caveat:
-the game samples input once per game frame (~15 Hz, same as the pad — see
-below), so the reticle updates at that same game rate no matter how
-smoothly the mouse itself moves. That's inherent to the current build, not
-a bug in the mouse handling; fully smooth aim is coupled to the (not yet
-started) high-framerate enhancement.
+should fire the vulcan is still open.
+
+There are two ways mouse motion can be turned into aim, chosen with the
+`[input]` table's `mouse_mode` key:
+
+- `positional` (default) — the reticle follows the mouse **1:1 and
+  absolutely**: move the mouse an inch and the reticle moves the
+  corresponding distance, then stops there. This is a closed loop on the
+  game's own reticle position, so it needs no drift correction and never
+  overshoots. `mouse_sensitivity` scales how far the reticle travels per
+  unit of mouse movement.
+- `velocity` — mouse *speed* maps to stick deflection, so the reticle keeps
+  drifting for as long as the mouse keeps moving. This was the original
+  mapping; it is kept because it needs no knowledge of the game's state at
+  all.
+
+`mouse_invert_y` (off by default) inverts the vertical axis in both modes.
+Off means mouse-up aims up; on restores the game's own flight-style
+inverted aim. Turn mouse aim off entirely with `mouse_aim` — see
+"Configuration" below. The full reverse-engineering behind positional mode
+is in `analysis/docs/mouse-aim.md`.
+
+One honest caveat that applies to both modes: the game samples input once
+per game frame (~15 Hz, same as the pad — see below) and moves the reticle
+by a fixed amount per frame, so the reticle updates at that same game rate
+no matter how smoothly the mouse itself moves. That's inherent to the
+current build, not a bug in the mouse handling; fully smooth aim is coupled
+to the (not yet started) high-framerate enhancement.
 
 The game samples the controller once per game frame (~15 Hz — see
 `analysis/docs/timing-and-mission-debug.md`), the same as on console, so a key
@@ -243,7 +263,9 @@ stderr.
 | `stick_curve` | `1.0` | `0.25`–`4.0` | Response exponent applied after the deadzone rescale; `>1.0` gives finer control near center without changing full deflection. |
 | `stick_sensitivity` | `1.0` | `0.1`–`3.0` | Multiplier applied after the curve; `>1.0` reaches full deflection before the stick is maxed out, `<1.0` caps below full deflection. |
 | `mouse_aim` | `true` | boolean | Master switch for mouse aim (see Controls above). `false` disables capture-on-click entirely. |
-| `mouse_sensitivity` | `1.0` | `0.05`–`20.0` | Multiplier on mouse-derived stick deflection. |
+| `mouse_sensitivity` | `1.0` | `0.05`–`20.0` | Multiplier on mouse-derived aiming: reticle travel per unit of mouse movement in `positional` mode, stick deflection per unit of mouse *speed* in `velocity` mode. |
+| `mouse_mode` | `"positional"` | `"positional"` \| `"velocity"` | How mouse motion becomes aim — 1:1 absolute reticle following, or mouse-speed-to-stick drift. See Controls above. |
+| `mouse_invert_y` | `false` | boolean | Inverts the vertical mouse axis in both modes. Off is mouse-up = reticle-up; on restores the game's own flight-style inverted aim. |
 
 ## Regenerating from a ROM
 

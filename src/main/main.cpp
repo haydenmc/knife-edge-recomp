@@ -249,6 +249,22 @@ namespace {
     std::atomic<bool> mouse_aim_enabled{true};
     std::atomic<float> mouse_sensitivity{1.0f};
 
+    // config.input.mouse_mode / mouse_invert_y (see MouseMode in config.h and
+    // analysis/docs/mouse-aim.md). Set once at startup like the two above and
+    // read once per get_input() call. `positional` is the default mapping.
+    std::atomic<bool> mouse_mode_positional{true};
+    std::atomic<bool> mouse_invert_y{false};
+
+    // Window height in pixels, republished by update_gfx() once per pass and
+    // read by get_input()'s positional controller, which needs it to convert
+    // mouse pixels into the game's own reticle units. Those units are N64
+    // pixels of the 240-line frame -- measured: at 1280x720 the reticle moves
+    // exactly 3.0 host px per unit, i.e. window_h / 240 (see
+    // analysis/docs/mouse-aim.md). Sampled rather than assumed so the mapping
+    // survives a window resize. The initial value matches create_window()'s
+    // 1280x720.
+    std::atomic<int> window_height{720};
+
     // Whether the pointer is currently captured (relative-mouse-mode). Only
     // SDL_SetRelativeMouseMode/capture-state transitions happen in
     // update_gfx() on the event thread, which is also the only writer of
@@ -414,6 +430,18 @@ namespace {
             }
         }
 
+        // Republish the window height for get_input()'s positional mouse
+        // controller (see window_height above). Once per pass, on the thread
+        // that owns the SDL window, rather than from the input thread.
+        if (window != nullptr) {
+            int w = 0;
+            int h = 0;
+            SDL_GetWindowSize(window, &w, &h);
+            if (h > 0) {
+                window_height.store(h, std::memory_order_relaxed);
+            }
+        }
+
         // Sample every open pad and publish the combined state (see
         // open_controllers/pad_buttons above for the threading rationale and
         // the multi-pad-as-controller-1 rationale).
@@ -484,6 +512,82 @@ namespace {
         pad_stick_y.store(std::clamp(stick_y, -1.0f, 1.0f), std::memory_order_relaxed);
     }
 
+    // ---- positional mouse aim ---------------------------------------------
+    //
+    // The game's reticle is not a position the host can write; it is an
+    // integrator the game advances by a fixed number of units per game frame,
+    // and the size of that step is a staircase function of the stick byte it
+    // reads. Measured against a live mission (all 34 sample points on both
+    // axes fit, see analysis/docs/mouse-aim.md):
+    //
+    //     units_per_frame = clamp(floor((|stick| - 5) * 20 / 58), 0, 20)
+    //
+    // so a stick below 8 does nothing, 63 already saturates at 20 units/frame
+    // (half the s8 range is dead weight), and there is no auto-centering --
+    // release the stick and the reticle simply stays put. That makes an exact
+    // deadbeat controller possible: each frame, ask for the step that closes
+    // the remaining error.
+    //
+    // mouse_step_thresholds[k-1] is the smallest stick magnitude that yields k
+    // units/frame.
+    constexpr int mouse_max_step = 20;
+    constexpr int mouse_step_thresholds[mouse_max_step] = {
+        8, 11, 14, 17, 20, 23, 26, 29, 32, 34, 37, 40, 43, 46, 49, 52, 55, 58, 61, 63,
+    };
+
+    // Stick magnitude (0..127) that makes the game move the reticle `step`
+    // units on its next frame. Aims one past the threshold so it lands inside
+    // the band rather than on its edge -- the narrowest band is 2 wide, so
+    // this is always still the right band, and it costs nothing to be robust
+    // to the curve fit being a unit off anywhere. Saturation is asked for at
+    // 80 rather than 63: there is no step above 20 to overshoot into, so the
+    // extra margin is free.
+    int mouse_stick_for_step(int step) {
+        if (step <= 0) {
+            return 0;
+        }
+        if (step >= mouse_max_step) {
+            return 80;
+        }
+        return mouse_step_thresholds[step - 1] + 1;
+    }
+
+    // Deadbeat law for one axis. floor(), not round(): commanding fewer units
+    // than remain can never overshoot, so the reticle walks onto the target
+    // monotonically and stops -- no dither, no oscillation. The cost is
+    // settling up to 1 unit short, which is ~3 host pixels at 720p.
+    int mouse_step_for_error(float err) {
+        const int step = std::min(static_cast<int>(std::floor(std::fabs(err))), mouse_max_step);
+        const int mag = mouse_stick_for_step(step);
+        return err < 0.0f ? -mag : mag;
+    }
+
+    // The per-VI-retrace callback the game registers while a mission is
+    // running: func_8019CF84 of seg_1501A0, the shared in-game code overlay.
+    // Every screen registers its own callback (see src/main/rcp_timing.cpp's
+    // header comment), so this value names the screen, and it is the only
+    // cheap test for "a mission is actually running" -- the reticle words
+    // cannot answer that, since nothing zeroes them on mission exit.
+    //
+    // Measured 300/300 samples in a mission and 400/400 on the attract screen
+    // (which reads 0x801DC3E4 there); seg_1501A0 is shared by every stage, so
+    // this is stage-independent. Evidence and the leak that motivated the gate
+    // are in analysis/docs/mouse-aim.md sections 6.2 and 9.
+    constexpr uint32_t mission_retrace_callback = 0x8019CF84u;
+
+    // Stick byte -> the float ultramodern will convert back into exactly that
+    // byte. deps/N64ModernRuntime/ultramodern/src/input.cpp:154 does
+    // `data[controller].stick_x = (int8_t)(127 * x)`, a C truncation toward
+    // zero, so every x in [s/127, (s+1)/127) yields s; the midpoint keeps the
+    // most room on both sides for float rounding.
+    float mouse_stick_axis(int s) {
+        if (s == 0) {
+            return 0.0f;
+        }
+        const float mag = (static_cast<float>(std::abs(s)) + 0.5f) / 127.0f;
+        return s > 0 ? mag : -mag;
+    }
+
     bool get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
         if (controller_num != 0) {
             return false;
@@ -508,13 +612,15 @@ namespace {
 
         // Mouse aim: drain the motion accumulated by update_gfx() since the
         // last call (zero if not captured -- update_gfx() only accumulates
-        // while mouse_captured_local is set), convert to a velocity with a
-        // measured dt so deflection doesn't depend on how often this
-        // function happens to be called, then fold into the same axis sum
-        // keyboard/pad already go through. This function runs on a ~15 Hz
-        // thread separate from the event thread that writes the
-        // accumulators (see the atomics above), so dt is measured here
-        // rather than assumed.
+        // while mouse_captured_local is set), turn it into a stick deflection
+        // by whichever of the two mappings is configured, then fold that into
+        // the same axis sum keyboard/pad already go through.
+        //
+        // dt below is measured rather than assumed because this function runs
+        // on its own thread, driven by the game's controller read, at a rate
+        // it does not control (measured: ~3.2 calls per game frame). Only the
+        // velocity mapping needs it -- the positional controller is driven by
+        // the game's own frame counter instead, which is the point of it.
         const float mouse_dx = mouse_accum_x.exchange(0.0f, std::memory_order_relaxed);
         const float mouse_dy = mouse_accum_y.exchange(0.0f, std::memory_order_relaxed);
         static std::chrono::steady_clock::time_point last_mouse_read{};
@@ -530,11 +636,124 @@ namespace {
         }
         last_mouse_read = now;
         const float sens = mouse_sensitivity.load(std::memory_order_relaxed);
-        // Full deflection at 500 px/s of mouse travel at sensitivity 1.0.
-        // Y is negated: SDL's yrel is down-positive, but up-positive matches
-        // the keyboard binding's W=+1 and the pad's convention above.
-        const float mouse_x = (mouse_dx / dt) * sens / 500.0f;
-        const float mouse_y = -(mouse_dy / dt) * sens / 500.0f;
+
+        // Vertical sign. SDL's yrel is down-positive and the game's reticle
+        // value is ALSO down-positive (a stick pushed up drives the reticle
+        // down -- the game aims flight-inverted; measured, see
+        // analysis/docs/mouse-aim.md). So passing yrel straight through gives
+        // mouse-down = reticle-down, i.e. the non-inverted convention, and
+        // mouse_invert_y flips it back to the game's own. This is also the fix
+        // for the velocity path below, which used to negate yrel on the
+        // assumption that stick +y meant "up" -- as shipped, moving the mouse
+        // up aimed DOWN.
+        const float ysign = mouse_invert_y.load(std::memory_order_relaxed) ? -1.0f : 1.0f;
+
+        float mouse_x = 0.0f;
+        float mouse_y = 0.0f;
+        if (mouse_mode_positional.load(std::memory_order_relaxed)) {
+            const kerecomp::ReticleState reticle = kerecomp::reticle_state();
+
+            // Function-local: get_input() is the only reader of the published
+            // reticle state and runs on one thread, so the loop's own memory
+            // needs no synchronization.
+            static float target_x = 0.0f;
+            static float target_y = 0.0f;
+            static uint32_t last_clock = 0;
+            static std::chrono::steady_clock::time_point last_step{};
+            static std::chrono::steady_clock::time_point last_motion{};
+            static bool have_step = false;
+            static bool have_motion = false;
+
+            if (reticle.clock != last_clock) {
+                last_clock = reticle.clock;
+                last_step = now;
+                have_step = true;
+            }
+            if (mouse_dx != 0.0f || mouse_dy != 0.0f) {
+                last_motion = now;
+                have_motion = true;
+            }
+
+            // Three gates; ALL must hold or the loop stays open (zero mouse
+            // contribution) and the target is resynced to wherever the reticle
+            // actually is, so re-engaging never starts with a stale error.
+            // They are layered deliberately, coarsest first:
+            //
+            //  1. A mission is running, i.e. the game's per-retrace callback is
+            //     the in-mission one. This is the discriminator, and it FAILS
+            //     CLOSED: any screen or game mode this code has not anticipated
+            //     registers some other callback, so aim goes quiet there rather
+            //     than emitting stick input into a menu. That is the right way
+            //     round -- inert aim is a visible annoyance, phantom menu input
+            //     is a corrupting one.
+            //
+            //     It is load-bearing, not belt-and-braces: gate 2 alone does
+            //     not keep the front end safe, because the attract/demo screens
+            //     tick the same counter once per frame exactly as a mission
+            //     does. Measured, with the pointer captured and the mouse moved
+            //     continuously for 30 s at attract, gates 2+3 alone left the
+            //     game's stick byte saturated at +-80 for 17.4% of samples --
+            //     the reticle words are frozen there, so the error never closes
+            //     and the controller never stops commanding.
+            //
+            //  2. The game stepped RECENTLY. Kills aim while the world is
+            //     frozen inside a mission (a pause, a load, a cutscene): the
+            //     reticle cannot move then, so chasing it would just wind the
+            //     target up against a value that never changes.
+            //
+            //     Deliberately a time window and not "the clock changed since
+            //     the previous call": this function is driven by the game's
+            //     controller read, which measurement puts at ~3.2 calls per
+            //     game frame (median 2, and hundreds while a load or cutscene
+            //     holds the world still). Testing for a change per call would
+            //     therefore fail on roughly two calls in three purely from
+            //     sampling faster than the thing being sampled, and each
+            //     failure would resync the target -- which empirically zeroed
+            //     the output entirely. 250 ms is ~7 game frames at the current
+            //     pace and ~4 at the console-faithful 15 fps, so a live world
+            //     always passes and a genuinely stopped one trips it well
+            //     inside gate 3's window.
+            //
+            //  3. The mouse moved within the last second, which bounds whatever
+            //     residual exposure the first two leave. A full-width chase is
+            //     256 units = 13 frames = ~0.5 s at the measured 20
+            //     units/frame, so this never truncates a real flick; it is
+            //     what stops the loop from holding a deflection indefinitely.
+            const bool in_mission = reticle.retrace_callback == mission_retrace_callback;
+            const bool stepped = have_step &&
+                std::chrono::duration<float>(now - last_step).count() <= 0.25f;
+            const bool recent = have_motion &&
+                std::chrono::duration<float>(now - last_motion).count() <= 1.0f;
+
+            if (!in_mission || !stepped || !recent) {
+                target_x = static_cast<float>(reticle.x);
+                target_y = static_cast<float>(reticle.y);
+            } else {
+                // Mouse pixels -> reticle units. Reticle units are N64 pixels
+                // of the 240-line frame, so one unit is window_h/240 host
+                // pixels (measured exactly 3.0 at 720p) and the inverse is
+                // 240/window_h. Sensitivity scales that mapping, which makes
+                // it a plain "reticle travel per inch of mouse" knob.
+                const int win_h = window_height.load(std::memory_order_relaxed);
+                const float px_to_units = (240.0f / static_cast<float>(win_h > 0 ? win_h : 720)) * sens;
+                target_x += mouse_dx * px_to_units;
+                target_y += ysign * mouse_dy * px_to_units;
+                // Clamp to the measured rails (stage-independent). The game
+                // clamps hard there itself, so without this the target would
+                // wind up past a reticle that has stopped following.
+                target_x = std::clamp(target_x, -128.0f, 128.0f);
+                target_y = std::clamp(target_y, -84.0f, 84.0f);
+
+                mouse_x = mouse_stick_axis(mouse_step_for_error(target_x - static_cast<float>(reticle.x)));
+                mouse_y = mouse_stick_axis(mouse_step_for_error(target_y - static_cast<float>(reticle.y)));
+            }
+        } else {
+            // Velocity mapping: full deflection at 500 px/s of mouse travel at
+            // sensitivity 1.0. Open loop -- the reticle drifts for as long as
+            // the mouse keeps moving.
+            mouse_x = (mouse_dx / dt) * sens / 500.0f;
+            mouse_y = ysign * (mouse_dy / dt) * sens / 500.0f;
+        }
 
         *x = std::clamp(kx + pad_stick_x.load(std::memory_order_relaxed) + mouse_x, -1.0f, 1.0f);
         *y = std::clamp(ky + pad_stick_y.load(std::memory_order_relaxed) + mouse_y, -1.0f, 1.0f);
@@ -625,6 +844,9 @@ int main(int argc, char** argv) {
     stick_sensitivity.store(static_cast<float>(config.input.stick_sensitivity), std::memory_order_relaxed);
     mouse_aim_enabled.store(config.input.mouse_aim, std::memory_order_relaxed);
     mouse_sensitivity.store(static_cast<float>(config.input.mouse_sensitivity), std::memory_order_relaxed);
+    mouse_mode_positional.store(config.input.mouse_mode == kerecomp::MouseMode::Positional,
+                                std::memory_order_relaxed);
+    mouse_invert_y.store(config.input.mouse_invert_y, std::memory_order_relaxed);
 
     // enhancements.high_resolution / .widescreen (analysis/docs/enhancements.md).
     // Must be set before recomp::start() below spins up the gfx thread, since

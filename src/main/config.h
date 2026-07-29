@@ -72,6 +72,21 @@ struct TuningFlags {
     double rcp_frame_ms = 0.0;
 };
 
+// How mouse motion is turned into stick deflection (src/main/main.cpp's
+// get_input(); the full RE and controller design are in
+// analysis/docs/mouse-aim.md).
+enum class MouseMode {
+    // Closed loop on the game's own reticle position: mouse travel moves a
+    // target in reticle units and a deadbeat controller emits whatever stick
+    // deflection walks the reticle onto it. 1:1 and absolute -- the same
+    // mouse travel always produces the same on-screen movement.
+    Positional,
+    // Open loop: mouse speed maps directly to stick deflection, so the
+    // reticle drifts while the mouse moves. The original mouse-aim mapping,
+    // kept because it needs no reticle state at all.
+    Velocity,
+};
+
 // Analog-stick response shaping -- host input-device tuning, NOT enhancements
 // (the pad itself is not an enhancement either; see the gamepad commit).
 // Applies in every profile, vanilla included: it shapes how the host stick
@@ -88,8 +103,19 @@ struct InputTuning {
     // hardware analog either way, so this defaults on as a QoL convenience
     // available regardless of profile, same as the stick tuning above.
     bool mouse_aim = true;
-    // Multiplier on mouse-derived stick deflection. Range [0.05, 20.0].
+    // Multiplier on mouse-derived stick deflection. Range [0.05, 20.0]. In
+    // positional mode it scales the pixels-to-reticle-units mapping instead,
+    // i.e. it is a straightforward "how far the reticle goes per inch of
+    // mouse" knob rather than a deflection multiplier.
     double mouse_sensitivity = 1.0;
+    // Positional (default) or velocity mouse-to-stick mapping; see MouseMode.
+    MouseMode mouse_mode = MouseMode::Positional;
+    // Inverts the vertical mouse axis in BOTH modes. Default (off) is
+    // mouse-up = reticle-up. The game's own aiming is flight-inverted (a
+    // stick pushed up drives the reticle DOWN -- measured, see
+    // analysis/docs/mouse-aim.md), so turning this on restores that
+    // convention for players who prefer it.
+    bool mouse_invert_y = false;
 };
 
 struct Config {

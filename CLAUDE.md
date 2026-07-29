@@ -68,15 +68,27 @@ RT64's bundled nativefiledialog aborting on an unguarded
 `dbus_connection_unref` when no session bus exists (container-only; masked
 the segfault until repro ran under `dbus-run-session`).
 
-Agreed order for the rest: mouse aim → containerized builds → Flatpak →
-high framerate. Rationale: gamepad before mouse aim (both touch
-`get_input`'s axis path; gamepad was the simpler pattern-setter),
-containerized builds before Flatpak (a reproducible container build is the
-substrate the Flatpak manifest reuses), Flatpak once the config surface
-stops churning, high framerate last because it is the deepest
-timing-sensitive cut. Mouse aim caveat: reticle updates at game rate
-(~15 Hz pad sampling) regardless of input smoothness — fully smooth aim is
-coupled to the high-framerate work.
+Mouse aim shipped (2026-07-29) — host input support like the pad, `[input]`
+keys, active in every profile. Two modes: `mouse_mode = "positional"`
+(default; closed-loop deadbeat controller driving the game's own reticle
+integrator via the stick — the full RE and controller design are in
+`analysis/docs/mouse-aim.md`, including the owner-seeded reticle addresses,
+the measured deflection→step curve, and the three-layer gate that keeps it
+inert outside missions) and `"velocity"` (FPS-style fallback). Also
+`mouse_invert_y` (the game aims flight-inverted; default un-inverts).
+Click captures / Esc releases; L/R/M buttons → A/B/Z (first cut). Verified
+headless including a closed-loop tracking test (zero overshoot) and a
+0/5938 menu-safety re-measurement; **owner hands-on pending** (positional
+vs velocity A/B, sensitivity default, which button should fire, and §9.1's
+watch-item: aim going inert in any untested in-mission variant). Reticle
+updates at game rate (~26.7 Hz at current budget) regardless of mouse
+smoothness — fully smooth aim is coupled to the high-framerate work.
+
+Agreed order for the rest: containerized builds → Flatpak → high
+framerate. Rationale: containerized builds before Flatpak (a reproducible
+container build is the substrate the Flatpak manifest reuses), Flatpak
+once the config surface stops churning, high framerate last because it is
+the deepest timing-sensitive cut.
 
 RCP frame budget: **36.5 ms** (~24.6 measured game fps), tuned by the owner
 against real N64 gameplay footage. This replaced an earlier 59.733 ms figure
@@ -132,6 +144,7 @@ binary embeds no ROM data before publishing.
 | `analysis/docs/audio.md` | Locating/recompiling the audio microcode; the SDL sink. |
 | `analysis/docs/overlay-tracking.md` | Why overlay DMA is hooked and how. |
 | `analysis/docs/enhancements.md` | **Read before adding any feature.** Policy, mechanism menu, current flags, deferred candidates. |
+| `analysis/docs/mouse-aim.md` | The aiming reticle in RDRAM: layout + byte-order proof, 20-units/frame step and its stick-deflection curve, no auto-centering, out-of-mission staleness, and which word actually means "in a mission" (§6.2). Then the positional (closed-loop) mouse controller built on it, its three gates, and the fail-closed limitation that buys (§9.1). |
 | `analysis/docs/build-notes.md` | CMake/dependency integration details. |
 
 Git history is deliberately verbose — commit messages carry root causes and
@@ -197,12 +210,14 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    confounded by the title screen auto-advancing and cannot decide it.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
-4. Enhancements not yet started, in agreed order (see Status): mouse aim,
+4. Enhancements not yet started, in agreed order (see Status):
    containerized builds, Flatpak packaging, high framerate. High-score
    persistence deferred (see candidates).
-5. Gamepad: hotplug mid-game unverified (everything else owner-verified);
+5. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
+   fire-button mapping, `mouse-aim.md` §9.1 inert-aim watch-item).
+6. Gamepad: hotplug mid-game unverified (everything else owner-verified);
    `[input]` stick knobs shipped, owner feel-check pending.
-6. Upstream: owner decided (2026-07-29) **not** to pursue a N64ModernRuntime
+7. Upstream: owner decided (2026-07-29) **not** to pursue a N64ModernRuntime
    PR for the orderly-shutdown patch — we carry it in `patches/`
    indefinitely (an upstream *issue* with repro + patch link remains an
    option if the owner ever wants it). Report candidates unchanged: RT64

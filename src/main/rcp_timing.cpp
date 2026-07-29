@@ -57,6 +57,12 @@
 #include <cstdlib>
 #include <cstdint>
 
+// For the MEM_* accessors used by the reticle publisher below. librecomp
+// stores game RAM byte-swapped within each 32-bit word, so reading it by hand
+// is a standing bug waiting to happen; these are the same macros the
+// recompiled code itself uses.
+#include "recomp.h"
+
 #include "support.h"
 
 // ultramodern/src/scheduling.cpp. Waits up to 1 ms for an external message,
@@ -141,6 +147,58 @@ namespace {
         clock_type::time_point seen = idle_wait_seen.load(std::memory_order_relaxed);
         return clock_type::now() - seen <= idle_wait_live;
     }
+
+    // ---- reticle publisher (analysis/docs/mouse-aim.md) -------------------
+    //
+    // Positional mouse aim has to know where the game currently thinks the
+    // reticle is, and this file's ke_gfx_task_end() is the project's only
+    // per-game-frame hook that is handed `rdram` -- the game advances the
+    // world exactly once per submitted display list (see the header comment),
+    // so a read here samples every frame and never twice within one. That is
+    // the whole reason this lives in the pacing file rather than beside the
+    // controller in main.cpp.
+    //
+    // Addresses must be SIGN-EXTENDED (CLAUDE.md's first gotcha): MEM_W
+    // indexes rdram as `addr - 0xFFFFFFFF80000000`, so a bare positive
+    // 0x8011D4BC would read ~4 GB out of bounds.
+    constexpr gpr reticle_x_addr = static_cast<gpr>(static_cast<int32_t>(0x8011D4BC));
+    constexpr gpr reticle_y_addr = static_cast<gpr>(static_cast<int32_t>(0x8011D4CC));
+    constexpr gpr mission_clock_addr = static_cast<gpr>(static_cast<int32_t>(0x8011D1CC));
+    // The game's per-VI-retrace callback pointer (func_800D1640 stores it here;
+    // func_800D2930 dispatches it -- see this file's header comment). Whichever
+    // screen is running owns it, so its value names the screen. Published so
+    // get_input() can tell "in a mission" from "in the front end", which the
+    // reticle words alone cannot do: nothing zeroes them on mission exit, so a
+    // menu legitimately reads a stale +-128/+-84.
+    constexpr gpr retrace_callback_addr = static_cast<gpr>(static_cast<int32_t>(0x800EBC00));
+
+    // Written only here (on the game's graphics task thread), read only by
+    // get_input() on the controller-read thread. Relaxed is right for the same
+    // reason as main.cpp's input atomics: three independent scalars whose
+    // slight skew across one frame boundary is indistinguishable from sampling
+    // a frame earlier, which the controller already tolerates.
+    std::atomic<int32_t> reticle_x{0};
+    std::atomic<int32_t> reticle_y{0};
+    std::atomic<uint32_t> mission_clock{0};
+    std::atomic<uint32_t> retrace_callback{0};
+
+    void publish_reticle_state(uint8_t* rdram) {
+        reticle_x.store(MEM_W(0, reticle_x_addr), std::memory_order_relaxed);
+        reticle_y.store(MEM_W(0, reticle_y_addr), std::memory_order_relaxed);
+        mission_clock.store(static_cast<uint32_t>(MEM_W(0, mission_clock_addr)),
+                            std::memory_order_relaxed);
+        retrace_callback.store(static_cast<uint32_t>(MEM_W(0, retrace_callback_addr)),
+                               std::memory_order_relaxed);
+    }
+}
+
+kerecomp::ReticleState kerecomp::reticle_state() {
+    ReticleState state;
+    state.x = reticle_x.load(std::memory_order_relaxed);
+    state.y = reticle_y.load(std::memory_order_relaxed);
+    state.clock = mission_clock.load(std::memory_order_relaxed);
+    state.retrace_callback = retrace_callback.load(std::memory_order_relaxed);
+    return state;
 }
 
 // Hooked at the game's osSpTaskStartGo call site: the RCP has just been handed
@@ -154,6 +212,10 @@ extern "C" void ke_gfx_task_begin(void) {
 // game's per-retrace callback reads). Holds the completion until the modelled
 // RCP frame time has elapsed.
 extern "C" void ke_gfx_task_end(uint8_t* rdram) {
+    // Ahead of the budget check below so the reticle keeps being published
+    // even with pacing disabled (KE_RCP_FRAME_MS=0), where this early-returns.
+    publish_reticle_state(rdram);
+
     double budget = frame_budget_ms();
     if (budget <= 0.0) {
         return;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 
 // Small helpers used by main.cpp. Kept deliberately tiny for this skeleton;
@@ -37,6 +38,30 @@ namespace kerecomp {
     // The KE_RCP_FRAME_MS env var still takes precedence when set. Call once,
     // before recomp::start(), with the resolved kerecomp::Config's value.
     void set_rcp_frame_ms_tuning(double ms);
+
+    // ---- mouse aim (analysis/docs/mouse-aim.md, src/main/rcp_timing.cpp) ----
+    // The game's aiming state, sampled out of game RAM once per game frame and
+    // published for src/main/main.cpp's get_input() to close its positional
+    // mouse-aim loop on. Read-only with respect to game memory.
+    //
+    // x/y are the reticle position in N64 pixels relative to the center of the
+    // in-mission viewport (+x right, +y DOWN); measured ranges are x [-128,
+    // +128] and y [-84, +84]. `clock` is the game's own per-frame counter
+    // (0x8011D1CC): it advances by 1 per game frame while a mission runs, so a
+    // change in it is the "the world stepped" signal the controller gates on.
+    // `retrace_callback` is the game's per-VI-retrace callback pointer
+    // (0x800EBC00), which identifies WHICH screen is running and is therefore
+    // the "are we in a mission at all" test -- the reticle words themselves
+    // cannot answer that, since nothing zeroes them on mission exit. Published
+    // raw rather than as a bool so a diagnostic can report what it actually
+    // was; see analysis/docs/mouse-aim.md sections 6.2 and 9.
+    struct ReticleState {
+        int32_t x = 0;
+        int32_t y = 0;
+        uint32_t clock = 0;
+        uint32_t retrace_callback = 0;
+    };
+    ReticleState reticle_state();
 
     // ---- enhancements (analysis/docs/enhancements.md, src/main/full_height.cpp) --
     // Turns the full_height enhancement on/off (removes the in-mission

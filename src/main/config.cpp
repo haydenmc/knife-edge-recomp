@@ -17,6 +17,7 @@ namespace {
     using kerecomp::Config;
     using kerecomp::EnhancementFlags;
     using kerecomp::InputTuning;
+    using kerecomp::MouseMode;
     using kerecomp::Profile;
     using kerecomp::TuningFlags;
 
@@ -52,6 +53,12 @@ namespace {
         if (s == "vanilla") { out = Profile::Vanilla; return true; }
         if (s == "enhanced") { out = Profile::Enhanced; return true; }
         if (s == "custom") { out = Profile::Custom; return true; }
+        return false;
+    }
+
+    bool parse_mouse_mode_name(std::string_view s, MouseMode& out) {
+        if (s == "positional") { out = MouseMode::Positional; return true; }
+        if (s == "velocity") { out = MouseMode::Velocity; return true; }
         return false;
     }
 
@@ -112,8 +119,16 @@ namespace {
         "# mouse motion (added to the control stick); Esc releases capture.\n"
         "# While captured, left/right/middle mouse buttons map to A/B/Z.\n"
         "mouse_aim = true\n"
-        "# Multiplier on mouse-derived stick deflection. Range [0.05, 20.0].\n"
-        "mouse_sensitivity = 1.0\n";
+        "# Multiplier on mouse-derived aiming. Range [0.05, 20.0].\n"
+        "mouse_sensitivity = 1.0\n"
+        "# \"positional\" (default): the reticle is driven to follow the mouse 1:1,\n"
+        "#   closed-loop on the game's own reticle position (analysis/docs/mouse-aim.md).\n"
+        "# \"velocity\": mouse speed maps to stick deflection, so the reticle drifts\n"
+        "#   while the mouse moves.\n"
+        "mouse_mode = \"positional\"\n"
+        "# Inverts the vertical mouse axis in both modes. Off (default) is\n"
+        "# mouse-up = reticle-up; on restores the game's own flight-inverted aim.\n"
+        "mouse_invert_y = false\n";
 
     // Parses argv for --profile <name> and --config <path> only, matching
     // main.cpp's existing minimal --rom parsing style.
@@ -221,7 +236,8 @@ namespace {
             for (auto&& [key, value] : *input_tbl) {
                 std::string_view k = key.str();
                 if (k != "stick_deadzone" && k != "stick_curve" && k != "stick_sensitivity" &&
-                    k != "mouse_aim" && k != "mouse_sensitivity") {
+                    k != "mouse_aim" && k != "mouse_sensitivity" && k != "mouse_mode" &&
+                    k != "mouse_invert_y") {
                     unknown.emplace_back(std::string("input.") + std::string(k));
                 }
             }
@@ -244,6 +260,25 @@ namespace {
             }
             if (auto v = (*input_tbl)["mouse_sensitivity"].value<double>()) {
                 cfg.input.mouse_sensitivity = clamp_input_value("mouse_sensitivity", *v, 0.05, 20.0);
+            }
+            // An unrecognized mode name warns and leaves the default, the same
+            // shape as profile.active's typo handling above (a mistyped mode
+            // shouldn't silently change how aiming feels).
+            if (auto mode = (*input_tbl).get("mouse_mode")) {
+                if (auto s = mode->value<std::string>()) {
+                    MouseMode m;
+                    if (parse_mouse_mode_name(*s, m)) {
+                        cfg.input.mouse_mode = m;
+                    } else {
+                        warn("input.mouse_mode = \"" + *s + "\" is not one of "
+                             "positional|velocity; using positional");
+                    }
+                } else {
+                    warn("input.mouse_mode is not a string; using positional");
+                }
+            }
+            if (auto v = (*input_tbl)["mouse_invert_y"].value<bool>()) {
+                cfg.input.mouse_invert_y = *v;
             }
         }
 
@@ -374,6 +409,12 @@ std::string kerecomp::describe_config(const Config& cfg) {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "mouse_sensitivity=%.2f", cfg.input.mouse_sensitivity);
         parts.emplace_back(buf);
+    }
+    if (cfg.input.mouse_mode != default_input.mouse_mode) {
+        parts.emplace_back("mouse_mode=velocity");
+    }
+    if (cfg.input.mouse_invert_y) {
+        parts.emplace_back("mouse_invert_y=on");
     }
 
     std::string line = std::string("profile: ") + profile_name(cfg.profile);
