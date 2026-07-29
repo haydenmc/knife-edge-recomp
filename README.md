@@ -168,6 +168,27 @@ step.
 Custom gamepad mappings can be supplied the standard SDL way, via the
 `SDL_GAMECONTROLLERCONFIG` environment variable.
 
+Mouse aim is also available, on by default. Click anywhere in the window to
+capture the pointer; Esc releases it. While captured, mouse motion steers
+the same control stick as the keyboard/gamepad (summed with them, then
+clamped), and mouse buttons map to N64 buttons:
+
+| N64 input | Mouse |
+|---|---|
+| A | Left click |
+| B | Right click |
+| Z | Middle click |
+
+That mapping is a first cut, not yet confirmed hands-on — which button
+should fire the vulcan is still open. Turn mouse aim off, or tune its
+sensitivity, with the `[input]` table's `mouse_aim` and
+`mouse_sensitivity` keys — see "Configuration" below. One honest caveat:
+the game samples input once per game frame (~15 Hz, same as the pad — see
+below), so the reticle updates at that same game rate no matter how
+smoothly the mouse itself moves. That's inherent to the current build, not
+a bug in the mouse handling; fully smooth aim is coupled to the (not yet
+started) high-framerate enhancement.
+
 The game samples the controller once per game frame (~15 Hz — see
 `analysis/docs/timing-and-mission-debug.md`), the same as on console, so a key
 has to be held for a frame to register. The window disables SDL's text input
@@ -221,6 +242,8 @@ stderr.
 | `stick_deadzone` | `0.15` | `0.0`–`0.9` | Radial stick travel around center that's ignored. |
 | `stick_curve` | `1.0` | `0.25`–`4.0` | Response exponent applied after the deadzone rescale; `>1.0` gives finer control near center without changing full deflection. |
 | `stick_sensitivity` | `1.0` | `0.1`–`3.0` | Multiplier applied after the curve; `>1.0` reaches full deflection before the stick is maxed out, `<1.0` caps below full deflection. |
+| `mouse_aim` | `true` | boolean | Master switch for mouse aim (see Controls above). `false` disables capture-on-click entirely. |
+| `mouse_sensitivity` | `1.0` | `0.05`–`20.0` | Multiplier on mouse-derived stick deflection. |
 
 ## Regenerating from a ROM
 

@@ -80,6 +80,16 @@ struct InputTuning {
     double stick_deadzone = 0.15;     // radial, [0.0, 0.9]
     double stick_curve = 1.0;         // response exponent, [0.25, 4.0]
     double stick_sensitivity = 1.0;   // post-curve multiplier, [0.1, 3.0]
+
+    // Master switch for mouse-look input (src/main/main.cpp: click to
+    // capture the pointer, Esc to release; while captured, mouse motion
+    // adds to the control stick and L/R/M buttons map to A/B/Z). Off by
+    // default is NOT vanilla-fidelity policy here -- mouse aim has no N64
+    // hardware analog either way, so this defaults on as a QoL convenience
+    // available regardless of profile, same as the stick tuning above.
+    bool mouse_aim = true;
+    // Multiplier on mouse-derived stick deflection. Range [0.05, 20.0].
+    double mouse_sensitivity = 1.0;
 };
 
 struct Config {

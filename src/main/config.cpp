@@ -107,7 +107,13 @@ namespace {
         "# Multiplier applied after the curve. >1.0 reaches full deflection\n"
         "# before the stick is maxed out; <1.0 caps below full deflection.\n"
         "# Range [0.1, 3.0].\n"
-        "stick_sensitivity = 1.0\n";
+        "stick_sensitivity = 1.0\n"
+        "# Mouse aim: click the window to capture the pointer and steer with\n"
+        "# mouse motion (added to the control stick); Esc releases capture.\n"
+        "# While captured, left/right/middle mouse buttons map to A/B/Z.\n"
+        "mouse_aim = true\n"
+        "# Multiplier on mouse-derived stick deflection. Range [0.05, 20.0].\n"
+        "mouse_sensitivity = 1.0\n";
 
     // Parses argv for --profile <name> and --config <path> only, matching
     // main.cpp's existing minimal --rom parsing style.
@@ -214,7 +220,8 @@ namespace {
         if (const toml::table* input_tbl = tbl["input"].as_table()) {
             for (auto&& [key, value] : *input_tbl) {
                 std::string_view k = key.str();
-                if (k != "stick_deadzone" && k != "stick_curve" && k != "stick_sensitivity") {
+                if (k != "stick_deadzone" && k != "stick_curve" && k != "stick_sensitivity" &&
+                    k != "mouse_aim" && k != "mouse_sensitivity") {
                     unknown.emplace_back(std::string("input.") + std::string(k));
                 }
             }
@@ -229,6 +236,14 @@ namespace {
             }
             if (auto v = (*input_tbl)["stick_sensitivity"].value<double>()) {
                 cfg.input.stick_sensitivity = clamp_input_value("stick_sensitivity", *v, 0.1, 3.0);
+            }
+            // A non-bool value is left at its InputTuning default silently,
+            // same treatment as profile-name typos elsewhere in this file.
+            if (auto v = (*input_tbl)["mouse_aim"].value<bool>()) {
+                cfg.input.mouse_aim = *v;
+            }
+            if (auto v = (*input_tbl)["mouse_sensitivity"].value<double>()) {
+                cfg.input.mouse_sensitivity = clamp_input_value("mouse_sensitivity", *v, 0.05, 20.0);
             }
         }
 
@@ -350,6 +365,14 @@ std::string kerecomp::describe_config(const Config& cfg) {
     if (cfg.input.stick_sensitivity != default_input.stick_sensitivity) {
         char buf[64];
         std::snprintf(buf, sizeof(buf), "stick_sensitivity=%.2f", cfg.input.stick_sensitivity);
+        parts.emplace_back(buf);
+    }
+    if (!cfg.input.mouse_aim) {
+        parts.emplace_back("mouse_aim=off");
+    }
+    if (cfg.input.mouse_sensitivity != default_input.mouse_sensitivity) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "mouse_sensitivity=%.2f", cfg.input.mouse_sensitivity);
         parts.emplace_back(buf);
     }
 

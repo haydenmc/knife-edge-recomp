@@ -50,6 +50,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <unordered_map>
 
@@ -240,6 +241,42 @@ namespace {
     // drains it into the buttons it returns.
     std::atomic<uint16_t> latched_buttons{0};
 
+    // ---- mouse aim -----------------------------------------------------
+    // config.input.mouse_aim / mouse_sensitivity (see InputTuning in
+    // config.h). Set once at startup, same pattern as the stick_* atomics
+    // above; read from update_gfx() (the capture click / motion / button
+    // handling, all on the event thread) and get_input() (sensitivity only).
+    std::atomic<bool> mouse_aim_enabled{true};
+    std::atomic<float> mouse_sensitivity{1.0f};
+
+    // Whether the pointer is currently captured (relative-mouse-mode). Only
+    // SDL_SetRelativeMouseMode/capture-state transitions happen in
+    // update_gfx() on the event thread, which is also the only writer of
+    // this atomic; mouse_captured_local is a plain, non-atomic mirror kept
+    // for that same thread's own branching (no reason to pay for an atomic
+    // load to read back a value only this thread ever wrote). The atomic is
+    // published in case get_input() or a future consumer needs the state
+    // from another thread.
+    std::atomic<bool> mouse_captured{false};
+    bool mouse_captured_local = false;
+
+    // Raw relative mouse motion (SDL_MOUSEMOTION xrel/yrel), accumulated by
+    // update_gfx() while captured and drained by get_input() each read via
+    // exchange(0.0f) -- same producer(event thread)/consumer(~15 Hz input
+    // thread) split as latched_buttons above. atomic<float>::fetch_add is a
+    // real (non-emulated) atomic RMW as of C++20 (this tree targets C++20,
+    // see CMAKE_CXX_STANDARD in CMakeLists.txt), so no CAS loop is needed;
+    // this is the one place motion accumulation happens.
+    std::atomic<float> mouse_accum_x{0.0f};
+    std::atomic<float> mouse_accum_y{0.0f};
+
+    // Mouse-button state while captured, mapped to N64 buttons below (A/B/Z
+    // -- see the SDL_MOUSEBUTTONDOWN/UP handling in update_gfx() for the
+    // mapping and the "first cut, pending owner hands-on" caveat). Set/
+    // cleared from button-down/up events, OR'd into get_input()'s `held`
+    // alongside pad_buttons.
+    std::atomic<uint16_t> mouse_buttons{0};
+
     void poll_input() {
         SDL_PumpEvents();
     }
@@ -254,6 +291,21 @@ namespace {
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 ultramodern::quit();
+            }
+            // Escape releases mouse capture. Checked ahead of the latching
+            // branch below (which would otherwise consume every KEYDOWN when
+            // latching is on) so release works regardless of the latching
+            // setting. Escape is deliberately not in `bindings[]`, so it was
+            // never latchable anyway -- this branch just makes the release
+            // unconditional rather than relying on that as an accident.
+            else if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == SDL_SCANCODE_ESCAPE &&
+                     mouse_captured_local) {
+                SDL_SetRelativeMouseMode(SDL_FALSE);
+                mouse_captured_local = false;
+                mouse_captured.store(false, std::memory_order_relaxed);
+                // Nothing should stay held across a release.
+                mouse_buttons.store(0, std::memory_order_relaxed);
+                std::fprintf(stdout, "Mouse released\n");
             }
             // Latch from key-down EVENTS, not from polled keyboard state. SDL
             // queues every press, so a tap that goes down and up between two
@@ -305,6 +357,60 @@ namespace {
                         break;
                     }
                 }
+            }
+            // Mouse aim (config.input.mouse_aim -- see InputTuning in
+            // config.h). The first click while not captured just captures
+            // the pointer and is consumed -- it does not also register as a
+            // game button, matching how a click to focus/capture a window
+            // normally isn't also a click "into" whatever's under it.
+            else if (event.type == SDL_MOUSEBUTTONDOWN && mouse_aim_enabled.load(std::memory_order_relaxed)) {
+                if (!mouse_captured_local) {
+                    SDL_SetRelativeMouseMode(SDL_TRUE);
+                    mouse_captured_local = true;
+                    mouse_captured.store(true, std::memory_order_relaxed);
+                    std::fprintf(stdout, "Mouse captured (Esc releases)\n");
+                } else {
+                    // Left/right/middle -> A/B/Z. First cut pending owner
+                    // hands-on; which button is the vulcan isn't pinned down
+                    // yet.
+                    uint16_t mask = 0;
+                    switch (event.button.button) {
+                        case SDL_BUTTON_LEFT:   mask = BTN_A; break;
+                        case SDL_BUTTON_RIGHT:  mask = BTN_B; break;
+                        case SDL_BUTTON_MIDDLE: mask = BTN_Z; break;
+                        default: break;
+                    }
+                    if (mask != 0) {
+                        mouse_buttons.fetch_or(mask, std::memory_order_relaxed);
+                        // Same rationale as the keyboard/pad latch paths
+                        // above: a click shorter than one game frame should
+                        // still register. The capture-consuming first click
+                        // never reaches here, so it's never latched either.
+                        if (latching) {
+                            latched_buttons.fetch_or(mask, std::memory_order_relaxed);
+                        }
+                    }
+                }
+            }
+            else if (event.type == SDL_MOUSEBUTTONUP) {
+                uint16_t mask = 0;
+                switch (event.button.button) {
+                    case SDL_BUTTON_LEFT:   mask = BTN_A; break;
+                    case SDL_BUTTON_RIGHT:  mask = BTN_B; break;
+                    case SDL_BUTTON_MIDDLE: mask = BTN_Z; break;
+                    default: break;
+                }
+                if (mask != 0) {
+                    mouse_buttons.fetch_and(static_cast<uint16_t>(~mask), std::memory_order_relaxed);
+                }
+            }
+            else if (event.type == SDL_MOUSEMOTION && mouse_captured_local) {
+                // Drained by get_input() below; accumulating here (rather
+                // than sampling absolute position) means no motion is lost
+                // between get_input() reads, however many update_gfx()
+                // iterations happen in between.
+                mouse_accum_x.fetch_add(static_cast<float>(event.motion.xrel), std::memory_order_relaxed);
+                mouse_accum_y.fetch_add(static_cast<float>(event.motion.yrel), std::memory_order_relaxed);
             }
         }
 
@@ -386,7 +492,8 @@ namespace {
         if (keys == nullptr) {
             return false;
         }
-        uint16_t held = sample_buttons(keys) | pad_buttons.load(std::memory_order_relaxed);
+        uint16_t held = sample_buttons(keys) | pad_buttons.load(std::memory_order_relaxed) |
+                        mouse_buttons.load(std::memory_order_relaxed);
         if (input_latching_enabled.load(std::memory_order_relaxed)) {
             // Press-latch: OR everything pressed since the last read into what
             // we return now, then clear so the next read starts fresh. Vanilla
@@ -398,8 +505,39 @@ namespace {
         *buttons = held;
         const float kx = (keys[SDL_SCANCODE_D] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_A] ? 1.0f : 0.0f);
         const float ky = (keys[SDL_SCANCODE_W] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_S] ? 1.0f : 0.0f);
-        *x = std::clamp(kx + pad_stick_x.load(std::memory_order_relaxed), -1.0f, 1.0f);
-        *y = std::clamp(ky + pad_stick_y.load(std::memory_order_relaxed), -1.0f, 1.0f);
+
+        // Mouse aim: drain the motion accumulated by update_gfx() since the
+        // last call (zero if not captured -- update_gfx() only accumulates
+        // while mouse_captured_local is set), convert to a velocity with a
+        // measured dt so deflection doesn't depend on how often this
+        // function happens to be called, then fold into the same axis sum
+        // keyboard/pad already go through. This function runs on a ~15 Hz
+        // thread separate from the event thread that writes the
+        // accumulators (see the atomics above), so dt is measured here
+        // rather than assumed.
+        const float mouse_dx = mouse_accum_x.exchange(0.0f, std::memory_order_relaxed);
+        const float mouse_dy = mouse_accum_y.exchange(0.0f, std::memory_order_relaxed);
+        static std::chrono::steady_clock::time_point last_mouse_read{};
+        static bool have_last_mouse_read = false;
+        const auto now = std::chrono::steady_clock::now();
+        float dt;
+        if (have_last_mouse_read) {
+            dt = std::chrono::duration<float>(now - last_mouse_read).count();
+            dt = std::clamp(dt, 0.001f, 0.25f);
+        } else {
+            dt = 1.0f / 15.0f; // First call: assume the game's own ~15 Hz read rate.
+            have_last_mouse_read = true;
+        }
+        last_mouse_read = now;
+        const float sens = mouse_sensitivity.load(std::memory_order_relaxed);
+        // Full deflection at 500 px/s of mouse travel at sensitivity 1.0.
+        // Y is negated: SDL's yrel is down-positive, but up-positive matches
+        // the keyboard binding's W=+1 and the pad's convention above.
+        const float mouse_x = (mouse_dx / dt) * sens / 500.0f;
+        const float mouse_y = -(mouse_dy / dt) * sens / 500.0f;
+
+        *x = std::clamp(kx + pad_stick_x.load(std::memory_order_relaxed) + mouse_x, -1.0f, 1.0f);
+        *y = std::clamp(ky + pad_stick_y.load(std::memory_order_relaxed) + mouse_y, -1.0f, 1.0f);
         return true;
     }
 
@@ -485,6 +623,8 @@ int main(int argc, char** argv) {
     stick_deadzone.store(static_cast<float>(config.input.stick_deadzone), std::memory_order_relaxed);
     stick_curve.store(static_cast<float>(config.input.stick_curve), std::memory_order_relaxed);
     stick_sensitivity.store(static_cast<float>(config.input.stick_sensitivity), std::memory_order_relaxed);
+    mouse_aim_enabled.store(config.input.mouse_aim, std::memory_order_relaxed);
+    mouse_sensitivity.store(static_cast<float>(config.input.mouse_sensitivity), std::memory_order_relaxed);
 
     // enhancements.high_resolution / .widescreen (analysis/docs/enhancements.md).
     // Must be set before recomp::start() below spins up the gfx thread, since
