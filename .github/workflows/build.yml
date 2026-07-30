@@ -303,3 +303,74 @@ jobs:
             fi
             echo "OK: regenerated output is byte-identical to what is committed."
           '
+
+  # ---------------------------------------------------------------------------
+  # Flatpak release: on a version-tag push (vX.Y.Z), build the .flatpak bundle
+  # and attach it to the GitHub release for that tag (creating the release if
+  # the tag was pushed bare).
+  #
+  # Needs a ROM (recompiled game code is a required flatpak build input), so
+  # like regen-verify this only runs on a self-hosted runner. Runner
+  # requirements beyond the usual: a container runtime (podman/docker),
+  # flatpak-builder plus the org.freedesktop 25.08 runtime/Sdk and llvm20
+  # extension (scripts/build_flatpak.sh --runtime-install fetches them), the
+  # `gh` CLI, and the repository variable KE_ROM_PATH pointing at a
+  # Knife Edge (USA) ROM already on the runner's filesystem. The bundle
+  # contains recompiled code and zero game assets, same policy as the release
+  # binary (see the release job above).
+  # ---------------------------------------------------------------------------
+  flatpak-release:
+    name: "flatpak release (version tags, self-hosted)"
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: self-hosted
+    timeout-minutes: 90
+    permissions:
+      contents: write # creates/uploads the GitHub release for the tag
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Locate the ROM (repository variable KE_ROM_PATH)
+        run: |
+          if [ -z "${{ vars.KE_ROM_PATH }}" ] || [ ! -f "${{ vars.KE_ROM_PATH }}" ]; then
+            echo "::error::repository variable KE_ROM_PATH is unset or does not point at a file on this runner"
+            exit 1
+          fi
+
+      # Produce generated/us at the repo root, where the flatpak manifest's
+      # dir source expects it: ingest the ROM to build/knife_edge.z64 (the
+      # committed config/*.toml rom_file_path), then run both recompilers
+      # against the committed configs — their output paths land in
+      # generated/us and generated/us/rsp. All inside the canonical build
+      # container, same as every other ROM-touching job.
+      - name: Generate recompiled sources (containerized)
+        run: |
+          ./scripts/container_build.sh --rom "${{ vars.KE_ROM_PATH }}" --exec '
+            set -euo pipefail
+            echo "==> building N64Recomp + RSPRecomp host tools"
+            cmake -S deps/N64Recomp -B deps/N64Recomp/build-container -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
+            ninja -C deps/N64Recomp/build-container N64Recomp RSPRecomp
+            echo "==> ingesting the ROM (normalize to build/knife_edge.z64)"
+            mkdir -p build
+            python3 analysis/byteswap.py /rom/rom.n64 build/knife_edge.z64
+            echo "==> recompiling game code + audio microcode into generated/us"
+            deps/N64Recomp/build-container/N64Recomp config/knife_edge.us.toml
+            deps/N64Recomp/build-container/RSPRecomp config/aspMain.us.toml
+          '
+
+      # flatpak-builder runs on the runner host itself (not in the container):
+      # it needs its own bwrap sandboxing, which nested containers break.
+      - name: Build the Flatpak bundle
+        run: ./scripts/build_flatpak.sh --bundle KnifeEdgeRecompiled.flatpak
+
+      - name: Attach the bundle to the GitHub release for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --generate-notes
+          fi
+          gh release upload "$tag" KnifeEdgeRecompiled.flatpak --clobber

@@ -24,7 +24,7 @@ game only probes for a Controller Pak; see `analysis/docs/enhancements.md`).
 
 Not yet built: high framerate and Flatpak packaging. The
 configuration system that these will hang off is in place —
-`vanilla` is the default profile and the regression baseline (see
+`enhanced` is the default profile; `vanilla` is the regression baseline (see
 "Configuration" below and `analysis/docs/enhancements.md`).
 
 Development notes, working practices and a documentation index live in
@@ -275,20 +275,21 @@ Settings live in `<app folder>/config.toml` (the `ke_recomp_data/` directory
 mentioned above, next to wherever you run the binary from), created with
 commented defaults on first run. It selects a **profile**:
 
-- `vanilla` (default) — every enhancement off, faithful to original hardware
-  behavior. This is what every other section of this README assumes.
-- `enhanced` — a curated set of opt-in quality-of-life changes: currently
+- `enhanced` (default) — a curated set of quality-of-life changes: currently
   `input_latching` (see Controls above), `high_resolution` (renders the 3D
   scene at window resolution through RT64 instead of native 320x240),
   `widescreen` (expands the 3D field of view to the window's aspect ratio
   instead of 4:3-pillarboxing it), and `full_height` (removes the in-mission
   20-line letterbox, revealing the full 320x240 frame).
+- `vanilla` — every enhancement off, faithful to original hardware behavior.
+  This is the regression baseline every measurement and bug investigation in
+  `analysis/docs/` assumes unless stated otherwise.
 - `custom` — reads individual `[enhancements]` flags from the file.
 
 Two CLI flags, and nothing else config-related:
 
 ```sh
-./build/KnifeEdgeRecompiled --rom /path/to/knife_edge.z64 --profile enhanced
+./build/KnifeEdgeRecompiled --rom /path/to/knife_edge.z64 --profile vanilla
 ./build/KnifeEdgeRecompiled --config /path/to/other-config.toml
 ```
 

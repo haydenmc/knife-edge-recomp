@@ -119,7 +119,12 @@ struct InputTuning {
 };
 
 struct Config {
-    Profile profile = Profile::Vanilla;
+    // Default is Enhanced (owner decision, 2026-07-30): the out-of-box
+    // experience is the curated quality-of-life set. Vanilla remains fully
+    // available (--profile vanilla / [profile] active) and remains the
+    // REGRESSION BASELINE -- every timing measurement and bug investigation
+    // in analysis/docs/ assumes vanilla unless stated otherwise.
+    Profile profile = Profile::Enhanced;
     // Only consulted when profile == Custom; effective_enhancements() below
     // ignores this field for Vanilla/Enhanced.
     EnhancementFlags enhancements;

@@ -9,11 +9,17 @@ sampling, alternate renderer behavior, and so on), and some of those are
 worth offering.
 
 The rule this project follows: **every deviation from the original game's
-behavior is a runtime-toggleable option, off by default.** Concretely:
+behavior is a runtime-toggleable option.** Since 2026-07-30 (owner
+decision) the **default profile is `enhanced`** — the out-of-box experience
+is the curated quality-of-life set — but every enhancement remains
+individually toggleable and vanilla remains one `--profile vanilla` away.
+Concretely:
 
 - "Vanilla" (every enhancement off) is always available and is the
-  regression baseline — the configuration every bug report, smoke test, and
-  timing measurement in `analysis/docs/` assumes unless stated otherwise.
+  **regression baseline** — the configuration every bug report and timing
+  measurement in `analysis/docs/` assumes unless stated otherwise. (The
+  smoke test now exercises the enhanced default, deliberately: it should
+  test what players actually run.)
 - An enhancement is never baked in unconditionally. If a change to behavior
   can't be made optional (e.g. it's a straight bugfix for something that was
   never intentional, like `analysis/docs/timing-and-mission-debug.md`'s

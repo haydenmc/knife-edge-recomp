@@ -240,9 +240,13 @@ Fixes belong in `analysis/` (pipeline), `src/` (runtime shim), or N64Recomp
 patches/hooks emitted by `gen_syms.py`. See the mechanism menu in
 `enhancements.md`.
 
-**Enhancements go behind flags.** Vanilla is the default and the regression
-baseline; every deviation from original behavior is runtime-toggleable. Fidelity
-knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
+**Enhancements go behind flags.** The default profile is **enhanced** (owner
+decision 2026-07-30); vanilla remains one `--profile vanilla` away and remains
+the **regression baseline** — measurements and bug investigations assume
+vanilla unless stated otherwise. Every deviation from original behavior is
+runtime-toggleable. Fidelity knobs (e.g. `tuning.rcp_frame_ms`) are *not*
+enhancements. Note: an existing config.toml pins its own profile — the new
+default only affects fresh installs.
 
 ## Hard-won gotchas
 

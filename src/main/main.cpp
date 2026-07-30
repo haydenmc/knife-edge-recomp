@@ -1118,6 +1118,15 @@ int main(int argc, char** argv) {
                                    rom_path.string());
                         return EXIT_FAILURE;
                     }
+                    // select_rom() stores the ROM on disk but is_rom_valid()
+                    // consults an in-memory set populated only by
+                    // check_all_stored_roms() -- which already ran, before
+                    // this picker. Rescan, or the is_rom_valid() gate below
+                    // fails on exactly the launch that picked the ROM (it
+                    // then works on every later launch, which is how this
+                    // shipped: the one-launch-late symptom looked like
+                    // success in every after-the-first test).
+                    recomp::check_all_stored_roms();
                 }
                 // Cancel, dialog error, or NFD_Init failure: fall through to
                 // the no-ROM error below, unchanged.

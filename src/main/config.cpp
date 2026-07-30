@@ -74,11 +74,11 @@ namespace {
         "# rather than refusing to start.\n"
         "\n"
         "[profile]\n"
-        "# \"vanilla\" (default): every enhancement OFF -- the regression baseline,\n"
+        "# \"enhanced\" (default): a curated set of quality-of-life changes.\n"
+        "# \"vanilla\": every enhancement OFF -- the regression baseline,\n"
         "#   faithful to original hardware behavior.\n"
-        "# \"enhanced\": a curated set of opt-in quality-of-life changes.\n"
         "# \"custom\": read [enhancements] below individually.\n"
-        "active = \"vanilla\"\n"
+        "active = \"enhanced\"\n"
         "\n"
         "[enhancements]\n"
         "# Only consulted when profile.active = \"custom\".\n"
@@ -117,7 +117,8 @@ namespace {
         "stick_sensitivity = 1.0\n"
         "# Mouse aim: click the window to capture the pointer and steer with\n"
         "# mouse motion (added to the control stick); Esc releases capture.\n"
-        "# While captured, left/right/middle mouse buttons map to A/B/Z.\n"
+        "# While captured, left/right/middle mouse buttons map to Z/A/B\n"
+        "# (left = fire).\n"
         "mouse_aim = true\n"
         "# Multiplier on mouse-derived aiming. Range [0.05, 20.0].\n"
         "mouse_sensitivity = 1.0\n"
@@ -177,10 +178,10 @@ namespace {
                         cfg.profile = p;
                     } else {
                         warn("profile.active = \"" + *s + "\" is not one of "
-                             "vanilla|enhanced|custom; using vanilla");
+                             "vanilla|enhanced|custom; using the default (enhanced)");
                     }
                 } else {
-                    warn("profile.active is not a string; using vanilla");
+                    warn("profile.active is not a string; using the default (enhanced)");
                 }
             }
         }
@@ -306,7 +307,7 @@ kerecomp::Config kerecomp::load_config(int argc, char** argv, const std::filesys
         ? (app_folder / "config.toml")
         : cli.config_path;
 
-    Config cfg{}; // vanilla defaults; every early-return below leaves this in effect.
+    Config cfg{}; // built-in defaults (enhanced profile); every early-return below leaves this in effect.
 
     if (!std::filesystem::exists(config_path)) {
         write_default_file(config_path);
@@ -327,7 +328,7 @@ kerecomp::Config kerecomp::load_config(int argc, char** argv, const std::filesys
             }
         } catch (const toml::parse_error& err) {
             warn("failed to parse " + config_path.string() + ": " +
-                 std::string(err.description()) + " -- using vanilla defaults");
+                 std::string(err.description()) + " -- using built-in defaults (enhanced)");
             cfg = Config{};
         }
     }
