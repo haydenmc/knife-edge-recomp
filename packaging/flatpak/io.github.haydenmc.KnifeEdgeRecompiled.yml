@@ -1,9 +1,20 @@
 app-id: io.github.haydenmc.KnifeEdgeRecompiled
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '25.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
-  - org.freedesktop.Sdk.Extension.llvm18
+  - org.freedesktop.Sdk.Extension.llvm20
+
+# Superproject subprojects (zstd et al) install headers/tools/man pages into
+# /app as a side effect of `ninja install`; none of it is needed at runtime.
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/man
+  - '*.a'
+  - /bin/zstd*
+  - /bin/unzstd
 # Not the raw binary: the wrapper sets KE_DATA_DIR to a per-app XDG path (see
 # knife-edge-recompiled.sh) before exec'ing the real executable.
 command: knife-edge-recompiled.sh
@@ -34,8 +45,8 @@ modules:
   - name: knife-edge-recompiled
     buildsystem: cmake-ninja
     build-options:
-      append-path: /usr/lib/sdk/llvm18/bin
-      prepend-ld-library-path: /usr/lib/sdk/llvm18/lib
+      append-path: /usr/lib/sdk/llvm20/bin
+      prepend-ld-library-path: /usr/lib/sdk/llvm20/lib
       env:
         CC: clang
         CXX: clang++
@@ -62,20 +73,24 @@ modules:
         # network), so the working tree has to arrive pre-populated. See
         # build-notes.md, "Flatpak packaging", for why Flathub distribution
         # would need a different source strategy (out of scope here).
-    # CMakeLists.txt has no install() rules (this is a build-system
-    # skeleton, see its header comment) -- `ninja install` is a harmless
-    # no-op, so every file placement below is done by hand. Paths are
-    # relative to the module's build directory, which flatpak-builder's
-    # cmake-ninja buildsystem creates at _build/ under the source root
-    # (verify on first real build -- this is one of the two things this
-    # manifest could not be tested against in the sandbox this was written
-    # in; see build-notes.md).
+    # Our own CMakeLists.txt has no install() rules, so every app-file
+    # placement below is done by hand. `ninja install` is NOT a no-op,
+    # though: subprojects (zstd et al) install their headers/tools/man
+    # pages into /app -- the top-level `cleanup:` list strips those from
+    # the finished flatpak.
     post-install:
+      # The binary is relative (post-install CWD is wherever the build
+      # products are, in-source or builddir alike); the packaging files use
+      # absolute in-sandbox source paths because the CWD relationship to the
+      # source root is NOT stable across flatpak-builder build modes — the
+      # first real build proved an in-source CWD where ../packaging didn't
+      # exist. /run/build/<module-name> is deterministic for a dir source.
       - install -Dm755 KnifeEdgeRecompiled /app/bin/knife-edge-recompiled-bin
-      - install -Dm755 ../packaging/flatpak/knife-edge-recompiled.sh /app/bin/knife-edge-recompiled.sh
-      - install -Dm644 ../packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.desktop
+      - install -Dm755 /run/build/knife-edge-recompiled/packaging/flatpak/knife-edge-recompiled.sh
+          /app/bin/knife-edge-recompiled.sh
+      - install -Dm644 /run/build/knife-edge-recompiled/packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.desktop
           /app/share/applications/io.github.haydenmc.KnifeEdgeRecompiled.desktop
-      - install -Dm644 ../packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.metainfo.xml
+      - install -Dm644 /run/build/knife-edge-recompiled/packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.metainfo.xml
           /app/share/metainfo/io.github.haydenmc.KnifeEdgeRecompiled.metainfo.xml
-      - install -Dm644 ../packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.svg
+      - install -Dm644 /run/build/knife-edge-recompiled/packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.svg
           /app/share/icons/hicolor/scalable/apps/io.github.haydenmc.KnifeEdgeRecompiled.svg

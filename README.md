@@ -154,7 +154,7 @@ Needs recompiled game code first (Option A/B/C above with `-DKE_ROM=...`, or
 This builds `KnifeEdgeRecompiled.flatpak` in the repo root and installs it for
 the current user (drop `--install` to just produce the bundle; see
 `./scripts/build_flatpak.sh --help` for `--bundle <path>` and
-`--runtime-install`, which fetches the `org.freedesktop.Platform`/`Sdk`//24.08
+`--runtime-install`, which fetches the `org.freedesktop.Platform`/`Sdk`//25.08
 runtime this manifest needs if you don't have it yet). Then:
 
 ```sh

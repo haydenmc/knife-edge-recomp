@@ -17,9 +17,9 @@
 #                        Default: KnifeEdgeRecompiled.flatpak in the repo
 #                        root.
 #   --runtime-install     Install the runtime/SDK/extension this manifest
-#                        needs (org.freedesktop.Platform//24.08,
-#                        org.freedesktop.Sdk//24.08,
-#                        org.freedesktop.Sdk.Extension.llvm18//24.08) via
+#                        needs (org.freedesktop.Platform//25.08,
+#                        org.freedesktop.Sdk//25.08,
+#                        org.freedesktop.Sdk.Extension.llvm20//25.08) via
 #                        `flatpak install`, then exit. Run this once before
 #                        the first real build if flatpak-builder complains
 #                        about a missing runtime.
@@ -53,9 +53,9 @@ done
 
 if [ "$RUNTIME_INSTALL" -eq 1 ]; then
     exec flatpak install --user --noninteractive \
-        org.freedesktop.Platform//24.08 \
-        org.freedesktop.Sdk//24.08 \
-        org.freedesktop.Sdk.Extension.llvm18//24.08
+        org.freedesktop.Platform//25.08 \
+        org.freedesktop.Sdk//25.08 \
+        org.freedesktop.Sdk.Extension.llvm20//25.08
 fi
 
 # --- Preflight ---------------------------------------------------------

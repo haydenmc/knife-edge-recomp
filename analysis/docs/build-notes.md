@@ -410,11 +410,11 @@ workflow thin seemed more valuable than the minutes saved.
 `packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.yml` +
 `scripts/build_flatpak.sh`. Design decisions:
 
-- **Runtime: `org.freedesktop.Platform`/`Sdk` 24.08 + the `llvm18` SDK
+- **Runtime: `org.freedesktop.Platform`/`Sdk` 25.08 + the `llvm20` SDK
   extension.** Same clang-based toolchain this project already builds with
   everywhere else (devcontainer, `containers/Containerfile`), just sourced
   from the Flatpak SDK instead of apt. `build-options` puts
-  `/usr/lib/sdk/llvm18/bin` on `PATH` and its `lib/` on the linker's runtime
+  `/usr/lib/sdk/llvm20/bin` on `PATH` and its `lib/` on the linker's runtime
   search path, and `config-opts` forces `-fuse-ld=lld` (matching this
   project's other build paths, which all use lld over the Sdk's default
   bfd/gold).
