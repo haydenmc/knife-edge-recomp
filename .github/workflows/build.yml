@@ -291,7 +291,7 @@ jobs:
             python3 analysis/byteswap.py /rom/rom.n64 build/knife_edge.z64
 
             echo "==> regenerating symbols + config (make -C analysis)"
-            make -C analysis
+            make -C analysis PY=/opt/ke-pyenv/bin/python
 
             echo "==> running N64Recomp (output is a build artifact, not committed)"
             deps/N64Recomp/build-container/N64Recomp config/knife_edge.us.toml

@@ -92,12 +92,18 @@ if (KE_ROM)
             "-DCMAKE_BUILD_TYPE=Release && cmake --build deps/N64Recomp/build")
     endif()
 
-    # The analysis pipeline needs tomlkit/rabbitizer. Prefer the project venv
-    # (created by the devcontainer's postCreateCommand) over the system python.
-    if (EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
-        set(KE_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
-    else()
-        find_program(KE_PYTHON NAMES python3 python REQUIRED)
+    # The analysis pipeline needs tomlkit/rabbitizer. -DKE_PYTHON=<interpreter>
+    # overrides the auto-detection entirely -- the containerized build passes
+    # its image-local venv this way so a host-built .venv/ in the bind-mounted
+    # repo can never leak into a hermetic build (see
+    # scripts/container_build.sh). Otherwise prefer the project venv (created
+    # by the devcontainer's postCreateCommand) over the system python.
+    if (NOT KE_PYTHON)
+        if (EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+            set(KE_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+        else()
+            find_program(KE_PYTHON NAMES python3 python REQUIRED)
+        endif()
     endif()
     execute_process(COMMAND "${KE_PYTHON}" -c "import tomlkit, rabbitizer"
                     RESULT_VARIABLE KE_PYDEPS_RESULT ERROR_QUIET)

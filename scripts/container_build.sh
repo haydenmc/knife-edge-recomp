@@ -174,14 +174,6 @@ fi
 # ---------------------------------------------------------------------------
 run_args=(--rm -e HOME=/tmp/ke-home -v "$ROOT:/work:rw" -w /work)
 
-# Shadow any .venv/ the bind-mounted repo happens to carry from the host with
-# an in-container-only tmpfs overlay (see the preamble script below for why:
-# both CMakeLists.txt and analysis/Makefile read a repo-relative
-# .venv/bin/python and would otherwise silently pick up a host-built
-# interpreter that may not even run inside this image). This mount is
-# container-local; it never touches the host's real .venv/.
-run_args+=(--tmpfs /work/.venv:rw,exec,nosuid,size=16m)
-
 case "$runtime" in
     podman)
         # Proven on the project owner's rootless-podman/SELinux (Fedora) host —
@@ -231,21 +223,22 @@ fi
 # Inner script(s) — executed inside the container via `bash -c`.
 # ---------------------------------------------------------------------------
 
-# Always run: uid/safe.directory setup + the .venv shadow-and-repoint. Kept
-# as a single quoted (no expansion needed) block.
+# Always run: uid/safe.directory setup. Kept as a single quoted (no
+# expansion needed) block.
+#
+# Host-.venv note: the bind-mounted repo may carry a host-built .venv/ that
+# CMakeLists.txt would otherwise auto-prefer. The build below neutralizes
+# that with -DKE_PYTHON=/opt/ke-pyenv/bin/python (honored since CMakeLists
+# guards its auto-detect with `if (NOT KE_PYTHON)`), and the regen-verify
+# recipe passes PY= to analysis/Makefile the same way. An earlier approach
+# (--tmpfs shadow over /work/.venv) failed in practice: crun applies
+# tmpcopyup to tmpfs mounts, copying the host's ~95MB venv into the 16MB
+# tmpfs -> ENOSPC at container start -- and docker doesn't copy up at all,
+# so the mount behaved differently per runtime. Explicit override > mount
+# games.
 read -r -d '' preamble <<'PREAMBLE' || true
 set -euo pipefail
 git config --global --add safe.directory '*'
-
-# See the --tmpfs /work/.venv mount above: it shadows whatever .venv/ the
-# bind-mounted repo carries from the host with an empty, container-local
-# overlay. Point that overlay at this image's own venv so two things that
-# each hardcode a repo-relative .venv/bin/python — CMakeLists.txt's
-# KE_PYTHON preference and analysis/Makefile's PY variable — both resolve
-# to an interpreter that actually works inside this image, regardless of
-# what (if anything) is really sitting in the host's .venv/.
-mkdir -p /work/.venv/bin
-ln -sf /opt/ke-pyenv/bin/python /work/.venv/bin/python
 PREAMBLE
 
 submodule_check=""
@@ -266,7 +259,7 @@ cmake -S deps/N64Recomp -B deps/N64Recomp/build-container -G Ninja -DCMAKE_BUILD
 ninja -C deps/N64Recomp/build-container $jobs_flag N64Recomp RSPRecomp
 
 echo '==> configuring + building KnifeEdgeRecompiled (build-container)'
-cmake -S . -B build-container -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DN64RECOMP_HOST_TOOL=/work/deps/N64Recomp/build-container/N64Recomp -DRSPRECOMP_HOST_TOOL=/work/deps/N64Recomp/build-container/RSPRecomp $rom_cmake_flag
+cmake -S . -B build-container -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DKE_PYTHON=/opt/ke-pyenv/bin/python -DN64RECOMP_HOST_TOOL=/work/deps/N64Recomp/build-container/N64Recomp -DRSPRECOMP_HOST_TOOL=/work/deps/N64Recomp/build-container/RSPRecomp $rom_cmake_flag
 ninja -C build-container $jobs_flag"
 fi
 

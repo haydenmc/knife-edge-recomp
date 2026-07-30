@@ -330,15 +330,24 @@ host checkout happens to carry its own `.venv/` (common on a machine that's
 also done native builds — this workspace is a live example), that host venv
 would come along for the ride and get silently preferred over the
 container's own `/opt/ke-pyenv`, even though it may be built against a
-different libc/interpreter ABI than the container's. `scripts/container_build.sh`
-handles this with a `--tmpfs /work/.venv:rw,exec,nosuid,size=16m` run flag —
-an in-container-only overlay that shadows whatever's really at the host's
-`.venv/` without touching it — and then, inside the container, symlinks
-`/work/.venv/bin/python -> /opt/ke-pyenv/bin/python`. Both hardcoded
-lookups now resolve to the container's own interpreter regardless of what
-the host's checkout contains. A clean CI checkout never has a `.venv/` at
-all (it's gitignored), so this is a no-op there; it only matters for local
-container builds against an existing working tree.
+different libc/interpreter ABI than the container's. Handled with explicit
+overrides, not mounts: `CMakeLists.txt` guards its auto-detect with
+`if (NOT KE_PYTHON)` so `scripts/container_build.sh` can pass
+`-DKE_PYTHON=/opt/ke-pyenv/bin/python`, and the regen-verify recipe passes
+`PY=/opt/ke-pyenv/bin/python` on the `make -C analysis` command line
+(command-line assignments beat the Makefile's `:=`). A clean CI checkout
+never has a `.venv/` at all (it's gitignored), so both overrides are
+no-ops there; they only matter for local container builds against an
+existing working tree.
+
+*Rejected first attempt, kept for the record:* a
+`--tmpfs /work/.venv:...,size=16m` shadow mount over the host venv failed
+on the owner's host at first real run — crun applies `tmpcopyup` to tmpfs
+mounts, i.e. it **copies the underlying directory's contents into the new
+tmpfs**, and the 95 MB host venv overflowed the 16 MB tmpfs:
+`crun: write: No space left on device` at container start, with terabytes
+actually free. Docker doesn't copy up at all, so the mount also behaved
+differently per runtime. Explicit overrides have neither problem.
 
 **Podman/SELinux run flags.** `--userns=keep-id --security-opt label=disable`
 for podman are lifted verbatim from

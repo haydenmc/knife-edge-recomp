@@ -94,8 +94,10 @@ apt-get/cmake recipe. Design in `analysis/docs/build-notes.md`,
 "Containerized build" — build-dir isolation (`*-container` suffix, never
 shares an object dir with a host build), ROM-as-mount-never-in-image, the
 podman/SELinux run flags lifted from `.devcontainer`'s proven ones, and a
-`.venv`-shadowing tmpfs mount that stops a host-built venv the bind-mounted
-repo might carry from being silently preferred over the container's own.
+`-DKE_PYTHON`/`PY=` overrides that stop a host-built `.venv` the
+bind-mounted repo might carry from being silently preferred over the
+container's own (a tmpfs-shadow first attempt died on crun's tmpcopyup —
+see build-notes).
 Verification is **static only** — `bash -n`, a YAML parse, and package-list
 cross-checking against the existing CI jobs/devcontainer/`smoke_test.sh` —
 because this devcontainer has no container runtime at all (no docker, no
