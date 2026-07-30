@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Knife Edge Recompiled
+Comment=Static-recompilation PC port of Knife Edge - Nose Gunner (N64); requires your own ROM
+Exec=knife-edge-recompiled.sh
+Icon=io.github.haydenmc.KnifeEdgeRecompiled
+Categories=Game;
+Terminal=false

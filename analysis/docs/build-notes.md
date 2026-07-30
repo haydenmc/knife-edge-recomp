@@ -405,6 +405,139 @@ it adds a registry-auth/push surface to a workflow that currently needs
 none, and the config surface here is still young enough that keeping the
 workflow thin seemed more valuable than the minutes saved.
 
+## Flatpak packaging
+
+`packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.yml` +
+`scripts/build_flatpak.sh`. Design decisions:
+
+- **Runtime: `org.freedesktop.Platform`/`Sdk` 24.08 + the `llvm18` SDK
+  extension.** Same clang-based toolchain this project already builds with
+  everywhere else (devcontainer, `containers/Containerfile`), just sourced
+  from the Flatpak SDK instead of apt. `build-options` puts
+  `/usr/lib/sdk/llvm18/bin` on `PATH` and its `lib/` on the linker's runtime
+  search path, and `config-opts` forces `-fuse-ld=lld` (matching this
+  project's other build paths, which all use lld over the Sdk's default
+  bfd/gold).
+- **`dir` source over pre-generated code, not `git`.** flatpak-builder's
+  sandboxed build has no network access and no ROM, so it can neither fetch
+  git submodules (`deps/`) nor run the analysis pipeline
+  (`analysis/byteswap.py` + `analysis/gen_syms.py`) nor invoke the
+  N64Recomp/RSPRecomp host tools — all three require either the internet or a
+  ROM the sandbox will never have. A `type: dir, path: ../..` source sidesteps
+  all of that: flatpak-builder copies the *already-checked-out* working tree
+  verbatim (submodules included, since they're just directories under
+  `deps/` once initialized) into `/run/build/<module-name>/`, gitignored
+  `generated/` included. `-DKE_GENERATED_DIR=/run/build/knife-edge-recompiled/generated/us`
+  points the build at that copy directly, which — confirmed by reading
+  `CMakeLists.txt` — needs neither python nor the N64Recomp/RSPRecomp host
+  tools: those only run inside the `if (KE_ROM)` block, and this module
+  never sets `KE_ROM`. `find_package(Git QUIET REQUIRED)` does still run
+  unconditionally (for `patches/n64modernruntime-orderly-shutdown.patch` and
+  the build-stamp commit), so the module needs `git` inside the sandbox;
+  `org.freedesktop.Sdk` carries it. The `dir` source copies the whole
+  working tree, `.git` included (no `skip:` field exists for `dir` sources
+  in the flatpak-builder version this was written against) — around 1 GB
+  with `deps/`'s vendored contrib libraries, accepted as the cost of not
+  needing network access. **Flathub distribution is out of scope for this
+  manifest** and would need a different source strategy entirely (Flathub's
+  build service has no access to a `dir` source pointing outside the
+  manifest's own repo, and typically expects reproducible `git`/archive
+  sources it can fetch itself).
+- **No `install()` rules in `CMakeLists.txt`** (this is a build-system
+  skeleton by design, see its header comment), so `ninja install` — what
+  flatpak-builder's `cmake-ninja` buildsystem runs by default — is a
+  harmless no-op. The manifest's `post-install` does the placement by hand:
+  binary to `/app/bin/knife-edge-recompiled-bin`, the wrapper script
+  (below) to `/app/bin/knife-edge-recompiled.sh` (the `command:`), desktop
+  file, AppStream metainfo, and the hicolor SVG icon. Paths there are
+  relative to flatpak-builder's cmake-ninja build directory, which its
+  `cmake-ninja`/`cmake` buildsystem creates at `_build/` under the module's
+  source root — **not independently verified in this sandbox** (no
+  flatpak-builder here; see the manifest's own comment on this and re-check
+  on the first real build).
+- **Portal ROM picker enables zero filesystem `finish-args`.** Every other
+  Flatpak-packaged emulator/recompilation port either ships copyrighted data
+  (not an option here) or asks for a broad `--filesystem=host` grant just to
+  read one ROM file the user already owns. `src/main/main.cpp` instead calls
+  `NFD_OpenDialogU8` (nativefiledialog-extended, already linked into this
+  binary via `rt64` — see "Dependency quirks" above) when no ROM is cached,
+  a display is present, and — new for this work — the portal is actually
+  reachable (see below); the chosen path is fed through the exact same
+  `select_rom()` validation `--rom` uses. A portal-mediated file pick needs
+  no Flatpak permission at all, which is why `finish-args` in the manifest
+  carries no `--filesystem=*` of any kind — that absence is the point, not
+  an oversight.
+  - **Verified hazard #1 (fixed): `NFD_Quit()` after a failed `NFD_Init()`
+    aborts the process.** NFD's portal backend calls
+    `dbus_connection_unref()` unconditionally inside `NFD_Quit()`, on a
+    connection that only exists if `NFD_Init()` actually returned
+    `NFD_OKAY` — nfd.h's own doc comment says as much ("Call this to
+    de-initialize NFD, if NFD_Init returned NFD_OKAY"), but violating it
+    aborts rather than failing soft. This is the same shape as the
+    already-known "RT64-bundled nativefiledialog null-dbus abort" issue
+    (CLAUDE.md open items; `RT64::FileDialog::initialize()`/`finish()` in
+    `deps/rt64/src/gui/rt64_file_dialog.cpp`, called unconditionally at
+    `RT64Application` startup/shutdown, has the *same* unguarded pairing —
+    that one is pre-existing RT64 code, out of scope for this work, and
+    still a candidate upstream report). Our own new call site guards it:
+    `NFD_Quit()` in `main.cpp` is reachable only from inside the
+    `NFD_Init() == NFD_OKAY` branch.
+  - **Verified hazard #2 (fixed): NFD's portal `OpenFile` call can hang
+    forever with no portal service present.** `nfd_portal.cpp`'s
+    `NFD_DBus_OpenFile()` calls
+    `dbus_connection_send_with_reply_and_block(..., DBUS_TIMEOUT_INFINITE,
+    ...)` — confirmed by reading it — so under a live X/Wayland display
+    with a working D-Bus session but no `xdg-desktop-portal` service and no
+    D-Bus activation entry for it (reproduced here: a bare Xvfb + a plain
+    `dbus-run-session`, no portal package installed at all), that call
+    never returns and the process wedges permanently. A wall-clock timeout
+    around the NFD call would be the wrong fix — a *real* portal dialog is
+    supposed to block indefinitely, for as long as the user takes to pick a
+    file. Instead, `main.cpp`'s `portal_reachable()` asks the **local D-Bus
+    daemon** (never the portal process itself) two fast questions before
+    ever calling `NFD_Init()`: does `org.freedesktop.portal.Desktop`
+    currently have an owner (`dbus_bus_name_has_owner`), or is it at least
+    D-Bus-activatable (`ListActivatableNames` — the common case, since
+    `xdg-desktop-portal` is normally not running until first asked for;
+    this is exactly how a Flatpak sandbox's proxied session bus looks). Both
+    answers come from the daemon's own registry, so they return promptly
+    even when no portal exists anywhere — confirmed by `strace`: the whole
+    round trip takes well under a millisecond. If neither is true, the
+    picker is skipped entirely and control falls straight through to the
+    ordinary no-ROM error, unchanged. This needs a second, independent
+    `pkg_check_modules(... dbus-1)` in `CMakeLists.txt` for
+    `KnifeEdgeRecompiled` itself: `nativefiledialog-extended` already
+    depends on `dbus-1` too, but links it `PRIVATE`
+    (`nativefiledialog-extended/src/CMakeLists.txt`), so that dependency
+    isn't visible to us transitively through `rt64`.
+  - **A third, separate, pre-existing behavior surfaced by testing this:**
+    the fatal-error path (`exit_error()` → `show_error_message_box()` →
+    `SDL_ShowSimpleMessageBox`) shows a genuinely *modal* dialog under any
+    live X/Wayland display, which SDL implements by forking a child process
+    that blocks until a human dismisses it. Under a real desktop (or inside
+    a real Flatpak sandbox, which always has a compositor and a user) this
+    is exactly the intended, correct behavior. Under a bare Xvfb with no
+    window manager and no human (this project's own automated verification
+    harness, not a real deployment target), that dialog can never be
+    dismissed and the process appears to hang — confirmed to be unrelated
+    to the two hazards above (verified via `strace`: no further NFD/D-Bus
+    activity after the picker is skipped) and confirmed to resolve cleanly
+    (exit 1) the instant the dialog is dismissed (via `xdotool key ...
+    Return` in testing). Not fixed here — it's a property of
+    `show_error_message_box()` shared by every fatal-error call site in
+    this project, not something introduced by the ROM picker, and it never
+    affects CI or the real no-ROM contract (no `DISPLAY` at all → SDL's
+    message box fails immediately and falls back to stderr, confirmed:
+    exit 1 in ~5 ms). Left as a candidate follow-up (CLAUDE.md open items).
+- **`KE_DATA_DIR`.** `src/main/support.cpp`'s `get_app_folder_path()` now
+  honors this env var when set (falls back to the pre-existing
+  CWD-relative default otherwise, so nothing changes for non-Flatpak
+  builds). `packaging/flatpak/knife-edge-recompiled.sh` (the manifest's
+  `command:`) sets it to `$XDG_DATA_HOME/knife-edge-recompiled`, which
+  inside the sandbox is `~/.var/app/<appid>/data/knife-edge-recompiled` —
+  stable across app updates, unlike the working directory Flatpak launches
+  the command from.
+
 ## Open problems / TODOs left for later work
 
 - `N64RECOMP_HOST_TOOL`/`RSPRECOMP_HOST_TOOL` are imported by path, not

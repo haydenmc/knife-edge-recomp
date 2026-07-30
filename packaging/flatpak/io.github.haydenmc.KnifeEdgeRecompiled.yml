@@ -1,0 +1,81 @@
+app-id: io.github.haydenmc.KnifeEdgeRecompiled
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.llvm18
+# Not the raw binary: the wrapper sets KE_DATA_DIR to a per-app XDG path (see
+# knife-edge-recompiled.sh) before exec'ing the real executable.
+command: knife-edge-recompiled.sh
+
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --socket=pulseaudio
+  - --device=dri
+  - --share=ipc
+  # Deliberately NO --filesystem=* of any kind. The game has no use for host
+  # files except the one time it needs a ROM, and that's handled by the
+  # portal ROM picker (src/main/main.cpp, NFD_OpenDialogU8 via the
+  # xdg-desktop-portal FileChooser) -- portal file access needs no
+  # filesystem permission at all, that's the whole point of portals: the
+  # user grants access to one file, per-use, from outside the sandbox, and
+  # the picked path is handed back through the portal rather than requiring
+  # the sandbox to already be able to see it. ROM cache/config similarly
+  # live under the app's own private data dir (KE_DATA_DIR below), which
+  # every Flatpak app can already write to without any finish-arg.
+
+modules:
+  # Module name is load-bearing: config-opts below hardcodes
+  # /run/build/knife-edge-recompiled/generated/us as KE_GENERATED_DIR,
+  # which is flatpak-builder's in-sandbox source path for a `dir` source
+  # -- /run/build/<this module's name>/<path inside the copied source tree>.
+  # Renaming this module requires updating that path too.
+  - name: knife-edge-recompiled
+    buildsystem: cmake-ninja
+    build-options:
+      append-path: /usr/lib/sdk/llvm18/bin
+      prepend-ld-library-path: /usr/lib/sdk/llvm18/lib
+      env:
+        CC: clang
+        CXX: clang++
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
+      # No ROM, no python, no N64Recomp/RSPRecomp host tools in this
+      # sandbox (see build-notes.md, "Flatpak packaging") -- the recompiled
+      # C is supplied as pre-generated source instead (KE_GENERATED_DIR),
+      # which is why the source below is `type: dir` over the whole repo
+      # rather than a `type: git` checkout: it needs generated/ (gitignored,
+      # a build artifact everywhere else) to already be present.
+      - -DKE_GENERATED_DIR=/run/build/knife-edge-recompiled/generated/us
+    sources:
+      - type: dir
+        path: ../..
+        # dir sources have no documented skip/exclude mechanism in the
+        # flatpak-builder version this was written against, so this copies
+        # the whole working tree -- including deps/ (~1 GB with rt64's
+        # vendored contrib libs) and .git. That's the accepted cost of
+        # `dir` over `git`: no network access is available to
+        # flatpak-builder's sandboxed build (deps/ are git submodules,
+        # which a `git` source's submodule fetch can't reach either without
+        # network), so the working tree has to arrive pre-populated. See
+        # build-notes.md, "Flatpak packaging", for why Flathub distribution
+        # would need a different source strategy (out of scope here).
+    # CMakeLists.txt has no install() rules (this is a build-system
+    # skeleton, see its header comment) -- `ninja install` is a harmless
+    # no-op, so every file placement below is done by hand. Paths are
+    # relative to the module's build directory, which flatpak-builder's
+    # cmake-ninja buildsystem creates at _build/ under the source root
+    # (verify on first real build -- this is one of the two things this
+    # manifest could not be tested against in the sandbox this was written
+    # in; see build-notes.md).
+    post-install:
+      - install -Dm755 KnifeEdgeRecompiled /app/bin/knife-edge-recompiled-bin
+      - install -Dm755 ../packaging/flatpak/knife-edge-recompiled.sh /app/bin/knife-edge-recompiled.sh
+      - install -Dm644 ../packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.desktop
+          /app/share/applications/io.github.haydenmc.KnifeEdgeRecompiled.desktop
+      - install -Dm644 ../packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.metainfo.xml
+          /app/share/metainfo/io.github.haydenmc.KnifeEdgeRecompiled.metainfo.xml
+      - install -Dm644 ../packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.svg
+          /app/share/icons/hicolor/scalable/apps/io.github.haydenmc.KnifeEdgeRecompiled.svg

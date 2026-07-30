@@ -141,6 +141,37 @@ rest of its flags (`--check`, `--smoke`, `--shell`, `--exec`, `--jobs`,
 `--rebuild-image`), and `analysis/docs/build-notes.md`'s "Containerized
 build" section for the design.
 
+### Option D: Flatpak
+
+Needs recompiled game code first (Option A/B/C above with `-DKE_ROM=...`, or
+`./scripts/container_build.sh --rom ...`) so `generated/us/` exists, plus
+`flatpak-builder` on the host:
+
+```sh
+./scripts/build_flatpak.sh --install
+```
+
+This builds `KnifeEdgeRecompiled.flatpak` in the repo root and installs it for
+the current user (drop `--install` to just produce the bundle; see
+`./scripts/build_flatpak.sh --help` for `--bundle <path>` and
+`--runtime-install`, which fetches the `org.freedesktop.Platform`/`Sdk`//24.08
+runtime this manifest needs if you don't have it yet). Then:
+
+```sh
+flatpak run io.github.haydenmc.KnifeEdgeRecompiled
+```
+
+First run opens a portal file-open dialog to pick your ROM (no ROM ships in
+the bundle, and none is downloaded) — the sandbox has **no filesystem
+permissions at all**; the portal is what lets you point it at a file from
+outside the sandbox for that one pick. App data (config, the normalized ROM
+cache) lives at `~/.var/app/io.github.haydenmc.KnifeEdgeRecompiled/data/knife-edge-recompiled/`,
+so it persists across app updates. See `analysis/docs/build-notes.md`,
+"Flatpak packaging", for the manifest's design and
+`packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.yml`'s
+`finish-args` for the exact sandbox permissions (wayland/X11/pulseaudio
+sockets, DRI, IPC — no filesystem, no network).
+
 ## Running
 
 You need your own dump of *Knife Edge – Nose Gunner (USA)* (`.z64`, `.v64`,

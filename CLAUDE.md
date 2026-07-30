@@ -109,11 +109,41 @@ scratch-dir `cd` (35ead54). Still unexercised: the rewritten workflow's
 first run on a GitHub runner (happens on next push), and `regen-verify` on
 the self-hosted podman runner.
 
-Agreed order for the rest: Flatpak → high framerate (containerized builds
-were the item ahead of Flatpak — a reproducible container build is the
-substrate the Flatpak manifest reuses — and are now done pending the
-owner's host verification above). High framerate last because it is the
-deepest timing-sensitive cut.
+Flatpak packaging shipped (2026-07-30): `packaging/flatpak/` (manifest,
+launcher wrapper, desktop/metainfo/icon) + `scripts/build_flatpak.sh`. Two
+src-side changes make it possible, both verified headless in this session:
+`KE_DATA_DIR` env override for `get_app_folder_path()` (`src/main/support.cpp`)
+so the Flatpak wrapper can point config/ROM-cache at the per-app XDG data dir;
+and a portal ROM picker in `main.cpp` (NFD, already linked in via `rt64`) that
+runs when no ROM is cached, so the manifest's `finish-args` need **no
+`--filesystem` permission at all**. Two real hang/abort hazards were found and
+fixed on the way, both in this session, both confirmed via `strace`: (1)
+`NFD_Quit()` unconditionally `dbus_connection_unref()`s, which aborts if
+`NFD_Init()` failed — guarded so `NFD_Quit()` is reachable only after
+`NFD_Init() == NFD_OKAY`; (2) NFD's portal `OpenFile` call blocks with
+`DBUS_TIMEOUT_INFINITE` and **hangs forever** if no portal service is
+reachable at all (reproduced: bare Xvfb + a plain session bus, no
+`xdg-desktop-portal` installed) — fixed with a `portal_reachable()` precheck
+that asks the local D-Bus daemon (never the portal process) whether the
+portal has an owner or is at least D-Bus-activatable, entirely skipping NFD
+when neither is true; confirmed by `strace` to resolve in well under a
+millisecond either way. A third, separate, **pre-existing** behavior was
+also found and deliberately left alone: `show_error_message_box()`'s SDL
+message box is genuinely modal under any live display (forks and blocks for
+a human), which only matters for automated testing under a bare Xvfb with no
+window manager — never for CI (no `DISPLAY` at all, confirmed clean exit 1
+in ~5 ms) or a real desktop/Flatpak session (always has a compositor and a
+user). Full design and the exact verification transcripts are in
+`analysis/docs/build-notes.md`, "Flatpak packaging". **Not yet run**:
+flatpak-builder itself and the manifest end-to-end (no working
+flatpak-builder/bwrap in this session's container) — pending the owner's
+host, along with a real interactive portal-picker dismissal and data-dir
+persistence across runs.
+
+Agreed order for the rest: high framerate is the only item left (Flatpak
+above is done pending the owner's host verification; containerized builds,
+the item before it, were owner-verified end-to-end already — see above).
+High framerate last because it is the deepest timing-sensitive cut.
 
 RCP frame budget: **36.5 ms** (~24.6 measured game fps), tuned by the owner
 against real N64 gameplay footage. This replaced an earlier 59.733 ms figure
@@ -239,9 +269,9 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    confounded by the title screen auto-advancing and cannot decide it.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
-4. Enhancements not yet started, in agreed order (see Status): Flatpak
-   packaging, high framerate. High-score persistence deferred (see
-   candidates).
+4. Enhancements not yet started, in agreed order (see Status): high
+   framerate (the only one left — Flatpak packaging shipped, see Status).
+   High-score persistence deferred (see candidates).
 5. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
    `mouse-aim.md` §9.1 inert-aim watch-item). Buttons settled: L/R/M →
    Z/A/B, owner-specified.
@@ -258,3 +288,11 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    Remaining: first GitHub-runner execution of the rewritten workflow
    (automatic on next push — check the Actions tab), and the `regen-verify`
    job's containerized form on the self-hosted (podman) runner.
+9. Flatpak packaging: src-side changes (`KE_DATA_DIR`, portal ROM picker)
+   verified headless (see Status); the manifest/build itself has not run
+   anywhere (no working flatpak-builder/bwrap in this session's container)
+   — pending the owner's host: `scripts/build_flatpak.sh`, an interactive
+   portal-picker dismissal on a real desktop, and data-dir persistence
+   across runs. Report candidate added: the pre-existing modal-message-box
+   behavior under a bare-Xvfb-no-WM harness (`build-notes.md`, "Flatpak
+   packaging" — not a real-world defect, left alone).

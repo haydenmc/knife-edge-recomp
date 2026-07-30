@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original artwork for this project: a stylized reticle over an abstract
+     horizon. No Kemco assets, marks, or game art of any kind. Three flat
+     colors, no gradients. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect x="4" y="4" width="120" height="120" rx="24" fill="#182233"/>
+  <path d="M 4 84 L 128 84 L 128 100 A 24 24 0 0 1 104 124 L 24 124 A 24 24 0 0 1 4 100 Z" fill="#eef3f7"/>
+  <g stroke="#ff5a36" stroke-width="4" stroke-linecap="round">
+    <circle cx="64" cy="64" r="26" fill="none"/>
+    <line x1="64" y1="20" x2="64" y2="38"/>
+    <line x1="64" y1="90" x2="64" y2="108"/>
+    <line x1="20" y1="64" x2="38" y2="64"/>
+    <line x1="90" y1="64" x2="108" y2="64"/>
+  </g>
+  <circle cx="64" cy="64" r="4" fill="#ff5a36"/>
+</svg>

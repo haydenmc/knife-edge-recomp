@@ -10,11 +10,19 @@
 namespace kerecomp {
     // Base directory used for config/save data.
     //
-    // TODO: use a proper per-OS user data directory (XDG_DATA_HOME on Linux,
-    // %APPDATA% on Windows, Application Support on macOS) once save/config
-    // handling is implemented. For now this just anchors everything under a
-    // folder next to the current working directory so the skeleton has
-    // somewhere writable to point recomp::register_config_path() at.
+    // If the KE_DATA_DIR environment variable is set to a non-empty value,
+    // that path is used verbatim (still create_directories'd). This is the
+    // override the Flatpak wrapper (packaging/flatpak/knife-edge-recompiled.sh)
+    // sets to a per-app XDG_DATA_HOME path, since the sandbox's working
+    // directory is not a stable (or necessarily writable) place to keep the
+    // ROM cache/config across launches and updates.
+    //
+    // TODO: without KE_DATA_DIR, use a proper per-OS user data directory
+    // (XDG_DATA_HOME on Linux, %APPDATA% on Windows, Application Support on
+    // macOS) once save/config handling is implemented more broadly. For now
+    // the default just anchors everything under a folder next to the current
+    // working directory so the skeleton has somewhere writable to point
+    // recomp::register_config_path() at.
     std::filesystem::path get_app_folder_path();
 
     // Shows a native OS error dialog. Falls back to stderr if SDL's video

@@ -364,6 +364,18 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     find_package(Threads REQUIRED)
 
     target_link_libraries(KnifeEdgeRecompiled PRIVATE -latomic ${CMAKE_DL_LIBS} Threads::Threads SDL2::SDL2)
+
+    # main.cpp's portal-reachability precheck (see the comment beside
+    # portal_reachable() there) needs libdbus directly. nfd_portal.cpp
+    # (deps/rt64/src/contrib/nativefiledialog-extended) already depends on
+    # dbus-1 too, but links it PRIVATE
+    # (nativefiledialog-extended/src/CMakeLists.txt), so that dependency isn't
+    # visible to us transitively through rt64 -- this is a second, independent
+    # find of the same already-present system library, not a new install
+    # requirement.
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(KE_DBUS REQUIRED IMPORTED_TARGET dbus-1)
+    target_link_libraries(KnifeEdgeRecompiled PRIVATE PkgConfig::KE_DBUS)
 endif()
 
 if (APPLE)

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.haydenmc.KnifeEdgeRecompiled</id>
+  <name>Knife Edge Recompiled</name>
+  <summary>Static-recompilation PC port of Knife Edge - Nose Gunner (N64)</summary>
+
+  <!-- metadata_license covers this file; the repo carries a GPLv3 COPYING
+       file with no per-file "or later" notice, hence *-only rather than
+       *-or-later (see build-notes.md, "Flatpak packaging"). -->
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+
+  <developer id="io.github.haydenmc">
+    <name>haydenmc</name>
+  </developer>
+
+  <description>
+    <p>
+      Knife Edge Recompiled is a static-recompilation PC port of Knife Edge -
+      Nose Gunner, a 1998 Nintendo 64 rail-shooter by Kemco. The game's
+      original MIPS machine code is translated ahead of time into native code
+      (no emulation) using N64Recomp, with rendering handled by RT64.
+    </p>
+    <p>
+      This project contains no Kemco assets, game data, or ROM content --
+      only independently reverse-engineered control-flow structure needed to
+      recompile the game's own machine code. It REQUIRES you to already own
+      a legally obtained Knife Edge - Nose Gunner (USA) ROM: no game data is
+      included, and none can be downloaded through this app. On first run,
+      you will be asked to pick your ROM file through a file-open dialog.
+    </p>
+    <p>
+      Optional enhancements over the original 1998 release (higher-resolution
+      3D rendering, widescreen, and an uncropped in-mission view) are
+      available and off by default; vanilla behavior is preserved exactly
+      unless you opt in.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.haydenmc.KnifeEdgeRecompiled.desktop</launchable>
+
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-fantasy">mild</content_attribute>
+  </content_rating>
+
+  <releases>
+    <release version="0.0.1" date="2026-07-30">
+      <description>
+        <p>Initial Flatpak packaging.</p>
+      </description>
+    </release>
+  </releases>
+
+  <url type="homepage">https://github.com/haydenmc/knife-edge-recomp</url>
+  <url type="vcs-browser">https://github.com/haydenmc/knife-edge-recomp</url>
+</component>

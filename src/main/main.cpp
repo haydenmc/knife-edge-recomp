@@ -15,6 +15,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 
 #include "ultramodern/config.hpp"
@@ -47,6 +48,19 @@
 #include "config.h"
 #include "rt64_render_context.h"
 #include "support.h"
+
+// ROM picker (see the no-ROM fallback in main() below). Already linked into
+// this binary: deps/rt64/CMakeLists.txt links `nfd` (nativefiledialog-extended)
+// into the `rt64` target this executable links, and its headers are already
+// on our include path (CMakeLists.txt, nativefiledialog-extended/src/include).
+#include "nfd.h"
+
+#if defined(__linux__)
+// See portal_reachable() below: a direct (second, independent) use of
+// libdbus, needed only to pre-flight whether NFD's portal call is safe to
+// make at all.
+#   include <dbus/dbus.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -95,6 +109,85 @@ namespace {
         kerecomp::show_error_message_box("Knife Edge Recompiled - Fatal Error", message.c_str());
         ultramodern::error_handling::quick_exit(__FILE__, __LINE__, __FUNCTION__);
     }
+
+#if defined(__linux__)
+    // Whether org.freedesktop.portal.Desktop is reachable on the session bus:
+    // either already running (has an owner) or D-Bus-activatable (a .service
+    // file exists, so the bus daemon starts it on first use -- the common
+    // case, since xdg-desktop-portal is normally not running until something
+    // asks for it; this is exactly how a Flatpak sandbox's proxied session
+    // bus normally looks). Both queries below are answered by the LOCAL
+    // dbus-daemon about its own registry -- neither is proxied to the portal
+    // process itself -- so both return promptly even when no portal exists
+    // at all.
+    //
+    // This exists because nfd_portal.cpp's own D-Bus calls
+    // (dbus_connection_send_with_reply_and_block(..., DBUS_TIMEOUT_INFINITE,
+    // ...) in NFD_DBus_OpenFile()) have NO timeout, and were verified here to
+    // hang forever under a live X display with a working session bus but no
+    // portal service and no activation entry for it (bare Xvfb inside this
+    // project's dev container -- see analysis/docs/build-notes.md, "Flatpak
+    // packaging"). Skipping the NFD call entirely in that situation is the
+    // only reliable way to guarantee main() can't hang here; a wall-clock
+    // timeout around the NFD call instead would be wrong, since a real portal
+    // dialog is expected to legitimately block for as long as the user takes
+    // to pick a file.
+    bool portal_reachable() {
+        DBusError err;
+        dbus_error_init(&err);
+        // _private, not the shared dbus_bus_get(): this connection is ours
+        // alone to close below. Closing a connection obtained via the
+        // shared, process-wide dbus_bus_get() cache would also break it for
+        // NFD_Init()'s own later dbus_bus_get() call on the happy path.
+        DBusConnection* conn = dbus_bus_get_private(DBUS_BUS_SESSION, &err);
+        if (conn == nullptr) {
+            dbus_error_free(&err);
+            return false;
+        }
+
+        bool reachable = dbus_bus_name_has_owner(conn, "org.freedesktop.portal.Desktop", &err);
+        dbus_error_free(&err);
+
+        if (!reachable) {
+            DBusMessage* query = dbus_message_new_method_call(
+                "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                "ListActivatableNames");
+            if (query != nullptr) {
+                DBusError list_err;
+                dbus_error_init(&list_err);
+                // Bounded out of caution, even though this call goes to the
+                // daemon about its own registry and should never actually
+                // wait on the (possibly absent) portal.
+                DBusMessage* reply =
+                    dbus_connection_send_with_reply_and_block(conn, query, 2000, &list_err);
+                dbus_message_unref(query);
+                if (reply != nullptr) {
+                    DBusMessageIter iter;
+                    if (dbus_message_iter_init(reply, &iter) &&
+                        dbus_message_iter_get_arg_type(&iter) == DBUS_TYPE_ARRAY) {
+                        DBusMessageIter arr_iter;
+                        dbus_message_iter_recurse(&iter, &arr_iter);
+                        while (dbus_message_iter_get_arg_type(&arr_iter) == DBUS_TYPE_STRING) {
+                            const char* name = nullptr;
+                            dbus_message_iter_get_basic(&arr_iter, &name);
+                            if (name != nullptr && std::strcmp(name, "org.freedesktop.portal.Desktop") == 0) {
+                                reachable = true;
+                                break;
+                            }
+                            dbus_message_iter_next(&arr_iter);
+                        }
+                    }
+                    dbus_message_unref(reply);
+                }
+                dbus_error_free(&list_err);
+            }
+        }
+
+        dbus_connection_close(conn);
+        dbus_connection_unref(conn);
+        return reachable;
+    }
+#endif
 
     ultramodern::gfx_callbacks_t::gfx_data_t create_gfx() {
         SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
@@ -827,6 +920,9 @@ int main(int argc, char** argv) {
     std::filesystem::path app_folder = kerecomp::get_app_folder_path();
     kerecomp::Config config = kerecomp::load_config(argc, argv, app_folder);
     std::fprintf(stdout, "%s\n", kerecomp::describe_config(config).c_str());
+    // App data (config/ROM cache) location can vary now (KE_DATA_DIR, see
+    // support.cpp) -- print it so a bug report self-identifies where to look.
+    std::fprintf(stdout, "app data: %s\n", app_folder.string().c_str());
     std::fflush(stdout);
 
     kerecomp::EnhancementFlags enhancements = kerecomp::effective_enhancements(config);
@@ -962,6 +1058,74 @@ int main(int argc, char** argv) {
         }
     }
     recomp::check_all_stored_roms();
+    if (!recomp::is_rom_valid(knife_edge_entry.game_id)) {
+        // Portal ROM picker. Launcher UX, not an enhancement
+        // (analysis/docs/enhancements.md's policy is about gameplay-affecting
+        // deviations from vanilla; this only gets a path onto disk). It
+        // exists chiefly for the Flatpak build (packaging/flatpak/), where a
+        // portal file-open dialog is the sanctioned way to reach host files
+        // from a sandbox granted zero explicit filesystem permissions -- see
+        // that manifest's finish-args comment.
+        //
+        // Only attempted when a display is plausibly present. A headless run
+        // (no DISPLAY and no WAYLAND_DISPLAY -- this is CI's contract, and
+        // also plain `--rom`-less local runs over SSH) must keep failing
+        // exactly as before: promptly, with no dialog attempt at all, so it
+        // can never hang a script or a CI job.
+        const char* display_env = std::getenv("DISPLAY");
+        const char* wayland_env = std::getenv("WAYLAND_DISPLAY");
+        bool have_display = (display_env != nullptr && display_env[0] != '\0') ||
+                             (wayland_env != nullptr && wayland_env[0] != '\0');
+
+#if defined(__linux__)
+        // See portal_reachable() above: without this, a live display but no
+        // portal service (bare Xvfb, no xdg-desktop-portal) hangs forever
+        // inside NFD's own D-Bus call rather than falling through.
+        bool attempt_picker = have_display && portal_reachable();
+#else
+        bool attempt_picker = have_display;
+#endif
+
+        if (attempt_picker) {
+            // CRITICAL (see CLAUDE.md open items / this file's git history):
+            // on NFD's portal backend, NFD_Quit() unconditionally calls
+            // dbus_connection_unref() on a connection that only exists if
+            // NFD_Init() actually succeeded. Calling NFD_Quit() after a
+            // FAILED NFD_Init() (e.g. no xdg-desktop-portal service, or no
+            // session bus at all -- both plausible under a bare Xvfb) aborts
+            // the whole process. nfd.h's own doc comment says as much
+            // ("Call this ... if NFD_Init returned NFD_OKAY"); the bug is
+            // that violating it doesn't fail soft, it aborts. So: the
+            // NFD_Quit() call below is reachable ONLY through the
+            // `NFD_Init() == NFD_OKAY` branch, and nowhere else in this
+            // function.
+            if (NFD_Init() == NFD_OKAY) {
+                nfdu8char_t* picked_path = nullptr;
+                const nfdu8filteritem_t rom_filters[1] = {{"N64 ROM", "z64,n64,v64"}};
+                nfdresult_t dialog_result = NFD_OpenDialogU8(&picked_path, rom_filters, 1, nullptr);
+                if (dialog_result == NFD_OKAY && picked_path != nullptr) {
+                    // Treat the picked path exactly as if it had been passed
+                    // via --rom: run it through the same select_rom()
+                    // validation, so a bad pick fails the same way a bad
+                    // --rom path would.
+                    rom_path = picked_path;
+                    NFD_FreePathU8(picked_path);
+                    recomp::RomValidationError rom_err = recomp::select_rom(rom_path, knife_edge_entry.game_id);
+                    if (rom_err != recomp::RomValidationError::Good) {
+                        NFD_Quit();
+                        exit_error("ROM validation failed (error " +
+                                   std::to_string(static_cast<int>(rom_err)) + ") for " +
+                                   rom_path.string());
+                        return EXIT_FAILURE;
+                    }
+                }
+                // Cancel, dialog error, or NFD_Init failure: fall through to
+                // the no-ROM error below, unchanged.
+                NFD_Quit();
+            }
+        }
+    }
+
     if (!recomp::is_rom_valid(knife_edge_entry.game_id)) {
         exit_error("No valid ROM. Run with: KnifeEdgeRecompiled --rom <path-to-knife-edge-rom>");
         return EXIT_FAILURE;
