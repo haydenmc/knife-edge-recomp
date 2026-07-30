@@ -42,6 +42,12 @@ for f in "$ROM" "$BIN"; do
     fi
 done
 
+# Absolutize before the `cd` below -- --rom/--binary may be given relative to
+# the caller's directory (container_build.sh --smoke does), and a relative
+# path silently dangles once we move into the scratch dir.
+ROM="$(realpath "$ROM")"
+BIN="$(realpath "$BIN")"
+
 WORK="$(mktemp -d)"
 cleanup() {
     [ -n "${APP_PID:-}" ] && kill "$APP_PID" 2>/dev/null
