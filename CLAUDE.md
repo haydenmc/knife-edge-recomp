@@ -98,12 +98,16 @@ podman/SELinux run flags lifted from `.devcontainer`'s proven ones, and a
 bind-mounted repo might carry from being silently preferred over the
 container's own (a tmpfs-shadow first attempt died on crun's tmpcopyup —
 see build-notes).
-Verification is **static only** — `bash -n`, a YAML parse, and package-list
-cross-checking against the existing CI jobs/devcontainer/`smoke_test.sh` —
-because this devcontainer has no container runtime at all (no docker, no
-podman: we're already inside a container). Nothing here has actually been
-built or run in an image yet; that's the next thing needed from the owner's
-host (see Open items).
+**Owner-verified end-to-end (2026-07-30)** on the rootless-podman/SELinux
+host: image build, stub build + `--check` (clean exit-1), and the full
+`--rom --smoke` path (analysis pipeline on the image venv, recompile, link,
+in-container Xvfb/lavapipe smoke PASS). Two real bugs found and fixed on
+the way: the `.venv` tmpfs shadow died on crun's tmpcopyup (95 MB venv into
+a 16 MB tmpfs — replaced with `-DKE_PYTHON`/`PY=` overrides, 3cc4266), and
+`smoke_test.sh` dangled relative `--rom`/`--binary` paths after its
+scratch-dir `cd` (35ead54). Still unexercised: the rewritten workflow's
+first run on a GitHub runner (happens on next push), and `regen-verify` on
+the self-hosted podman runner.
 
 Agreed order for the rest: Flatpak → high framerate (containerized builds
 were the item ahead of Flatpak — a reproducible container build is the
@@ -250,10 +254,7 @@ knobs (e.g. `tuning.rcp_frame_ms`) are *not* enhancements.
    letterbox-band color bug (vanilla-only cosmetic;
    `letterbox-full-height.md` §4); RT64-bundled nativefiledialog null-dbus
    abort (container-only).
-8. Containerized build: owner verification on a real host with docker or
-   podman actually installed (this devcontainer has neither, so
-   `containers/Containerfile` and `scripts/container_build.sh` have only
-   been verified statically — syntax/YAML checks and package-list
-   cross-referencing, never an actual image build or container run). Also
-   unverified: the `regen-verify` job's containerized form on the owner's
-   self-hosted (podman) runner.
+8. Containerized build: owner-verified end-to-end on the host (see Status).
+   Remaining: first GitHub-runner execution of the rewritten workflow
+   (automatic on next push — check the Actions tab), and the `regen-verify`
+   job's containerized form on the self-hosted (podman) runner.
