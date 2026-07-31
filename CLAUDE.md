@@ -202,10 +202,28 @@ decrypted z64 and **default-branch caches are restorable by fork-PR
 runs**. `on.push` is now filtered to `main` + `v*` (PRs cover branches);
 workflow `concurrency` cancels superseded PR runs only.
 
-Agreed order for the rest: high framerate is the only item left (Flatpak
-above is done pending the owner's host verification; containerized builds,
-the item before it, were owner-verified end-to-end already — see above).
-High framerate last because it is the deepest timing-sensitive cut.
+High framerate shipped (2026-07-31) — the last item of the agreed
+enhancement order. `high_framerate` flag (in `enhanced`, like its siblings
+pre-verification): `rr_option = Display` activates RT64's frame
+interpolation, but the load-bearing piece is rate declaration — RT64's VI
+auto-detect needs a consistent 60/N cadence and this game's paced ~27 fps
+straddles 2-3 VIs, so detection returns 0 and interpolation silently never
+engages. Fix: `send_dl` (which already chooses the DL entry address)
+prepends a 4-command extended-GBI prologue in scratch RDRAM at 0x807FF000
+(upper 4 MiB; base-4MiB game never touches it; one-time zero-check
+fail-safe): hook-ENABLE → `gEXSetRefreshRate(rate)` → hook-DISABLE →
+hook-BRANCH to the game DL. The OSTask is never modified and extended GBI
+is never live inside the game's own DL. The declared rate is a live EMA
+over `ke_gfx_task_begin` intervals (cutscenes self-limit to ~15 fps and
+must interpolate at their own cadence — a constant would make them judder
+worse than vanilla). Game logic pace untouched (verified: identical DL
+counts flag-on vs flag-off). Full design record:
+`analysis/docs/high-framerate.md`. **Headless cannot exercise
+interpolation itself** (Xvfb → display target 0 Hz → targetRate 0): smoke
+PASS proves the prologue parses harmlessly; the owner's GPU run is the
+first real interpolation run — hands-on checklist in the doc §5 (HUD/
+reticle warping and respawn smearing are the expected artifact classes;
+escalation path is gEXMatrixGroup tagging).
 
 RCP frame budget: **36.5 ms** (~24.6 measured game fps), tuned by the owner
 against real N64 gameplay footage. This replaced an earlier 59.733 ms figure
@@ -335,9 +353,14 @@ default only affects fresh installs.
    confounded by the title screen auto-advancing and cannot decide it.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
-4. Enhancements not yet started, in agreed order (see Status): high
-   framerate (the only one left — Flatpak packaging shipped, see Status).
-   High-score persistence deferred (see candidates).
+4. High framerate: shipped headless-verified (see Status); owner hands-on
+   pending and load-bearing — headless can't run interpolation at all, so
+   the GPU run is its first real execution. Checklist:
+   `analysis/docs/high-framerate.md` §5 (smoothness vs ~27 baseline,
+   HUD/reticle warp, respawn smear, cutscene ~15 fps regime,
+   full_height/widescreen interaction). All items of the agreed
+   enhancement order are now shipped. High-score persistence remains
+   deferred (see candidates).
 5. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
    `mouse-aim.md` §9.1 inert-aim watch-item). Buttons settled: L/R/M →
    Z/A/B, owner-specified.

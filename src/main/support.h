@@ -71,6 +71,18 @@ namespace kerecomp {
     };
     ReticleState reticle_state();
 
+    // ---- measured game-frame cadence (analysis/docs/high-framerate.md,
+    // src/main/rcp_timing.cpp) ----
+    // EMA (alpha 0.25) of the interval between consecutive game graphics
+    // tasks, in milliseconds; load/pause hitches (>250 ms) and sub-millisecond
+    // noise (<1 ms) are excluded from the average rather than resetting it.
+    // 0.0 means no measurement yet (no task has completed a second time).
+    // Used by src/main/rt64_render_context.cpp to declare the game's logic
+    // rate to RT64 so its frame-interpolation auto-detection -- which needs a
+    // consistent 60/N VI cadence this game never produces -- has a rate to
+    // work with at all.
+    double measured_game_frame_interval_ms();
+
     // ---- enhancements (analysis/docs/enhancements.md, src/main/full_height.cpp) --
     // Turns the full_height enhancement on/off (removes the in-mission
     // letterbox, rendering the full 320x240 frame instead of 320x200).

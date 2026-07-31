@@ -37,6 +37,13 @@ namespace kerecomp {
             float get_resolution_scale() const override;
 
         private:
+            // high_framerate enhancement (analysis/docs/high-framerate.md):
+            // returns game_dl_addr unchanged unless RT64 needs a declared
+            // logic rate to interpolate against, in which case it writes a
+            // 4-command extended-GBI prologue to scratch RDRAM and returns
+            // its address instead. Implemented in rt64_render_context.cpp.
+            uint32_t maybe_inject_rate_prologue(uint32_t game_dl_addr);
+
             std::unique_ptr<RT64::Application> app;
         };
 

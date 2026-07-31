@@ -943,17 +943,21 @@ int main(int argc, char** argv) {
                                 std::memory_order_relaxed);
     mouse_invert_y.store(config.input.mouse_invert_y, std::memory_order_relaxed);
 
-    // enhancements.high_resolution / .widescreen (analysis/docs/enhancements.md).
-    // Must be set before recomp::start() below spins up the gfx thread, since
-    // gfx_thread_func() reads get_graphics_config() as its very first action
-    // (both directly for developer_mode and via create_render_context(), and
-    // again for its "old_config" baseline) -- setting it any later would
-    // race the gfx thread's startup read. Every field except res_option and
-    // ar_option pins today's value-initialized GraphicsConfig{} default (all
-    // enums 0, ints 0) so that vanilla (both flags off) stays bit-identical
-    // to pre-existing behavior; ds_option=1 here vs the implicit 0 before
-    // this code existed are equivalent because set_application_user_config()
-    // (src/main/rt64_render_context.cpp) clamps with max(ds_option, 1).
+    // enhancements.high_resolution / .widescreen / .high_framerate
+    // (analysis/docs/enhancements.md). Must be set before recomp::start()
+    // below spins up the gfx thread, since gfx_thread_func() reads
+    // get_graphics_config() as its very first action (both directly for
+    // developer_mode and via create_render_context(), and again for its
+    // "old_config" baseline) -- setting it any later would race the gfx
+    // thread's startup read. Every field except res_option, ar_option, and
+    // rr_option pins today's value-initialized GraphicsConfig{} default (all
+    // enums 0, ints 0) so that vanilla (all three flags off) stays
+    // bit-identical to pre-existing behavior; ds_option=1 here vs the
+    // implicit 0 before this code existed are equivalent because
+    // set_application_user_config() (src/main/rt64_render_context.cpp)
+    // clamps with max(ds_option, 1). rr_manual_value stays pinned at 0 --
+    // RT64's Manual refresh-rate mode is deliberately not exposed yet (see
+    // analysis/docs/high-framerate.md).
     ultramodern::renderer::GraphicsConfig gfx_config{};
     gfx_config.developer_mode = false;
     gfx_config.res_option = enhancements.high_resolution ? ultramodern::renderer::Resolution::Auto
@@ -964,7 +968,8 @@ int main(int argc, char** argv) {
     gfx_config.ar_option = enhancements.widescreen ? ultramodern::renderer::AspectRatio::Expand
                                                     : ultramodern::renderer::AspectRatio::Original;
     gfx_config.msaa_option = ultramodern::renderer::Antialiasing::None;
-    gfx_config.rr_option = ultramodern::renderer::RefreshRate::Original;
+    gfx_config.rr_option = enhancements.high_framerate ? ultramodern::renderer::RefreshRate::Display
+                                                        : ultramodern::renderer::RefreshRate::Original;
     gfx_config.hpfb_option = ultramodern::renderer::HighPrecisionFramebuffer::Auto;
     gfx_config.rr_manual_value = 0;
     gfx_config.ds_option = 1;

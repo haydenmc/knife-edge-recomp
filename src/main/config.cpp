@@ -92,6 +92,11 @@ namespace {
         "# Removes the 20-line letterbox during missions (renders the full\n"
         "# 320x240 frame).\n"
         "full_height = false\n"
+        "# Renders at the display's refresh rate via RT64 frame interpolation;\n"
+        "# game logic keeps its original paced rate (see analysis/docs/\n"
+        "# high-framerate.md). Off presents one frame per game step, like\n"
+        "# original hardware.\n"
+        "high_framerate = false\n"
         "\n"
         "[tuning]\n"
         "# Fidelity knobs, NOT enhancements -- see src/main/rcp_timing.cpp.\n"
@@ -190,6 +195,7 @@ namespace {
             // Known [enhancements] keys -- add one line here per new flag.
             static constexpr std::string_view known_enhancement_keys[] = {
                 "input_latching", "high_resolution", "widescreen", "full_height",
+                "high_framerate",
             };
             for (auto&& [key, value] : *enh_tbl) {
                 std::string_view k = key.str();
@@ -215,6 +221,9 @@ namespace {
             }
             if (auto v = (*enh_tbl)["full_height"].value<bool>()) {
                 cfg.enhancements.full_height = *v;
+            }
+            if (auto v = (*enh_tbl)["high_framerate"].value<bool>()) {
+                cfg.enhancements.high_framerate = *v;
             }
         }
 
@@ -355,6 +364,7 @@ kerecomp::EnhancementFlags kerecomp::effective_enhancements(const Config& cfg) {
             flags.high_resolution = true;
             flags.widescreen = true;
             flags.full_height = true;
+            flags.high_framerate = true;
             return flags;
         }
         case Profile::Custom:
@@ -378,6 +388,9 @@ std::string kerecomp::describe_config(const Config& cfg) {
     }
     if (effective.full_height) {
         parts.emplace_back("full_height=on");
+    }
+    if (effective.high_framerate) {
+        parts.emplace_back("high_framerate=on");
     }
     if (cfg.tuning.rcp_frame_ms > 0.0) {
         char buf[64];

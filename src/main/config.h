@@ -58,6 +58,13 @@ struct EnhancementFlags {
     // 320x240. Vanilla (off) keeps the 320x200 letterbox, faithful to
     // original hardware.
     bool full_height = false;
+
+    // Renders at the display's refresh rate via RT64's frame interpolation:
+    // game logic keeps stepping at its original paced rate (rcp_timing.cpp is
+    // untouched), and RT64 synthesizes the in-between frames by interpolating
+    // transforms between consecutive game frames. Vanilla (off) presents one
+    // frame per game step, like original hardware.
+    bool high_framerate = false;
 };
 
 // Fidelity knobs -- NOT enhancements. These approximate a real-hardware
@@ -155,7 +162,7 @@ Config load_config(int argc, char** argv, const std::filesystem::path& app_folde
 // The enhancement set actually in effect for cfg.profile:
 //   Vanilla  -> EnhancementFlags{} (everything off)
 //   Enhanced -> the curated set (input_latching = true, high_resolution = true,
-//               widescreen = true, full_height = true)
+//               widescreen = true, full_height = true, high_framerate = true)
 //   Custom   -> cfg.enhancements verbatim
 EnhancementFlags effective_enhancements(const Config& cfg);
 

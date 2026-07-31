@@ -309,8 +309,11 @@ commented defaults on first run. It selects a **profile**:
   `input_latching` (see Controls above), `high_resolution` (renders the 3D
   scene at window resolution through RT64 instead of native 320x240),
   `widescreen` (expands the 3D field of view to the window's aspect ratio
-  instead of 4:3-pillarboxing it), and `full_height` (removes the in-mission
-  20-line letterbox, revealing the full 320x240 frame).
+  instead of 4:3-pillarboxing it), `full_height` (removes the in-mission
+  20-line letterbox, revealing the full 320x240 frame), and `high_framerate`
+  (renders at the display's refresh rate via RT64 frame interpolation, while
+  game logic keeps stepping at its original paced rate — see
+  `analysis/docs/high-framerate.md`).
 - `vanilla` — every enhancement off, faithful to original hardware behavior.
   This is the regression baseline every measurement and bug investigation in
   `analysis/docs/` assumes unless stated otherwise.

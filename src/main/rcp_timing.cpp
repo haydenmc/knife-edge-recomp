@@ -132,6 +132,29 @@ namespace {
     // which runs one task at a time; atomic purely for tidiness.
     std::atomic<clock_type::time_point> task_start{clock_type::time_point{}};
 
+    // ---- measured game-frame cadence (high_framerate enhancement) ---------
+    //
+    // RT64's frame-interpolation only engages once it's told the game's
+    // *original* logic rate (analysis/docs/high-framerate.md): its own
+    // auto-detection needs a consistent 60/N VI cadence, and this game's
+    // paced rate straddles 2-3 VIs per frame (continuous ~27 fps at the
+    // default 36.5 ms budget, not quantised), so detection never agrees and
+    // returns 0. We measure the cadence ourselves instead, from the same
+    // per-task timestamp used for pacing above, and declare it directly via
+    // gEXSetRefreshRate (src/main/rt64_render_context.cpp).
+    //
+    // An EMA, not a raw instantaneous interval, because the declared rate
+    // must track the game's *steady* cadence -- gameplay ~27 fps at the
+    // default budget, cutscenes self-limited to ~15 fps by the game's own
+    // busy-wait (this file's header comment) -- without chasing one-off
+    // hitches (a load stall, a paused frame). Intervals outside [1, 250] ms
+    // are ignored entirely (neither folded into the EMA nor allowed to reset
+    // it): under 1 ms is measurement noise, over 250 ms is a hitch, not a
+    // cadence change.
+    constexpr double ema_alpha = 0.25;
+    std::atomic<clock_type::time_point> prev_begin{clock_type::time_point{}};
+    std::atomic<double> ema_frame_interval_ms{0.0};
+
     // Last time some game thread was seen spinning in func_800D2B40 waiting for
     // 0x8013C280 ("graphics tasks in flight") to reach 0.  Written by the
     // waiting thread, read by whichever thread is about to queue the next task.
@@ -204,7 +227,22 @@ kerecomp::ReticleState kerecomp::reticle_state() {
 // Hooked at the game's osSpTaskStartGo call site: the RCP has just been handed
 // a display list.
 extern "C" void ke_gfx_task_begin(void) {
-    task_start.store(clock_type::now(), std::memory_order_relaxed);
+    clock_type::time_point now = clock_type::now();
+
+    clock_type::time_point prev = prev_begin.exchange(now, std::memory_order_relaxed);
+    if (prev != clock_type::time_point{}) {
+        double interval_ms = std::chrono::duration<double, std::milli>(now - prev).count();
+        // See ema_frame_interval_ms's declaration above for why hitches (and
+        // sub-millisecond noise) are ignored rather than folded in or used to
+        // reset the average.
+        if (interval_ms >= 1.0 && interval_ms <= 250.0) {
+            double prior = ema_frame_interval_ms.load(std::memory_order_relaxed);
+            double updated = (prior == 0.0) ? interval_ms : (ema_alpha * interval_ms + (1.0 - ema_alpha) * prior);
+            ema_frame_interval_ms.store(updated, std::memory_order_relaxed);
+        }
+    }
+
+    task_start.store(now, std::memory_order_relaxed);
 }
 
 // Hooked just before the graphics task thread posts "task complete" back to the
@@ -276,4 +314,8 @@ extern "C" void ke_rcp_idle_wait(uint8_t* rdram) {
 
 void kerecomp::set_rcp_frame_ms_tuning(double ms) {
     tuning_frame_ms.store(ms, std::memory_order_relaxed);
+}
+
+double kerecomp::measured_game_frame_interval_ms() {
+    return ema_frame_interval_ms.load(std::memory_order_relaxed);
 }

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
@@ -294,7 +295,85 @@ void kerecomp::renderer::RT64Context::send_dl(const OSTask* task) {
         return;
     }
 
-    app->processDisplayLists(app->core.RDRAM, task->t.data_ptr & 0x3FFFFFF, 0, true);
+    uint32_t dl_addr = task->t.data_ptr & 0x3FFFFFF;
+    uint32_t entry = maybe_inject_rate_prologue(dl_addr);
+    app->processDisplayLists(app->core.RDRAM, entry, 0, true);
+}
+
+// high_framerate enhancement (analysis/docs/high-framerate.md). RT64's frame
+// interpolation only engages once it knows the game's original logic rate;
+// its own VI-cadence auto-detection can't derive one for this game (a
+// continuous ~27 fps that straddles 2-3 VIs per frame, never a consistent
+// 60/N), so we declare it per display list via RT64's extended-GBI
+// gEXSetRefreshRate instead. Returns game_dl_addr unchanged (untouched, no
+// scratch RDRAM write at all) unless every one of the gating conditions holds.
+uint32_t kerecomp::renderer::RT64Context::maybe_inject_rate_prologue(uint32_t game_dl_addr) {
+    const auto& cur_config = ultramodern::renderer::get_graphics_config();
+    if (cur_config.rr_option == ultramodern::renderer::RefreshRate::Original) {
+        return game_dl_addr;
+    }
+
+    double interval_ms = kerecomp::measured_game_frame_interval_ms();
+    if (interval_ms <= 0.0) {
+        // No measurement yet (e.g. the very first display list of the run).
+        return game_dl_addr;
+    }
+
+    // Scratch RDRAM: physical 0x7FF000 (vaddr 0x807FF000). Inside librecomp's
+    // 8 MiB RDRAM allocation but in the upper 4 MiB, which this base-4-MiB-
+    // machine game never touches (analysis/out/segment_map.md: highest write
+    // ever seen is 0x80287C20). One-time check, strictly before our first
+    // write ever happens (afterwards the words are nonzero by our own hand,
+    // so the check could never run again anyway): if any of the 8 words we're
+    // about to use are already nonzero, something else claimed this region,
+    // and we fail safe -- disable the injection permanently rather than risk
+    // corrupting whatever that is.
+    static const bool scratch_usable = [this]() {
+        uint32_t* p = reinterpret_cast<uint32_t*>(app->core.RDRAM + 0x7FF000);
+        for (int i = 0; i < 8; i++) {
+            if (p[i] != 0) {
+                std::fprintf(stderr,
+                    "[hfr] scratch RDRAM at 0x807FF000 unexpectedly in use; "
+                    "high framerate interpolation disabled\n");
+                return false;
+            }
+        }
+        return true;
+    }();
+    if (!scratch_usable) {
+        return game_dl_addr;
+    }
+
+    int rate = std::clamp(static_cast<int>(std::lround(1000.0 / interval_ms)), 10, 60);
+
+    static int last_logged_rate = -1;
+    if (rate != last_logged_rate) {
+        last_logged_rate = rate;
+        std::fprintf(stderr, "[hfr] declaring game logic rate %d Hz to RT64 (display target %u Hz)\n",
+                     rate, get_display_framerate());
+    }
+
+    // RT64 extended-GBI hook commands (deps/rt64/include/rt64_extended_gbi.h,
+    // handler: noOpHook in deps/rt64/src/gbi/rt64_gbi_extended.cpp). The game
+    // runs F3DEX2, whose G_SPNOOP opcode is 0xE0 = RT64_HOOK_OPCODE; magic
+    // 0x525464 ("RT",0x64) marks the NOOP as an RT64 hook. Sequence:
+    //   ENABLE(ext opcode 0x64) -> gEXSetRefreshRate(rate) -> DISABLE ->
+    //   BRANCH(game DL)
+    // DISABLE before the branch means the game's own display list never runs
+    // with the extended opcode registered, so 0x64 cannot collide with any
+    // game command byte.
+    //
+    // Direct u32 stores, no byte-swapping: RT64's DisplayList struct reads
+    // {w0, w1} as native u32s from this same buffer, and 4-byte-aligned u32
+    // stores are exactly what the recompiled game's own SW instructions
+    // produce.
+    uint32_t* p = reinterpret_cast<uint32_t*>(app->core.RDRAM + 0x7FF000);
+    p[0] = 0xE0525464u; p[1] = 0x10000064u;                       // HOOK_OP_ENABLE, extended opcode 0x64
+    p[2] = 0x64000009u; p[3] = static_cast<uint32_t>(rate) & 0xFFFFu; // G_EX_SETREFRESHRATE_V1
+    p[4] = 0xE0525464u; p[5] = 0x20000000u;                       // HOOK_OP_DISABLE
+    p[6] = 0xE0525464u; p[7] = 0x40000000u | (game_dl_addr & 0x0FFFFFFFu); // HOOK_OP_BRANCH -> game DL
+
+    return 0x7FF000;
 }
 
 void kerecomp::renderer::RT64Context::update_screen() {
