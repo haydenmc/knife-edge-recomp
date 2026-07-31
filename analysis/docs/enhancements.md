@@ -100,7 +100,21 @@ run on every push (no ROM on GitHub-hosted CI).
 
 Notes on `full_height`: unlike `widescreen`, there is **no pop-in risk** — the game's 30°/4:3 frustum plus `gSPClipRatio(FRUSTRATIO_2)` already cover all 240 rows, so nothing culled for a 200-line view needs to reappear. In the `enhanced` profile's curated set (promoted after the owner's hands-on check confirmed it works as intended). It reveals roughly 20% more scene vertically, which is an inherent gameplay effect (more of the world is visible), not a bug. In-mission cutscenes lose their letterbox bars too via the same mechanism — also inherent, since cutscenes reuse the mission's rendering path.
 
-Notes on `high_framerate`: in the `enhanced` profile's curated set, like the other three, but **pending the owner's hands-on hardware verification** (same status widescreen/high_resolution had before their own hands-on checks) — headless verification (build + the `[hfr] declaring` log line + an identical measured game-fps with the flag on vs off) is done, but only a human can judge whether interpolated motion looks right and whether the heuristic transform-matching risk above is visible in practice.
+Notes on `high_framerate`: **EXPERIMENTAL — deliberately NOT in the
+`enhanced` curated set** (owner decision 2026-07-31, after hands-on
+verification on real hardware). The hands-on result: interpolation works —
+frame rate visibly higher, most of the scene interpolates cleanly — but the
+heuristic transform-matching risk flagged above is real and visible on
+per-frame-respawned effects, confirmed on the **lock-on effect** and
+**bullet trails** (warping/smearing during interpolated in-between frames).
+This matches the ecosystem norm: Zelda64Recompiled's artifact-free high-FPS
+mode required extensive hand-placed `gEXMatrixGroup` tagging in its game
+patches, and RT64's own docs call automatic matching experimental and the
+tagging "vital" for accurate interpolation. Until per-effect tagging is done
+here (the escalation path in `high-framerate.md` §4 — nontrivial without a
+decompilation), the flag stays an opt-in via the `custom` profile, and both
+the generated config.toml text and the README label it experimental with
+known artifacts.
 
 Diagnostics, for completeness (not enhancements — see "Policy" above, both
 stay as env vars rather than config-file entries):

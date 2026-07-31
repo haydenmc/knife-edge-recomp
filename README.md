@@ -309,15 +309,21 @@ commented defaults on first run. It selects a **profile**:
   `input_latching` (see Controls above), `high_resolution` (renders the 3D
   scene at window resolution through RT64 instead of native 320x240),
   `widescreen` (expands the 3D field of view to the window's aspect ratio
-  instead of 4:3-pillarboxing it), `full_height` (removes the in-mission
-  20-line letterbox, revealing the full 320x240 frame), and `high_framerate`
-  (renders at the display's refresh rate via RT64 frame interpolation, while
-  game logic keeps stepping at its original paced rate — see
-  `analysis/docs/high-framerate.md`).
+  instead of 4:3-pillarboxing it), and `full_height` (removes the in-mission
+  20-line letterbox, revealing the full 320x240 frame).
 - `vanilla` — every enhancement off, faithful to original hardware behavior.
   This is the regression baseline every measurement and bug investigation in
   `analysis/docs/` assumes unless stated otherwise.
 - `custom` — reads individual `[enhancements]` flags from the file.
+
+One additional flag exists outside every curated profile: `high_framerate`
+(**experimental**) renders at the display's refresh rate via RT64 frame
+interpolation while game logic keeps its original paced rate. It works —
+motion is visibly smoother — but has known visual artifacts on some effects
+(the lock-on effect and bullet trails warp/smear, a limitation of RT64's
+heuristic frame matching; see `analysis/docs/high-framerate.md`). To try it,
+set `active = "custom"` and enable it (plus whichever enhanced-set flags you
+want) under `[enhancements]`.
 
 Two CLI flags, and nothing else config-related:
 

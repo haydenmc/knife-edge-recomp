@@ -92,10 +92,12 @@ namespace {
         "# Removes the 20-line letterbox during missions (renders the full\n"
         "# 320x240 frame).\n"
         "full_height = false\n"
-        "# Renders at the display's refresh rate via RT64 frame interpolation;\n"
-        "# game logic keeps its original paced rate (see analysis/docs/\n"
-        "# high-framerate.md). Off presents one frame per game step, like\n"
-        "# original hardware.\n"
+        "# EXPERIMENTAL: renders at the display's refresh rate via RT64 frame\n"
+        "# interpolation; game logic keeps its original paced rate (see\n"
+        "# analysis/docs/high-framerate.md). Known visual artifacts on some\n"
+        "# effects (e.g. the lock-on effect and bullet trails) -- not part of\n"
+        "# the enhanced profile for that reason. Off presents one frame per\n"
+        "# game step, like original hardware.\n"
         "high_framerate = false\n"
         "\n"
         "[tuning]\n"
@@ -364,7 +366,13 @@ kerecomp::EnhancementFlags kerecomp::effective_enhancements(const Config& cfg) {
             flags.high_resolution = true;
             flags.widescreen = true;
             flags.full_height = true;
-            flags.high_framerate = true;
+            // high_framerate is deliberately NOT in the curated set (owner
+            // decision 2026-07-31 after hands-on): it works -- frame rate is
+            // visibly higher and most of the scene interpolates cleanly --
+            // but RT64's heuristic transform matching produces visible
+            // artifacts on some effects (lock-on effect, bullet trails), so
+            // it stays an experimental opt-in via the custom profile until
+            // per-effect tagging addresses those (high-framerate.md section 4).
             return flags;
         }
         case Profile::Custom:

@@ -232,7 +232,29 @@ regimes automatically.
   (within 1 of each other at every checkpoint). Interpolation is not
   perturbing game logic pace.
 
-### Owner hands-on checklist (pending)
+### Owner hands-on results (2026-07-31)
+
+Verified on the owner's host GPU — the first run where interpolation
+actually executed (headless never can, see above):
+
+- **Works**: frame rate clearly higher, and most of the scene interpolates
+  smoothly.
+- **Artifacts confirmed** on exactly the class §4 predicted
+  (per-frame-respawned effects mismatched by heuristic transform matching):
+  the **lock-on effect** and the **bullet trails** from the player's gun
+  warp/smear visibly.
+- **Owner decision**: keep the feature, but out of the `enhanced` curated
+  set — it is an experimental opt-in (custom profile) until per-effect
+  `gEXMatrixGroup`/`gEXMatrixGroupNoInterpolate` tagging addresses the
+  confirmed offenders. The lock-on effect and bullet trails are the first
+  two targets for that work, whenever it happens; the likely treatment is
+  opting them *out* of interpolation (render at game rate, no warp), which
+  is the standard approach for particle-like effects in Zelda64Recompiled.
+
+The checklist below is retained for reference / future re-verification
+after any tagging work.
+
+### Owner hands-on checklist (original, pre-verification)
 
 - Does motion actually look smoother than the ~27 fps baseline at the
   display's real refresh rate (not just "the log line says a rate")?

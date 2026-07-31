@@ -218,12 +218,16 @@ over `ke_gfx_task_begin` intervals (cutscenes self-limit to ~15 fps and
 must interpolate at their own cadence — a constant would make them judder
 worse than vanilla). Game logic pace untouched (verified: identical DL
 counts flag-on vs flag-off). Full design record:
-`analysis/docs/high-framerate.md`. **Headless cannot exercise
-interpolation itself** (Xvfb → display target 0 Hz → targetRate 0): smoke
-PASS proves the prologue parses harmlessly; the owner's GPU run is the
-first real interpolation run — hands-on checklist in the doc §5 (HUD/
-reticle warping and respawn smearing are the expected artifact classes;
-escalation path is gEXMatrixGroup tagging).
+`analysis/docs/high-framerate.md`. Headless cannot exercise interpolation
+itself (Xvfb → display target 0 Hz → targetRate 0); the owner's GPU run
+was the first real interpolation run. **Owner-verified 2026-07-31**: works
+(visibly higher frame rate, most of the scene smooth), but heuristic
+transform matching artifacts confirmed on the lock-on effect and bullet
+trails — **owner decision: out of the `enhanced` set, experimental opt-in
+via custom profile**, labeled as such in config/README. Escalation path
+when wanted: per-effect gEXMatrixGroup tagging (doc §4); lock-on + trails
+are the first targets, likely treatment is opting them out of
+interpolation.
 
 RCP frame budget: **36.5 ms** (~24.6 measured game fps), tuned by the owner
 against real N64 gameplay footage. This replaced an earlier 59.733 ms figure
@@ -353,14 +357,14 @@ default only affects fresh installs.
    confounded by the title screen auto-advancing and cannot decide it.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
-4. High framerate: shipped headless-verified (see Status); owner hands-on
-   pending and load-bearing — headless can't run interpolation at all, so
-   the GPU run is its first real execution. Checklist:
-   `analysis/docs/high-framerate.md` §5 (smoothness vs ~27 baseline,
-   HUD/reticle warp, respawn smear, cutscene ~15 fps regime,
-   full_height/widescreen interaction). All items of the agreed
-   enhancement order are now shipped. High-score persistence remains
-   deferred (see candidates).
+4. High framerate: shipped and owner-verified (see Status); experimental
+   opt-in, not in `enhanced` (owner decision 2026-07-31 — confirmed
+   artifacts on lock-on effect + bullet trails). Deferred follow-up when
+   the owner wants it: per-effect interpolation opt-out tagging
+   (`high-framerate.md` §4; needs RE to identify the offending draws'
+   signatures — no decompilation exists to tag at the source). All items
+   of the agreed enhancement order are now shipped. High-score
+   persistence remains deferred (see candidates).
 5. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
    `mouse-aim.md` §9.1 inert-aim watch-item). Buttons settled: L/R/M →
    Z/A/B, owner-specified.

@@ -59,11 +59,17 @@ struct EnhancementFlags {
     // original hardware.
     bool full_height = false;
 
-    // Renders at the display's refresh rate via RT64's frame interpolation:
-    // game logic keeps stepping at its original paced rate (rcp_timing.cpp is
-    // untouched), and RT64 synthesizes the in-between frames by interpolating
-    // transforms between consecutive game frames. Vanilla (off) presents one
-    // frame per game step, like original hardware.
+    // EXPERIMENTAL. Renders at the display's refresh rate via RT64's frame
+    // interpolation: game logic keeps stepping at its original paced rate
+    // (rcp_timing.cpp is untouched), and RT64 synthesizes the in-between
+    // frames by interpolating transforms between consecutive game frames.
+    // Known visual artifacts (owner hands-on, 2026-07-31): RT64's heuristic
+    // transform matching warps/smears some per-frame-respawned effects --
+    // confirmed on the lock-on effect and bullet trails -- so this is NOT in
+    // the enhanced profile's curated set; opt in via the custom profile. The
+    // fix path is per-effect gEXMatrixGroup tagging (analysis/docs/
+    // high-framerate.md section 4). Vanilla (off) presents one frame per game
+    // step, like original hardware.
     bool high_framerate = false;
 };
 
@@ -162,7 +168,8 @@ Config load_config(int argc, char** argv, const std::filesystem::path& app_folde
 // The enhancement set actually in effect for cfg.profile:
 //   Vanilla  -> EnhancementFlags{} (everything off)
 //   Enhanced -> the curated set (input_latching = true, high_resolution = true,
-//               widescreen = true, full_height = true, high_framerate = true)
+//               widescreen = true, full_height = true; high_framerate stays
+//               off -- experimental, known artifacts, see its field comment)
 //   Custom   -> cfg.enhancements verbatim
 EnhancementFlags effective_enhancements(const Config& cfg);
 
