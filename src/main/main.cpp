@@ -929,6 +929,11 @@ int main(int argc, char** argv) {
     input_latching_enabled.store(enhancements.input_latching, std::memory_order_relaxed);
     kerecomp::set_rcp_frame_ms_tuning(config.tuning.rcp_frame_ms);
     kerecomp::set_full_height_enhancement(enhancements.full_height);
+    // hud_relocation (analysis/docs/hud-relocation.md). The vertical half of
+    // the re-anchoring only applies when full_height is on -- that is what
+    // exposes the 20-line bands the HUD is otherwise flush against.
+    kerecomp::renderer::set_hud_relocation_enhancement(enhancements.hud_relocation,
+                                                       enhancements.full_height);
 
     // config.input (analysis-doc terminology aside, NOT an enhancement -- see
     // InputTuning in config.h). Stored once here, same pattern as
@@ -963,7 +968,20 @@ int main(int argc, char** argv) {
     gfx_config.res_option = enhancements.high_resolution ? ultramodern::renderer::Resolution::Auto
                                                           : ultramodern::renderer::Resolution::Original;
     gfx_config.wm_option = ultramodern::renderer::WindowMode::Windowed;
-    gfx_config.hr_option = ultramodern::renderer::HUDRatioMode::Original;
+    // hr_option drives RT64's extAspectRatio, which is *only* consulted for
+    // rects that carry an extended-GBI origin (it scales
+    // convertViewportRect()'s computeOrigin() by extAspectPercentage, and
+    // that function returns the framebuffer centre unconditionally for
+    // G_EX_ORIGIN_NONE -- deps/rt64/src/render/rt64_framebuffer_renderer.cpp).
+    // No game rect ever carries one, so this changes nothing except how the
+    // hud_relocation stubs' own aligned rects resolve: Original collapses
+    // every origin onto the 4:3 column's centre, which makes the stubs an
+    // exact no-op, and Expand is what lets LEFT/RIGHT reach the real window
+    // edges. Only worth switching when there is a widescreen gap to escape
+    // into. See analysis/docs/hud-relocation.md, "Phase 2".
+    gfx_config.hr_option = (enhancements.hud_relocation && enhancements.widescreen)
+                               ? ultramodern::renderer::HUDRatioMode::Full
+                               : ultramodern::renderer::HUDRatioMode::Original;
     gfx_config.api_option = ultramodern::renderer::GraphicsApi::Auto;
     gfx_config.ar_option = enhancements.widescreen ? ultramodern::renderer::AspectRatio::Expand
                                                     : ultramodern::renderer::AspectRatio::Original;

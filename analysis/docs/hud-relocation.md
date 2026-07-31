@@ -494,3 +494,327 @@ in-mission cutscene overlay sub-DLs:
   enter   SETOTHERMODE_L  E200001C 0F0A7008
   leave   SETOTHERMODE_L  E200001C 0F0A4000
 ```
+
+---
+
+# Phase 2: implementation
+
+Shipped as the `hud_relocation` enhancement flag, in the `enhanced` profile's
+curated set (owner hands-on verification pending, like its siblings at this
+stage). Everything below was measured on this tree, headless, 1280x720
+Xvfb + lavapipe, stage 1 driven with the `timing-and-mission-debug.md` §3.1
+held-key recipe. Screenshots and dumps live in the job scratch dir, not the
+repo.
+
+## 1. What it does
+
+| element | anchor | vertical (only with `full_height`) |
+|---|---|---|
+| health cluster (backing, both arcs, jet glyph, number panel, % digits) | LEFT, keeping its 20 px margin | +20 px |
+| S-BOMB gauge + blinker | RIGHT, keeping its 25 px margin | +20 px |
+| radio / dialogue box (panel, glyphs, portrait frame, portrait) | CENTER | −20 px |
+| aiming reticle | CENTER, **no offsets ever** | none |
+| full-screen flash | LEFT + RIGHT (stretched edge to edge) | none |
+
+CENTER is deliberately a no-op placement: the 4:3 column is already centred
+in the window, so a CENTER-anchored element lands exactly where it lands
+today. It is used rather than "leave untagged" because it states the intent,
+and because it makes the reticle's registration explicit — `widescreen` widens
+the frustum *around* the original 4:3 content, so the reticle has to keep
+tracking that content's scale or it would point somewhere the game's hit test
+does not.
+
+Without `full_height` the letterbox is still there and both bottom clusters
+are already flush against its floor, so the vertical correction is zero. It is
+therefore keyed off `full_height`, not off `hud_relocation` itself.
+
+## 2. Mechanism
+
+`src/main/rt64_render_context.cpp`, all of it inside `send_dl`:
+
+1. **Stubs in scratch RDRAM.** Built once, at physical `0x7FF040` upward
+   (the display-list prologue owns `0x7FF000..0x7FF03F`), one 12-word stub per
+   fingerprinted element:
+
+   ```
+   gEXSetRectAlign(anchor, offsets)      64000006 <origins> <ulxOff|ulyOff> <lrxOff|lryOff>
+   G_DL push -> the real element sub-DL  DE000000 <sub-DL address>
+   gEXSetRectAlign(NONE, NONE, 0,0,0,0)  64000006 00800800 00000000 00000000
+   G_ENDDL                               DF000000 00000000
+   ```
+
+   The reset is in **every** stub, not once at the end of the group: RT64's
+   rect alignment is global state, and nothing in the game's display list
+   restores it (§7 landmine 1 — `RDP::clearExtended()` is reached from
+   `State::fullSync()`, i.e. at the frame's `G_RDPFULLSYNC`, long after the
+   whole HUD is drawn). Without it, each element's anchor would displace every
+   rect after it.
+
+2. **Extended GBI live across the game's own display list.** The prologue
+   `maybe_inject_rate_prologue` grew into `maybe_inject_prologue` and now
+   emits one of three sequences:
+
+   ```
+   high_framerate only   ENABLE -> SETREFRESHRATE -> DISABLE -> BRANCH   (unchanged)
+   hud_relocation only   ENABLE ->                SCISSORALIGN -> BRANCH
+   both                  ENABLE -> SETREFRESHRATE -> SCISSORALIGN -> BRANCH
+   ```
+
+   The `DISABLE` has to go when the stubs are in play, since they contain
+   `0x64` commands mid-frame. That is safe and was checked rather than
+   assumed: opcode `0x64` occurs **nowhere** in the 450 frames of the four
+   phase-1 captures plus a 400-frame front-end capture — the only opcodes the
+   dumper could not name were `0x00` (`G_NOOP`, once per frame) and `0xEE`
+   (`G_SETPRIMDEPTH`). RT64 unregisters the opcode itself at the frame's
+   `G_RDPFULLSYNC`, which every frame of this game emits, so `DISABLE` is
+   redundant rather than merely dropped.
+
+3. **Per-frame redirect pass.** Between the `KE_DL_DUMP` hook and
+   `processDisplayLists`, the frame's display list is walked and every `G_DL`
+   push whose resolved target is a fingerprint-table entry has its `w1`
+   rewritten in place to that element's stub address. The dumper's walk
+   skeleton was factored out into a shared `dl_walk()` iterator (return stack,
+   texrect continuation words, `G_MW_SEGMENT` table, bounds/depth/command
+   caps) with the per-command action as a callback; `dl_dump_walk` now uses
+   it too, and its output is byte-identical over a 40-frame title capture
+   re-run against the phase-1 dump.
+
+   Writing into the game's main display-list buffer resolves phase-1 open
+   question **O6** in favour of the in-place rewrite. It is safe by
+   construction, not by luck: the game rebuilds the whole frame list every
+   frame at a per-frame-varying offset in one of two arenas (§4: 52 distinct
+   offsets over 150 frames), so a rewritten word is dead as soon as the frame
+   is submitted and is never read back by game code. The element sub-display-
+   lists themselves are never written.
+
+4. One stderr line on first activation
+   (`[hud] relocation active: N element redirects this frame`), nothing
+   per-frame after.
+
+### 2.1 Encoding derivation
+
+`gEXSetRectAlign` (`deps/rt64/include/rt64_extended_gbi.h:269`) is a
+`G_EX_COMMAND2`, i.e. two Gfx commands / four native u32s:
+
+```
+w0 = PARAM(RT64_EXTENDED_OPCODE=0x64, 8, 24) | PARAM(G_EX_SETRECTALIGN_V1=6, 24, 0) = 0x64000006
+w1 = PARAM(lorigin, 12, 0) | PARAM(rorigin, 12, 12)
+w2 = PARAM(ulxOffset, 16, 16) | PARAM(ulyOffset, 16, 0)
+w3 = PARAM(lrxOffset, 16, 16) | PARAM(lryOffset, 16, 0)
+```
+
+**Units: 10.2, i.e. one N64 pixel is 4.** `setRectAlignV1`
+(`rt64_gbi_extended.cpp:77`) reads the four offsets as `int16_t` and hands
+them to `RDP::setRectAlign`; `RDP::drawRect` then adds them to the texrect's
+*raw* coordinates, which are 10.2 (`rt64_rdp.cpp:1173`). Note that
+`gEXSetRectAlign` is the one alignment macro that does **not** pre-multiply
+its offsets by 4 — its `gEXSetScissor` / `gEXSetScissorAlign` neighbours do —
+so the macro's arguments are in the same units as the words we build.
+
+Origins are `LEFT 0x0`, `CENTER 0x200`, `RIGHT 0x400`, `NONE 0x800`.
+F3DEX2 `G_DL` is `0xDE` with `w0` bit 16 clear for a push, `G_ENDDL` is `0xDF`
+(`rt64_gbi_f3dex2.cpp` opcode map + `GBI_F3D::runDl`/`endDl`).
+
+### 2.2 Why the offsets are what they are
+
+`RDP::drawRect` adds the offsets and then applies
+`movedFromOrigin(x, ori) = x + ori*width*4/G_EX_ORIGIN_RIGHT`; the framebuffer
+renderer later undoes exactly that shift about the window's corresponding edge
+(`convertViewportRect`'s `computeOrigin`,
+`rt64_framebuffer_renderer.cpp:88`). For a 320-wide colour image, writing `S`
+for the 4:3 pixel scale (`resolutionScale.y`, 3 at 720p):
+
+```
+LEFT    window_x = (x + off) * S
+CENTER  window_x = window_centre + (x + off) * S
+RIGHT   window_x = window_width  + (x + off) * S
+```
+
+so the offset is only ever "what the element's coordinate must become once it
+is measured from the chosen edge":
+
+| anchor | x offset |
+|---|---|
+| LEFT | 0 |
+| CENTER | −160 px (−640) |
+| RIGHT | −320 px (−1280) |
+| flash | ulx −2 px, lrx −317 px (its rect is 319 wide, plus 2 px of deliberate overdraw — see §4) |
+
+A pleasant consequence: with those offsets the whole transform is the **exact
+identity** when RT64's `extAspectRatio` is `Original`, because
+`extAspectPercentage` is then 0 and `computeOrigin()` collapses every origin
+onto the framebuffer centre. The stubs degrade to a no-op rather than to a
+corruption. That is also the answer to §3 below.
+
+## 3. The `hr_option` question, answered
+
+**Reality picked the second arm: `hr_option` must be `Full`.**
+
+`hr_option` drives RT64's `extAspectRatio`, which feeds
+`workloadConfig.extAspectPercentage` — `Original` → 0, `Expand` → 1
+(`rt64_workload_queue.cpp:156-183`). That percentage is consulted *only*
+inside `computeOrigin()`, and only for `origin < G_EX_ORIGIN_NONE`; an
+untagged rect returns `fbWidth/2` regardless. So:
+
+* `Original` (percentage 0): every origin resolves to the framebuffer centre,
+  the compensating offsets cancel it exactly, and LEFT/RIGHT-anchored rects
+  stay precisely where they were — **inside the 4:3 column**.
+* `Full` (percentage 1): origins resolve to the window's left / centre / right
+  edges, and the anchors reach the true window edges.
+
+Critically, `extAspectPercentage` has **no effect at all** on untagged rects,
+so switching to `Full` cannot disturb anything except our own stubs. The
+change is therefore gated on `hud_relocation && widescreen` in `main.cpp` —
+without a widescreen gap there is nothing to escape into.
+
+Measured, stage 1 gameplay, 1280x720, `full_height` on, comparing the same
+screenshot slot with and without the flag (`before` = the `enhanced` set minus
+`hud_relocation`, via a custom profile):
+
+| feature | before | after | delta | predicted |
+|---|---|---|---|---|
+| health "100" digits, x | 341..403 | 179..241 | **−162** | −162 (`160 + 3u` → `3u − 2`) |
+| health "100" digits, y | 556..577 | 616..637 | **+60** | +60 (20 px × 3) |
+| S-BOMB gauge bars, x | 811..1002 | 967..1169 | **+156…+167** | +158 ±2 (rounding, §4) |
+| S-BOMB gauge bars, y (bottom) | 647 | 707 | **+60** | +60 |
+| reticle bounding box, x | 592..687 | 589..684 | **−3** | −2 ±1 (misalignment only) |
+| radio panel interior, y (col 900) | 99..215 | 39..155 | **−60** | −60 (20 px × 3) |
+
+The reticle's −3 px is the whole story for it: CENTER anchoring is an identity
+transform, and the residual is RT64's own sub-pixel misalignment correction
+(§4). It stays registered with the 3D projection, which is the entire
+requirement.
+
+With `full_height` **off** (`hud_relocation` + `widescreen` only), the same
+run gives digits `x 179..241, y 555..577` and S-BOMB `y 600..647` — the
+horizontal relocation applies, the vertical correction does not, and the
+radio panel measures `99..215`, identical to `before`. Exactly the specified
+interplay.
+
+## 4. The scissor: the one thing phase 1 did not see coming
+
+Anchoring the rects correctly is not enough — they then get **clipped away**.
+A rect's GPU scissor is the game's own scissor rectangle converted through the
+*rect's* aspect scale but the *scissor's* own origins
+(`rt64_framebuffer_renderer.cpp:1679`). Untagged, that converts to the centred
+4:3 column, so anything anchored to a true window edge falls outside it.
+Measured on the first working build: the health cluster was cut off at the
+column's left edge (x 160) and the S-BOMB gauge at its right edge (x 1120) —
+the elements had moved, and then been sliced.
+
+The fix is one `gEXSetScissorAlign(LEFT, RIGHT, +1 px, 0, −320 px, 0,
+unbounded)` in the prologue, emitted **only on frames that actually contain
+relocated HUD** (so the triangle-based front end, §3.3, never sees it). It is
+a re-expression of the same scissor, not a new one: the game emits
+`G_SETSCISSOR(0, y0, 320, y1)` at the top of every frame, and
+`RDP::setScissor` applies the offsets and then `movedFromOrigin()`, so LEFT
+with ~0 and RIGHT with −320 px hand back `ulx = 0`, `lrx = 320 px` unchanged.
+Every heuristic that keys off the scissor *rectangle* — RT64's
+`coversWholeWidth` / `coversScissorWidth` wide-viewport tests, and therefore
+the 3D scene and every full-width fill rect — sees identical numbers. The one
+thing that changes is that `convertFixedRect` now resolves it against the
+window edges.
+
+**The `+1 px` left bias is required, not cosmetic.** For an origin-tagged
+coordinate `convertFixedRect` finishes with `correctMisalignment()`, which
+subtracts the render target's sub-pixel `misalignX` — 2 at 1280x720
+(`RenderTarget::computeScaledSize`: `|1280−960|/2 = 160`, `160 % 3 = 1`, so
+`misalignX = (3−1) % 3 = 2`). An untagged scissor never goes through that
+path; a tagged one whose left edge converts to 0 comes out at **−2**, and a
+`RenderRect` with a negative left reaches `setScissors()` unclamped for rect
+draws. (The 3D survives it only because `viewportScissorIntersection()` clamps
+against the viewport first — which is exactly why the observed failure was
+"every relocated element vanishes, gameplay HUD *and* the cutscene radio box,
+while the 3D renders normally".) One N64 pixel is the provable minimum: the
+converted left edge is `floor(1 × resScale.y) = resScale.y`, and `misalignX`
+is always in `[0, resScale.y − 1]`, so the result is ≥ 1 at any resolution.
+
+Bisected empirically, one variable at a time: `NONE/NONE` align (a literal
+no-op) → HUD present; `LEFT/RIGHT` with zero offsets → HUD gone;
+`LEFT/RIGHT` with `−320 px` → HUD gone; `LEFT/RIGHT` with a `+2 px` left bias
+→ HUD present and correctly anchored.
+
+Consequences, both accepted and both sub-pixel-ish:
+
+* Clipping starts 1 N64 px in from the left window edge and ends ~4 window px
+  short of the right one. Nothing comes near either — the closest is the
+  full-screen flash, which is therefore given 2 px of deliberate overdraw on
+  each side so it fills the scissor instead of leaving an unlit hairline.
+* Origin-tagged rects are snapped down to a multiple of `resScale.y` and
+  shifted by `misalignX` (2 px at 720p). That is RT64 doing to our rects what
+  it already does to every widescreen-tagged rect, and it accounts for the
+  ±2 px in the measurement table above.
+
+## 5. The `0x800F2B50` digits, and the O3 gate
+
+Phase 1 flagged the health % digits' sub-DL address as a **shared boot-segment
+buffer** (open question O3) and could not settle it, because all four captures
+started at least 6 s into a run. Phase 2 dumped **from boot**, and O3 is
+real: in the 640x480 front end the same address draws 8x19 glyphs at
+`y = 381` from the same glyph texture family (`0x8016B3C8`) — the copyright /
+"LICENSED BY NINTENDO" text — in **88 of the first 97 frames** of a run. A
+400-frame capture across the whole menu path found it in a further **334**
+frames. Left in the table naively, the enhancement would have dragged the
+logo screen's own text 160 px across the window (and 30 px down under
+`full_height`). It did, in the first build: the `[hud] relocation active`
+line fired in the first second of the run.
+
+Rather than drop the digits — which would have left them stranded in the 4:3
+column while the dial they belong to moved — they are marked
+`shared_buffer` and redirected **only on frames that also contain an element
+that can only be in-mission**. The gate is exact against every capture taken:
+
+| capture | frames | digits + mission element (redirected) | digits alone (front end, left alone) |
+|---|---|---|---|
+| from-boot, vanilla | 97 | 0 | 88 |
+| menu path, vanilla | 400 | 0 | 334 |
+| `cap_title` | 40 | 0 | 0 |
+| `cap_intro` | 220 | 156 | 0 |
+| `cap_mission` | 150 | 150 | 0 |
+| `cap_enh` | 40 | 40 | 0 |
+
+346/346 gameplay frames still redirect the digits; 422/422 front-end frames do
+not. Confirmed at runtime too: with the gate, the `[hud]` line moves from the
+first second of the run to the mission start (~46 s in).
+
+No other fingerprint address appears anywhere outside a mission across those
+537 front-end frames.
+
+## 6. Verification
+
+All headless, 1280x720 Xvfb + lavapipe, stage 1.
+
+* **Vanilla bit-identical.** `--profile vanilla`: no `[hud]`, `[hfr]` or
+  `[gfx]` line, and by inspection `maybe_redirect_hud` returns on an atomic
+  load before touching RDRAM while `maybe_inject_prologue` returns after
+  reading one config field — no scratch read, no scratch write, no rewrite,
+  the entry address handed to RT64 unchanged.
+* **Smoke test PASS** on the default (enhanced) profile: alive, 34215
+  distinct colours, 99.3% non-zero audio samples.
+* **Screenshot evidence**, before/after on the same game state: §3's table.
+* **`high_framerate` interplay.** Custom profile with `high_framerate` and
+  `hud_relocation` both on: `[hfr] declaring game logic rate …` lines still
+  appear, `[hud] relocation active` still appears, and the measured HUD
+  positions are pixel-identical to the enhanced profile's. Both prologue
+  variants exercised, no anomalies in a ~3 minute run.
+* **Cutscene.** Mission-1 intro with `full_height`: the radio panel's interior
+  moves from `y 99..215` to `y 39..155`, i.e. its plane's top edge from
+  window `y = 60` to `y = 0` — the true top.
+* **Dumper regression.** The shared-iterator refactor was checked by re-running
+  a 40-frame vanilla title capture and diffing against the phase-1 dump:
+  **40/40 frames identical**.
+
+## 7. What is still open
+
+* Owner hands-on, as for every other enhancement at this stage.
+* Only stage 1, only normal gameplay plus its intro cutscene — phase 1's open
+  question **O2** is untouched. Pause screen, lock-on reticle, boss health
+  bar, results and stage-clear screens all run under the same 320x200 mode and
+  have never been dumped. A HUD element that only appears there is simply not
+  in the fingerprint table, so it stays in the 4:3 column while its neighbours
+  move; that is the failure mode to look for. The mission results screen is
+  the most likely to reuse `0x800F2B50`, in which case §5's gate decides its
+  fate and may need widening.
+* **O1** (the "info marquee") remains never-observed.
+* The RT64 letterbox-band colour bug (`letterbox-full-height.md` §4) is
+  visible in the `full_height`-off screenshots, unchanged and unrelated.

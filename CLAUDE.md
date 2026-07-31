@@ -360,7 +360,16 @@ default only affects fresh installs.
    confounded by the title screen auto-advancing and cannot decide it.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
-4. High framerate: shipped and owner-verified (see Status); experimental
+4. HUD relocation: shipped headless-verified with screenshot evidence
+   (health bottom-left, S-BOMB bottom-right, reticle center-registered,
+   radio box to true top under full_height); owner hands-on pending.
+   Watch items: unfingerprinted HUD elements (pause, lock-on, boss bars,
+   results — `hud-relocation.md` O2) stay in the 4:3 column — a wide
+   top bar seen in stage 1 does this today and looks fine centered, but
+   any corner-anchored element from an unexamined state would visibly
+   split from its relocated neighbors; report + KE_DL_DUMP capture is
+   the fix path (add to the fingerprint table).
+5. High framerate: shipped and owner-verified (see Status); experimental
    opt-in, not in `enhanced` (owner decision 2026-07-31 — confirmed
    artifacts on lock-on effect + bullet trails). Deferred follow-up when
    the owner wants it: per-effect interpolation opt-out tagging
@@ -368,29 +377,29 @@ default only affects fresh installs.
    signatures — no decompilation exists to tag at the source). All items
    of the agreed enhancement order are now shipped. High-score
    persistence remains deferred (see candidates).
-5. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
+6. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
    `mouse-aim.md` §9.1 inert-aim watch-item). Buttons settled: L/R/M →
    Z/A/B, owner-specified.
-6. Gamepad: hotplug mid-game unverified (everything else owner-verified);
+7. Gamepad: hotplug mid-game unverified (everything else owner-verified);
    `[input]` stick knobs shipped, owner feel-check pending.
-7. Upstream: owner decided (2026-07-29) **not** to pursue a N64ModernRuntime
+8. Upstream: owner decided (2026-07-29) **not** to pursue a N64ModernRuntime
    PR for the orderly-shutdown patch — we carry it in `patches/`
    indefinitely (an upstream *issue* with repro + patch link remains an
    option if the owner ever wants it). Report candidates unchanged: RT64
    letterbox-band color bug (vanilla-only cosmetic;
    `letterbox-full-height.md` §4); RT64-bundled nativefiledialog null-dbus
    abort (container-only).
-8. Containerized build: owner-verified end-to-end on the host (see Status).
+9. Containerized build: owner-verified end-to-end on the host (see Status).
    Remaining: first GitHub-runner execution of the rewritten workflow
    (automatic on next push — check the Actions tab).
-9. Flatpak packaging: owner-verified build+run on the host (see Status).
+10. Flatpak packaging: owner-verified build+run on the host (see Status).
    Remaining: retest the first-launch picker fix (6788841) against a fresh
    data dir (wipe `~/.var/app/io.github.haydenmc.KnifeEdgeRecompiled/data/`
    or unset-`KE_DATA_DIR` equivalent), and data-dir persistence across
    runs. Report candidate: the pre-existing modal-message-box behavior
    under a bare-Xvfb-no-WM harness (`build-notes.md`, "Flatpak packaging"
    — not a real-world defect, left alone).
-10. Encrypted-ROM CI: owner setup done (2026-07-31, see Status).
+11. Encrypted-ROM CI: owner setup done (2026-07-31, see Status).
     Unverified-in-anger after the restructure: first full run on the next
     main push (linux-build with in-CI smoke + tarball, flatpak-build —
     first-ever flatpak-builder on a hosted runner: AppArmor userns sysctl,

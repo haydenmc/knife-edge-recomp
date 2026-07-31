@@ -92,6 +92,12 @@ namespace {
         "# Removes the 20-line letterbox during missions (renders the full\n"
         "# 320x240 frame).\n"
         "full_height = false\n"
+        "# Re-anchors the in-mission HUD to the true window edges: the health\n"
+        "# cluster to the bottom-left, the S-BOMB gauge to the bottom-right,\n"
+        "# each keeping its original margin. Only meaningful alongside\n"
+        "# widescreen (which is what creates the gap) and full_height (which\n"
+        "# is what exposes the extra 20 lines the HUD then moves into).\n"
+        "hud_relocation = false\n"
         "# EXPERIMENTAL: renders at the display's refresh rate via RT64 frame\n"
         "# interpolation; game logic keeps its original paced rate (see\n"
         "# analysis/docs/high-framerate.md). Known visual artifacts on some\n"
@@ -197,7 +203,7 @@ namespace {
             // Known [enhancements] keys -- add one line here per new flag.
             static constexpr std::string_view known_enhancement_keys[] = {
                 "input_latching", "high_resolution", "widescreen", "full_height",
-                "high_framerate",
+                "hud_relocation", "high_framerate",
             };
             for (auto&& [key, value] : *enh_tbl) {
                 std::string_view k = key.str();
@@ -223,6 +229,9 @@ namespace {
             }
             if (auto v = (*enh_tbl)["full_height"].value<bool>()) {
                 cfg.enhancements.full_height = *v;
+            }
+            if (auto v = (*enh_tbl)["hud_relocation"].value<bool>()) {
+                cfg.enhancements.hud_relocation = *v;
             }
             if (auto v = (*enh_tbl)["high_framerate"].value<bool>()) {
                 cfg.enhancements.high_framerate = *v;
@@ -366,6 +375,10 @@ kerecomp::EnhancementFlags kerecomp::effective_enhancements(const Config& cfg) {
             flags.high_resolution = true;
             flags.widescreen = true;
             flags.full_height = true;
+            // hud_relocation only does anything alongside the two flags above
+            // (widescreen creates the horizontal gap, full_height the
+            // vertical one), so it belongs with them rather than on its own.
+            flags.hud_relocation = true;
             // high_framerate is deliberately NOT in the curated set (owner
             // decision 2026-07-31 after hands-on): it works -- frame rate is
             // visibly higher and most of the scene interpolates cleanly --
@@ -396,6 +409,9 @@ std::string kerecomp::describe_config(const Config& cfg) {
     }
     if (effective.full_height) {
         parts.emplace_back("full_height=on");
+    }
+    if (effective.hud_relocation) {
+        parts.emplace_back("hud_relocation=on");
     }
     if (effective.high_framerate) {
         parts.emplace_back("high_framerate=on");

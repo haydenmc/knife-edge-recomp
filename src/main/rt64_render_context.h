@@ -37,15 +37,43 @@ namespace kerecomp {
             float get_resolution_scale() const override;
 
         private:
-            // high_framerate enhancement (analysis/docs/high-framerate.md):
-            // returns game_dl_addr unchanged unless RT64 needs a declared
-            // logic rate to interpolate against, in which case it writes a
-            // 4-command extended-GBI prologue to scratch RDRAM and returns
-            // its address instead. Implemented in rt64_render_context.cpp.
-            uint32_t maybe_inject_rate_prologue(uint32_t game_dl_addr);
+            // Extended-GBI display-list prologue, shared by the
+            // high_framerate (analysis/docs/high-framerate.md) and
+            // hud_relocation (analysis/docs/hud-relocation.md)
+            // enhancements: returns game_dl_addr unchanged unless one of
+            // them is active, in which case it writes a short prologue to
+            // scratch RDRAM and returns its address instead. Implemented in
+            // rt64_render_context.cpp.
+            // `hud_active` says whether this frame actually contains
+            // relocated HUD, which decides both whether the extended
+            // opcode has to stay registered across the game's own display
+            // list and whether the scissor re-expression is needed.
+            uint32_t maybe_inject_prologue(uint32_t game_dl_addr, bool hud_active);
+
+            // hud_relocation enhancement: repoints this frame's HUD
+            // display-list calls at re-anchoring stubs in scratch RDRAM,
+            // returning how many it repointed. No-op (0) unless the
+            // enhancement is on.
+            uint32_t maybe_redirect_hud(uint32_t game_dl_addr);
+            bool hud_relocation_active();
+
+            // One-time "is the scratch RDRAM region still all zeroes"
+            // check shared by both of the above; false means neither
+            // writes anything, ever.
+            bool scratch_usable();
 
             std::unique_ptr<RT64::Application> app;
         };
+
+        // Turns the hud_relocation enhancement on/off (re-anchors the
+        // in-mission HUD to the true window edges instead of the centered
+        // 4:3 column). `vertical_shift` is the full_height correction: with
+        // the letterbox removed the bottom clusters must move 20 px down and
+        // the radio box 20 px up to reach the newly-exposed frame edges;
+        // with the letterbox still there they are already flush against it.
+        // Call once, before recomp::start(), with the resolved
+        // kerecomp::EnhancementFlags's values.
+        void set_hud_relocation_enhancement(bool on, bool vertical_shift);
 
         // ultramodern::renderer::callbacks_t::create_render_context_t implementation.
         std::unique_ptr<ultramodern::renderer::RendererContext> create_render_context(uint8_t* rdram, ultramodern::renderer::WindowHandle window_handle, bool developer_mode);

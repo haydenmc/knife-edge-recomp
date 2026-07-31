@@ -59,6 +59,22 @@ struct EnhancementFlags {
     // original hardware.
     bool full_height = false;
 
+    // Re-anchors the in-mission HUD to the true window edges instead of
+    // leaving it inside the centered 4:3 column (widescreen) and against the
+    // 320x200-era letterbox bands (full_height). The health cluster anchors
+    // LEFT and the S-BOMB gauge RIGHT, each keeping its own original margin
+    // (20 px / 25 px); the cutscene radio box and the aiming reticle anchor
+    // CENTER, i.e. exactly where they are today; the full-screen flash
+    // stretches edge to edge. The vertical half only applies when
+    // full_height is also on -- that is what exposes the 20-line bands the
+    // HUD is currently flush against, so the bottom clusters move 20 px down
+    // and the radio box 20 px up; with the letterbox still present there is
+    // nothing to correct. Purely a presentation change: the game's own
+    // coordinates, its aim math and every game-side global are untouched,
+    // only where RT64 places the resulting rectangles changes. Vanilla (off)
+    // leaves the HUD where original hardware put it.
+    bool hud_relocation = false;
+
     // EXPERIMENTAL. Renders at the display's refresh rate via RT64's frame
     // interpolation: game logic keeps stepping at its original paced rate
     // (rcp_timing.cpp is untouched), and RT64 synthesizes the in-between
@@ -168,8 +184,9 @@ Config load_config(int argc, char** argv, const std::filesystem::path& app_folde
 // The enhancement set actually in effect for cfg.profile:
 //   Vanilla  -> EnhancementFlags{} (everything off)
 //   Enhanced -> the curated set (input_latching = true, high_resolution = true,
-//               widescreen = true, full_height = true; high_framerate stays
-//               off -- experimental, known artifacts, see its field comment)
+//               widescreen = true, full_height = true, hud_relocation = true;
+//               high_framerate stays off -- experimental, known artifacts,
+//               see its field comment)
 //   Custom   -> cfg.enhancements verbatim
 EnhancementFlags effective_enhancements(const Config& cfg);
 

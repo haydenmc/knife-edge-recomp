@@ -51,10 +51,11 @@ Not yet verified: full campaign completion, and high-score persistence across
 runs (analyzed and almost certainly absent — which is *faithful*, since the
 game only probes for a Controller Pak; see `analysis/docs/enhancements.md`).
 
-Not yet built: high framerate and Flatpak packaging. The
-configuration system that these will hang off is in place —
-`enhanced` is the default profile; `vanilla` is the regression baseline (see
-"Configuration" below and `analysis/docs/enhancements.md`).
+All planned enhancements are built: high resolution, widescreen, full
+height, HUD relocation, high framerate (experimental), plus gamepad and
+mouse-aim input support and Flatpak packaging. `enhanced` is the default
+profile; `vanilla` is the regression baseline (see "Configuration" below
+and `analysis/docs/enhancements.md`).
 
 Development notes, working practices and a documentation index live in
 `CLAUDE.md`.
@@ -309,8 +310,12 @@ commented defaults on first run. It selects a **profile**:
   `input_latching` (see Controls above), `high_resolution` (renders the 3D
   scene at window resolution through RT64 instead of native 320x240),
   `widescreen` (expands the 3D field of view to the window's aspect ratio
-  instead of 4:3-pillarboxing it), and `full_height` (removes the in-mission
-  20-line letterbox, revealing the full 320x240 frame).
+  instead of 4:3-pillarboxing it), `full_height` (removes the in-mission
+  20-line letterbox, revealing the full 320x240 frame), and `hud_relocation`
+  (re-anchors the in-mission HUD to the true window corners that the previous
+  two open up — health cluster bottom-left, S-BOMB gauge bottom-right, each
+  keeping its original margin — instead of leaving it inside the centered 4:3
+  column).
 - `vanilla` — every enhancement off, faithful to original hardware behavior.
   This is the regression baseline every measurement and bug investigation in
   `analysis/docs/` assumes unless stated otherwise.
