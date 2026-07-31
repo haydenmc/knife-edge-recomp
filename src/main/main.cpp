@@ -525,12 +525,22 @@ namespace {
         // Republish the window height for get_input()'s positional mouse
         // controller (see window_height above). Once per pass, on the thread
         // that owns the SDL window, rather than from the input thread.
+        //
+        // The window's aspect ratio goes to the extended_aim enhancement in
+        // the same pass and for the same reason: its horizontal reticle rail
+        // is "how much wider than 4:3 the view actually is", so a rail left
+        // over from a previous window size would let the player aim at world
+        // this window does not render (src/main/extended_aim.cpp).
         if (window != nullptr) {
             int w = 0;
             int h = 0;
             SDL_GetWindowSize(window, &w, &h);
             if (h > 0) {
                 window_height.store(h, std::memory_order_relaxed);
+                if (w > 0) {
+                    kerecomp::set_extended_aim_window_aspect(static_cast<double>(w) /
+                                                             static_cast<double>(h));
+                }
             }
         }
 
@@ -830,11 +840,22 @@ namespace {
                 const float px_to_units = (240.0f / static_cast<float>(win_h > 0 ? win_h : 720)) * sens;
                 target_x += mouse_dx * px_to_units;
                 target_y += ysign * mouse_dy * px_to_units;
-                // Clamp to the measured rails (stage-independent). The game
-                // clamps hard there itself, so without this the target would
-                // wind up past a reticle that has stopped following.
-                target_x = std::clamp(target_x, -128.0f, 128.0f);
-                target_y = std::clamp(target_y, -84.0f, 84.0f);
+                // Clamp to the rails the game will actually enforce this
+                // frame. It clamps hard there itself, so without this the
+                // target would wind up past a reticle that has stopped
+                // following.
+                //
+                // Not the measured +-128/+-84 constants any more: the
+                // extended_aim enhancement widens the game's own clamp
+                // (src/main/extended_aim.cpp), and a target clamp left behind
+                // at the old rails would stop mouse aim short of where the
+                // keyboard and pad can still go -- which would read as a
+                // mouse bug rather than a range one.
+                const kerecomp::AimRails rails = kerecomp::extended_aim_rails();
+                target_x = std::clamp(target_x, -static_cast<float>(rails.x),
+                                      static_cast<float>(rails.x));
+                target_y = std::clamp(target_y, -static_cast<float>(rails.y),
+                                      static_cast<float>(rails.y));
 
                 mouse_x = mouse_stick_axis(mouse_step_for_error(target_x - static_cast<float>(reticle.x)));
                 mouse_y = mouse_stick_axis(mouse_step_for_error(target_y - static_cast<float>(reticle.y)));
@@ -934,6 +955,19 @@ int main(int argc, char** argv) {
     // exposes the 20-line bands the HUD is otherwise flush against.
     kerecomp::renderer::set_hud_relocation_enhancement(enhancements.hud_relocation,
                                                        enhancements.full_height);
+    // extended_aim (analysis/docs/hud-relocation.md, "Reticle range
+    // extension"). Each half is keyed to the flag that creates the screen area
+    // it pans into: widescreen for the horizontal rail, full_height for the
+    // vertical one. The horizontal half additionally needs hud_relocation,
+    // because its draw side IS hud_relocation's machinery -- the reticle's
+    // re-anchoring stub is what cancels the game-side blit bias, and the
+    // prologue's scissor re-expression is what keeps RT64 from clipping the
+    // reticle at the centered 4:3 column. The rails themselves are derived
+    // from the live window aspect, which update_gfx() publishes; there is no
+    // window yet at this point in startup.
+    kerecomp::set_extended_aim_enhancement(
+        enhancements.extended_aim && enhancements.widescreen && enhancements.hud_relocation,
+        enhancements.extended_aim && enhancements.full_height);
 
     // config.input (analysis-doc terminology aside, NOT an enhancement -- see
     // InputTuning in config.h). Stored once here, same pattern as

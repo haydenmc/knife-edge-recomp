@@ -99,6 +99,12 @@ namespace {
         "# widescreen (which is what creates the gap) and full_height (which\n"
         "# is what exposes the extra 20 lines the HUD then moves into).\n"
         "hud_relocation = false\n"
+        "# Lets the aiming reticle reach the whole visible viewport instead of\n"
+        "# stopping at the original +-128/+-84 rails, scaling them by exactly\n"
+        "# how much the view opened (+-170 at 16:9, +-100 vertically). Changes\n"
+        "# what is aimable, not just how it looks. The horizontal half needs\n"
+        "# widescreen and hud_relocation, the vertical half needs full_height.\n"
+        "extended_aim = false\n"
         "# EXPERIMENTAL: renders at the display's refresh rate via RT64 frame\n"
         "# interpolation; game logic keeps its original paced rate (see\n"
         "# analysis/docs/high-framerate.md). Known visual artifacts on some\n"
@@ -204,7 +210,7 @@ namespace {
             // Known [enhancements] keys -- add one line here per new flag.
             static constexpr std::string_view known_enhancement_keys[] = {
                 "input_latching", "high_resolution", "widescreen", "full_height",
-                "hud_relocation", "high_framerate",
+                "hud_relocation", "extended_aim", "high_framerate",
             };
             for (auto&& [key, value] : *enh_tbl) {
                 std::string_view k = key.str();
@@ -233,6 +239,9 @@ namespace {
             }
             if (auto v = (*enh_tbl)["hud_relocation"].value<bool>()) {
                 cfg.enhancements.hud_relocation = *v;
+            }
+            if (auto v = (*enh_tbl)["extended_aim"].value<bool>()) {
+                cfg.enhancements.extended_aim = *v;
             }
             if (auto v = (*enh_tbl)["high_framerate"].value<bool>()) {
                 cfg.enhancements.high_framerate = *v;
@@ -380,6 +389,12 @@ kerecomp::EnhancementFlags kerecomp::effective_enhancements(const Config& cfg) {
             // (widescreen creates the horizontal gap, full_height the
             // vertical one), so it belongs with them rather than on its own.
             flags.hud_relocation = true;
+            // extended_aim likewise only does anything alongside those: its
+            // horizontal half rides on widescreen + hud_relocation and its
+            // vertical half on full_height (see the flag's comment in
+            // config.h). Curated pending the owner's hands-on check, the same
+            // way hud_relocation was.
+            flags.extended_aim = true;
             // high_framerate is deliberately NOT in the curated set (owner
             // decision 2026-07-31 after hands-on): it works -- frame rate is
             // visibly higher and most of the scene interpolates cleanly --
@@ -413,6 +428,9 @@ std::string kerecomp::describe_config(const Config& cfg) {
     }
     if (effective.hud_relocation) {
         parts.emplace_back("hud_relocation=on");
+    }
+    if (effective.extended_aim) {
+        parts.emplace_back("extended_aim=on");
     }
     if (effective.high_framerate) {
         parts.emplace_back("high_framerate=on");

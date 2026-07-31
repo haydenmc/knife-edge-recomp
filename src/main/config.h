@@ -77,6 +77,25 @@ struct EnhancementFlags {
     // leaves the HUD where original hardware put it.
     bool hud_relocation = false;
 
+    // Lets the aiming reticle travel to the whole visible viewport instead of
+    // the original +-128 / +-84 N64-pixel rails, which are 80% of the
+    // half-width of the 4:3 view and 70% of the half-height of the 320x200
+    // mission view. The rails scale by exactly how much the view opened
+    // (128 * aspect/(4:3), i.e. +-170 at 16:9; 84 * 240/200 = +-100), so the
+    // game's own edge margins and its 1 unit = 1 N64 pixel mapping both
+    // survive. The aim ray needs no correction: the game maps reticle units to
+    // a direction with atan2(pixel, focal) using the rendering frustum's own
+    // focal length, so crosshair and shot stay registered outside the rails
+    // too. Unlike every other flag here this one changes what the player can
+    // DO (more of the screen is aimable), not just how it looks.
+    //
+    // Each half is gated on the flag that creates the area it pans into:
+    // horizontal on widescreen (plus hud_relocation, whose stub/scissor
+    // machinery the draw side is built from -- see
+    // set_extended_aim_enhancement() in support.h), vertical on full_height.
+    // Vanilla (off) keeps the original rails, exactly as hardware clamps them.
+    bool extended_aim = false;
+
     // EXPERIMENTAL. Renders at the display's refresh rate via RT64's frame
     // interpolation: game logic keeps stepping at its original paced rate
     // (rcp_timing.cpp is untouched), and RT64 synthesizes the in-between
@@ -186,9 +205,9 @@ Config load_config(int argc, char** argv, const std::filesystem::path& app_folde
 // The enhancement set actually in effect for cfg.profile:
 //   Vanilla  -> EnhancementFlags{} (everything off)
 //   Enhanced -> the curated set (input_latching = true, high_resolution = true,
-//               widescreen = true, full_height = true, hud_relocation = true;
-//               high_framerate stays off -- experimental, known artifacts,
-//               see its field comment)
+//               widescreen = true, full_height = true, hud_relocation = true,
+//               extended_aim = true; high_framerate stays off --
+//               experimental, known artifacts, see its field comment)
 //   Custom   -> cfg.enhancements verbatim
 EnhancementFlags effective_enhancements(const Config& cfg);
 

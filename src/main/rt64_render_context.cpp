@@ -752,6 +752,12 @@ namespace {
         // Such an element is only redirected on frames that also contain an
         // unambiguously in-mission element -- see hud_redirect_frame().
         bool shared_buffer;
+        // True for the one element whose game-side coordinates the
+        // extended_aim enhancement biases (the reticle): its stub carries the
+        // matching negative offset that puts the sprite back where the game
+        // meant it. Zero unless that enhancement is active, so this is the
+        // exact identity in every other configuration.
+        bool aim_biased;
         const char* name;
     };
 
@@ -775,33 +781,42 @@ namespace {
         // content, which therefore stays centred at its original scale. A
         // reticle moved off that registration would point at something other
         // than what the game's hit test is aiming at.
-        { 0x801C8470u, HudAnchor::Center,  0, false, "reticle" },
+        //
+        // It is also the one element the extended_aim enhancement biases
+        // game-side (analysis/docs/hud-relocation.md, "Reticle range
+        // extension"): to be drawable outside the original 4:3 column at all,
+        // the blit's x is shifted right by B N64 pixels so the game's own
+        // sprite library emits non-negative, unclipped texrect coordinates,
+        // and this stub subtracts the same B again. B is 0 -- the exact
+        // identity -- whenever that enhancement is not widening the
+        // horizontal rail.
+        { 0x801C8470u, HudAnchor::Center,  0, false, true, "reticle" },
 
         // Bottom-left health cluster: x 20..86, y 172..220 (a 20 px left
         // margin, flush against the letterbox floor).
         // The fill arc is deliberately absent: it is a dynamic fill and is
         // matched by region below. Phase 2 listed two of its addresses here,
         // which is why it stayed behind at any health those two did not cover.
-        { 0x801BCE30u, HudAnchor::Left, 20, false, "health backing" },
-        { 0x801BD070u, HudAnchor::Left, 20, false, "health jet glyph" },
-        { 0x801BD2B0u, HudAnchor::Left, 20, false, "health number panel" },
+        { 0x801BCE30u, HudAnchor::Left, 20, false, false, "health backing" },
+        { 0x801BD070u, HudAnchor::Left, 20, false, false, "health jet glyph" },
+        { 0x801BD2B0u, HudAnchor::Left, 20, false, false, "health number panel" },
         // Drawn from a shared boot-segment buffer in its own 2D group after a
         // render-mode restore, so it needs its own align/reset pair even
         // though it is visually part of the dial. The buffer really is shared
         // (phase 1 open question O3, settled for phase 2 by a from-boot dump)
         // -- hence shared_buffer = true and the in-mission gate in
         // hud_redirect_frame().
-        { 0x800F2B50u, HudAnchor::Left, 20, true, "health % digits" },
+        { 0x800F2B50u, HudAnchor::Left, 20, true, false, "health % digits" },
 
         // Bottom-right S-BOMB cluster: x 215..295, y 188..220 (a 25 px right
         // margin, same letterbox floor).
         // Likewise the charge fill (phase 2's "S-BOMB blinker") is a dynamic
         // fill, matched by region below.
-        { 0x801C25F0u, HudAnchor::Right, 20, false, "S-BOMB gauge" },
+        { 0x801C25F0u, HudAnchor::Right, 20, false, false, "S-BOMB gauge" },
 
         // A screen effect, not a widget: one 319x239 rect covering the whole
         // frame. Stretched to the true window edges rather than translated.
-        { 0x801B6CB0u, HudAnchor::Stretch, 0, false, "full-screen flash" },
+        { 0x801B6CB0u, HudAnchor::Stretch, 0, false, false, "full-screen flash" },
 
         // The in-mission cutscene radio box (dialogue panel 0x801C88F0,
         // glyphs 0x80109550, portrait frame 0x801D0AB0, portraits
@@ -943,17 +958,25 @@ namespace {
     // for a fingerprinted element the table's KSEG0 constant, for a region
     // match the exact w1 the game's own push carried, so whatever the game
     // meant by it (it never uses a nonzero segment: phase 1 §5) is preserved.
+    // `aim_bias_px` is the extended_aim draw bias for this element, in N64
+    // pixels (0 for everything but the reticle, and 0 for the reticle too
+    // unless that enhancement is widening the horizontal rail). Subtracted
+    // from both horizontal offsets, in the same 10.2 units, so the sprite
+    // lands exactly where the game's own coordinate said before the bias.
     void hud_write_stub(uint8_t* rdram, uint32_t stub_addr, uint32_t sub_dl_word,
-                        HudAnchor anchor, int16_t vertical_px, bool vertical_shift) {
+                        HudAnchor anchor, int16_t vertical_px, bool vertical_shift,
+                        int16_t aim_bias_px = 0) {
         const HudAlign align = hud_align_for(anchor);
         const int16_t v = vertical_shift ? int16_t(vertical_px * 4) : int16_t(0);
+        const int16_t ulx_off = int16_t(align.ulx_off - aim_bias_px * 4);
+        const int16_t lrx_off = int16_t(align.lrx_off - aim_bias_px * 4);
 
         const uint32_t align_origins =
             (align.lorigin & 0xFFFu) | ((align.rorigin & 0xFFFu) << 12);
         const uint32_t align_ul =
-            (uint32_t(uint16_t(align.ulx_off)) << 16) | uint32_t(uint16_t(v));
+            (uint32_t(uint16_t(ulx_off)) << 16) | uint32_t(uint16_t(v));
         const uint32_t align_lr =
-            (uint32_t(uint16_t(align.lrx_off)) << 16) | uint32_t(uint16_t(v));
+            (uint32_t(uint16_t(lrx_off)) << 16) | uint32_t(uint16_t(v));
 
         uint32_t* p = reinterpret_cast<uint32_t*>(rdram + stub_addr);
         p[0] = G_EX_SETRECTALIGN_W0;  p[1] = align_origins;   // gEXSetRectAlign(anchor)
@@ -972,13 +995,18 @@ namespace {
         p[10] = F3DEX2_ENDDL_W0;      p[11] = 0;              // back to the main DL
     }
 
-    // Builds every fixed-address element's stub, once. The region stubs are
-    // not built here: the sub-DL they call moves from frame to frame, so
-    // they are rewritten on each frame that matches one.
-    void hud_build_stubs(uint8_t* rdram, bool vertical_shift) {
+    // Builds every fixed-address element's stub. The region stubs are not
+    // built here: the sub-DL they call moves from frame to frame, so they are
+    // rewritten on each frame that matches one.
+    //
+    // Rebuilt (rather than built once) whenever `aim_bias_px` changes, which
+    // only happens when the window is resized with extended_aim active -- the
+    // bias is derived from the window aspect. See maybe_redirect_hud().
+    void hud_build_stubs(uint8_t* rdram, bool vertical_shift, int16_t aim_bias_px) {
         for (size_t i = 0; i < HUD_ELEMENT_COUNT; i++) {
             hud_write_stub(rdram, hud_stub_address(i), hud_elements[i].sub_dl,
-                           hud_elements[i].anchor, hud_elements[i].vertical_px, vertical_shift);
+                           hud_elements[i].anchor, hud_elements[i].vertical_px, vertical_shift,
+                           hud_elements[i].aim_biased ? aim_bias_px : int16_t(0));
         }
     }
 
@@ -1319,6 +1347,13 @@ bool kerecomp::renderer::RT64Context::scratch_usable() {
                 std::fprintf(stderr,
                     "[gfx] scratch RDRAM at 0x807FF000 unexpectedly in use (word %u); "
                     "high framerate interpolation and HUD relocation disabled\n", i);
+                // extended_aim's horizontal half is built on the reticle's
+                // relocation stub, which lives in that scratch: without it
+                // nothing would undo the game-side draw bias, so tell it to
+                // fall back to the vanilla rail rather than draw wrong. This
+                // resolves on the run's first display list, long before any
+                // mission (src/main/extended_aim.cpp).
+                kerecomp::set_extended_aim_draw_supported(false);
                 return false;
             }
         }
@@ -1346,11 +1381,21 @@ uint32_t kerecomp::renderer::RT64Context::maybe_redirect_hud(uint32_t game_dl_ad
     }
 
     const bool vertical_shift = hud_vertical_shift_on.load(std::memory_order_relaxed);
-    static const bool built = [this, vertical_shift]() {
-        hud_build_stubs(app->core.RDRAM, vertical_shift);
-        return true;
-    }();
-    (void)built;
+
+    // The reticle's stub carries the extended_aim draw bias, which is derived
+    // from the live window aspect -- so unlike everything else here it is not
+    // a build-once constant. Rebuild on change; a resize is the only thing
+    // that changes it, and the rebuild is 12 stores per element. Plain
+    // statics: this runs only on the graphics thread.
+    const int16_t aim_bias =
+        static_cast<int16_t>(kerecomp::extended_aim_rails().draw_bias);
+    static bool stubs_built = false;
+    static int16_t built_aim_bias = 0;
+    if (!stubs_built || built_aim_bias != aim_bias) {
+        hud_build_stubs(app->core.RDRAM, vertical_shift, aim_bias);
+        stubs_built = true;
+        built_aim_bias = aim_bias;
+    }
 
     const uint32_t rewrites = hud_redirect_frame(app->core.RDRAM, game_dl_addr, vertical_shift);
 

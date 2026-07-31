@@ -111,6 +111,76 @@ RCP_PACING_HOOKS = [
 ]
 
 
+# Extended aim range (analysis/docs/hud-relocation.md, "Reticle range
+# extension"; implementation in src/main/extended_aim.cpp).
+#
+# The aiming reticle is an integrator the game clamps to +-128 / +-84 N64
+# pixels every frame, which is 80% of the half-width and 70% of the half-height
+# of the original 4:3 / 320x200 view.  With `widescreen` and `full_height` on
+# there is visibly more frame than the reticle can reach.  Four hooks widen it,
+# all of them no-ops unless the enhancement resolves to a wider rail:
+#
+#   A. the clamp, in func_8016E520_1501A0's tail (0x8016EC30..0x8016ECEC: four
+#      load / slti / conditional-store blocks against 0x81 / -0x80 / 0x55 /
+#      -0x54, on the SoA at 0x8011D458 + slot*4, X at +0x64 and Y at +0x74).
+#      A hook at the head of the block stashes the *unclamped* pair for this
+#      slot; a hook on the `jr $ra` at 0x8016ECF0 re-clamps the stash to our own
+#      rails and stores it back.  The pair, rather than one hook per slti site,
+#      because its correctness argument is global instead of per-site; the stash
+#      validity flag is what makes the three early exits that also land on
+#      0x8016ECF0 (the recentre path's `b`, and the two `bne` at 0x8016E720 /
+#      0x8016E734) safe -- they never set a stash, so the exit hook does
+#      nothing.  With the enhancement off the entry hook returns on one atomic
+#      load and the game's own clamp is the only clamp.
+#
+#   B. the aim ray needs no hook at all: func_8019C1D0_1501A0 maps the same two
+#      integers to a direction with atan2(pixel, 120/tan(FOV/2)), which is the
+#      rendering frustum's own focal length -- unbounded, monotone, and still
+#      registered with RT64's `Expand` widening past the original rails.
+#
+#   C. the draw.  func_800C6C6C is the game's generic 2D sprite blit and the
+#      reticle's only draw path (func_801757A0_1501A0 tail: spMove x = X + 144).
+#      Every call re-asserts a *software* clip box of (0,0)-(319,239) through
+#      the sprite library's spScissor, and spX2Draw clips the rect to it (and
+#      drops it entirely once it leaves), which is what stopped a poked
+#      out-of-range reticle at exactly N64 x = 0 / 320 -- not the RDP scissor,
+#      so hud_relocation's widened scissor did not lift it.  The entry hook
+#      shifts the reticle's x by a bias B >= 0 so the emitted texrect stays
+#      non-negative (G_TEXRECT coordinates are 12-bit *unsigned* 10.2), and
+#      marks the next spScissor as the reticle's; the callee hook on spScissor
+#      substitutes the widened box for that one call only.  The bias is undone
+#      at draw time by the reticle's hud_relocation stub
+#      (src/main/rt64_render_context.cpp), which is why the horizontal half of
+#      this enhancement is gated on hud_relocation.
+#
+#   The spScissor hook has to be on the callee, not the call site: a3 (lry) is
+#   assigned in the `jal`'s delay slot at 0x800C6D0C and N64Recomp emits delay
+#   slots *before* the call, so a `before_vram = 0x800C6D08` hook would be
+#   overwritten -- the trap letterbox-full-height.md section 7 records.
+#
+# Entries are (segment name, function vram, hook vram or None for an entry
+# hook, C text, why).
+EXTENDED_AIM_HOOKS = [
+    ("seg_1501A0", 0x8016E520, 0x8016EC30,
+     "ke_reticle_clamp_stash(rdram, (uint32_t)ctx->r4);",
+     "reticle clamp: stash the unclamped X/Y for slot $a0 before the game's "
+     "four slti blocks (0x8016EC44/0x8016EC74/0x8016ECA4/0x8016ECD4) run"),
+    ("seg_1501A0", 0x8016E520, 0x8016ECF0,
+     "ke_reticle_clamp_apply(rdram);",
+     "reticle clamp: re-clamp the stashed pair to the resolved rails and store "
+     "it back, on the `jr $ra` every path exits through"),
+    ("boot", 0x800C6C6C, None,
+     "ctx->r5 = (int32_t)ke_reticle_blit_x(rdram, (uint32_t)ctx->r4, "
+     "(int32_t)ctx->r5);",
+     "generic 2D sprite blit: bias the reticle's x (a1) so its texrect stays "
+     "non-negative, and mark the spScissor this call is about to make"),
+    ("boot", 0x800D3D84, None,
+     "ctx->r5 = (int32_t)ke_sprite_scissor_lrx((int32_t)ctx->r5);",
+     "sprite-library scissor: substitute a widened lrx (a1) for the marked "
+     "reticle blit only, so spX2Draw stops clipping it at N64 x = 320"),
+]
+
+
 # Spin-yield hooks whose body is something other than the default
 # `yield_self_1ms(rdram);`.  Keyed by (segment name, function vram).
 SPIN_YIELD_TEXT_OVERRIDES = {
@@ -272,6 +342,12 @@ def main(argv=None):
         "/* src/main/full_height.cpp - full-height missions enhancement: rewrites the\n"
         "   mission's 320x200 request to 320x240 when the flag is on. */\n"
         "extern uint32_t ke_view_height(uint32_t w, uint32_t h);\n"
+        "/* src/main/extended_aim.cpp - extended aim range enhancement: widens the\n"
+        "   reticle's clamp and lets its sprite be drawn outside the 4:3 column. */\n"
+        "extern void ke_reticle_clamp_stash(uint8_t* rdram, uint32_t slot);\n"
+        "extern void ke_reticle_clamp_apply(uint8_t* rdram);\n"
+        "extern int32_t ke_reticle_blit_x(uint8_t* rdram, uint32_t sprite, int32_t x);\n"
+        "extern int32_t ke_sprite_scissor_lrx(int32_t lrx);\n"
         "#ifdef __cplusplus\n"
         "}\n"
         "#endif"
@@ -403,6 +479,20 @@ def main(argv=None):
         h.add(tomlkit.comment(why))
         h["func"] = nm
         h["before_vram"] = hexint(hook_vram)
+        h["text"] = text
+        hooks.append(h)
+
+    # Extended aim range (see EXTENDED_AIM_HOOKS above).
+    for segname, func_vram, hook_vram, text, why in EXTENDED_AIM_HOOKS:
+        nm = stub_names.get((segname, func_vram))
+        if nm is None:
+            raise SystemExit("extended-aim hook target %s %08X is not an emitted "
+                             "function" % (segname, func_vram))
+        h = tomlkit.table()
+        h.add(tomlkit.comment(why))
+        h["func"] = nm
+        if hook_vram is not None:
+            h["before_vram"] = hexint(hook_vram)
         h["text"] = text
         hooks.append(h)
     patches["hook"] = hooks

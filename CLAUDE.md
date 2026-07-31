@@ -369,10 +369,24 @@ default only affects fresh installs.
    is deliberately left at its original position (owner decision —
    cutscene effects misalign alongside it and its 4:3 placement reads
    naturally). Verified headless at 20% health: fills ride with their
-   containers, nothing strands in the 4:3 column. Owner re-verification
-   pending. Watch item unchanged: elements from uncaptured states
-   (pause, boss bars, results — O2) stay in the 4:3 column; report +
-   KE_DL_DUMP capture is the fix path.
+   containers, nothing strands in the 4:3 column. Owner verdict on that
+   round: "looks good". Watch item unchanged: elements from uncaptured
+   states (pause, boss bars, results — O2) stay in the 4:3 column;
+   report + KE_DL_DUMP capture is the fix path.
+   `extended_aim` shipped on top (2026-07-31, owner-requested): reticle
+   rails widen from ±128/±84 to the enlarged view (±170 x at 16:9 with
+   widescreen+hud_relocation, ±100 y with full_height) — an EXTEND at
+   1 unit = 1 px, deliberately not a rescale (mouse-aim.md's measured
+   curves stay literally valid). Feasibility RE proved the aim ray is
+   the same two integers through an unbounded atan2 with the frustum's
+   own focal constant, so crosshair and shots agree at any value; four
+   gen_syms hooks (clamp stash/re-apply, blit x-bias, scissor widen) +
+   draw-side bias compensation in the reticle stub. THE OFF-PATH IS THE
+   FIDELITY GUARANTEE (hooks exist in every profile; vanilla measured
+   railing at exactly ±128/±84). In `enhanced`; owner hands-on pending
+   — edge-of-screen hit-registration feel is the one thing only play
+   can confirm. Full RE + plan: `hud-relocation.md`, "Reticle range
+   extension".
 5. High framerate: shipped and owner-verified (see Status); experimental
    opt-in, not in `enhanced` (owner decision 2026-07-31 — confirmed
    artifacts on lock-on effect + bullet trails). Deferred follow-up when

@@ -241,6 +241,18 @@ result is clamped to the measured rails (§5) so the target cannot wind up past
 a reticle that has stopped following. `window_h` is republished by
 `update_gfx()` each pass so a resize is tracked rather than assumed.
 
+> **Since 2026-07-31 that clamp is not the ±128/±84 constants.** The
+> `extended_aim` enhancement widens the game's own clamp (to ±170 at 16:9 and
+> ±100 vertically — `analysis/docs/hud-relocation.md`, "Reticle range
+> extension"), so `get_input()` reads the resolved rails from
+> `kerecomp::extended_aim_rails()` instead. It has to be the same number the
+> game will enforce: left at ±128 the controller would refuse to follow past
+> the old rails while keyboard and pad went to the new ones, and the symptom —
+> mouse aim stopping short — would read as a mouse bug. Everything else in this
+> section is unaffected, deliberately: the enhancement extends the rails at the
+> same units/pixel and leaves the 20 units/frame step alone, so §3.1's curve and
+> the threshold table below stay exactly as measured.
+
 The target is deliberately **not** clamped to the reticle's per-frame reach.
 A fast flick therefore leaves the target far ahead and the reticle visibly
 chases it at its game-capped 20 units/frame (§3) for up to ~half a second — a

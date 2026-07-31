@@ -311,11 +311,15 @@ commented defaults on first run. It selects a **profile**:
   scene at window resolution through RT64 instead of native 320x240),
   `widescreen` (expands the 3D field of view to the window's aspect ratio
   instead of 4:3-pillarboxing it), `full_height` (removes the in-mission
-  20-line letterbox, revealing the full 320x240 frame), and `hud_relocation`
+  20-line letterbox, revealing the full 320x240 frame), `hud_relocation`
   (re-anchors the in-mission HUD to the true window corners that the previous
   two open up — health cluster bottom-left, S-BOMB gauge bottom-right, each
   keeping its original margin — instead of leaving it inside the centered 4:3
-  column).
+  column), and `extended_aim` (lets the aiming reticle reach the whole
+  visible viewport instead of stopping at the rails it had for a 4:3 /
+  320x200 view — ±170 instead of ±128 horizontally at 16:9, ±100 instead of
+  ±84 vertically; the shot goes where the crosshair is out there too, the
+  game's aim math needs no correction for it).
 - `vanilla` — every enhancement off, faithful to original hardware behavior.
   This is the regression baseline every measurement and bug investigation in
   `analysis/docs/` assumes unless stated otherwise.

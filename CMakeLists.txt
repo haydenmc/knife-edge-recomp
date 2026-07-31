@@ -320,6 +320,7 @@ add_executable(KnifeEdgeRecompiled
     ${CMAKE_SOURCE_DIR}/src/main/register_overlays.cpp
     ${CMAKE_SOURCE_DIR}/src/main/rcp_timing.cpp
     ${CMAKE_SOURCE_DIR}/src/main/full_height.cpp
+    ${CMAKE_SOURCE_DIR}/src/main/extended_aim.cpp
     ${CMAKE_SOURCE_DIR}/src/main/rt64_render_context.cpp
     ${KE_RSP_SOURCES}
 )

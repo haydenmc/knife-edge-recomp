@@ -6,7 +6,7 @@ symbols_file_path = "knife_edge.us.syms.toml"
 rom_file_path = "../build/knife_edge.z64"
 output_func_path = "../generated/us"
 functions_per_output_file = 50
-recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n/* src/main/rcp_timing.cpp - models the time the RCP needs for one frame,\n   which is what sets this game's speed; used by RCP_PACING_HOOKS. */\nextern void ke_gfx_task_begin(void);\nextern void ke_gfx_task_end(uint8_t* rdram);\nextern void ke_rcp_idle_wait(uint8_t* rdram);\n/* src/main/full_height.cpp - full-height missions enhancement: rewrites the\n   mission's 320x200 request to 320x240 when the flag is on. */\nextern uint32_t ke_view_height(uint32_t w, uint32_t h);\n#ifdef __cplusplus\n}\n#endif"
+recomp_include = "#include \"recomp.h\"\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n/* src/main/register_overlays.cpp - whole-section overlay tracking. */\nextern void ke_overlay_dma(uint32_t rom, int32_t ram_addr, uint32_t size);\n/* ultramodern/src/scheduling.cpp - pumps the external message queue and\n   yields to any higher-priority ready thread; used by SPIN_YIELD_HOOKS. */\nextern void yield_self_1ms(uint8_t* rdram);\n/* src/main/rcp_timing.cpp - models the time the RCP needs for one frame,\n   which is what sets this game's speed; used by RCP_PACING_HOOKS. */\nextern void ke_gfx_task_begin(void);\nextern void ke_gfx_task_end(uint8_t* rdram);\nextern void ke_rcp_idle_wait(uint8_t* rdram);\n/* src/main/full_height.cpp - full-height missions enhancement: rewrites the\n   mission's 320x200 request to 320x240 when the flag is on. */\nextern uint32_t ke_view_height(uint32_t w, uint32_t h);\n/* src/main/extended_aim.cpp - extended aim range enhancement: widens the\n   reticle's clamp and lets its sprite be drawn outside the 4:3 column. */\nextern void ke_reticle_clamp_stash(uint8_t* rdram, uint32_t slot);\nextern void ke_reticle_clamp_apply(uint8_t* rdram);\nextern int32_t ke_reticle_blit_x(uint8_t* rdram, uint32_t sprite, int32_t x);\nextern int32_t ke_sprite_scissor_lrx(int32_t lrx);\n#ifdef __cplusplus\n}\n#endif"
 
 [patches]
 stubs = []
@@ -224,3 +224,25 @@ text = "ke_gfx_task_begin();"
 func = "func_800D25F0"
 before_vram = 0x800D2728
 text = "ke_gfx_task_end(rdram);"
+
+[[patches.hook]]
+# reticle clamp: stash the unclamped X/Y for slot $a0 before the game's four slti blocks (0x8016EC44/0x8016EC74/0x8016ECA4/0x8016ECD4) run
+func = "func_8016E520_1501A0"
+before_vram = 0x8016EC30
+text = "ke_reticle_clamp_stash(rdram, (uint32_t)ctx->r4);"
+
+[[patches.hook]]
+# reticle clamp: re-clamp the stashed pair to the resolved rails and store it back, on the `jr $ra` every path exits through
+func = "func_8016E520_1501A0"
+before_vram = 0x8016ECF0
+text = "ke_reticle_clamp_apply(rdram);"
+
+[[patches.hook]]
+# generic 2D sprite blit: bias the reticle's x (a1) so its texrect stays non-negative, and mark the spScissor this call is about to make
+func = "func_800C6C6C"
+text = "ctx->r5 = (int32_t)ke_reticle_blit_x(rdram, (uint32_t)ctx->r4, (int32_t)ctx->r5);"
+
+[[patches.hook]]
+# sprite-library scissor: substitute a widened lrx (a1) for the marked reticle blit only, so spX2Draw stops clipping it at N64 x = 320
+func = "spScissor"
+text = "ctx->r5 = (int32_t)ke_sprite_scissor_lrx((int32_t)ctx->r5);"

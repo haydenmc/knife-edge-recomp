@@ -89,4 +89,53 @@ namespace kerecomp {
     // Implemented in full_height.cpp. Call once, before recomp::start(), with
     // the resolved kerecomp::EnhancementFlags's value.
     void set_full_height_enhancement(bool on);
+
+    // ---- extended aim range (analysis/docs/hud-relocation.md, "Reticle range
+    // extension"; src/main/extended_aim.cpp) ----
+    //
+    // The reticle's clamp rails, in N64 pixels, as currently resolved. Vanilla
+    // is {128, 84, 0}; the extended_aim enhancement widens them to the same
+    // fraction of the enlarged view that the originals were of the 4:3 /
+    // 320x200 one. `draw_bias` is the N64-pixel shift the reticle's sprite
+    // blit is given so its texrect coordinates stay non-negative at the left
+    // rail, and which the reticle's hud_relocation stub subtracts again at
+    // draw time; it is derived from `x` (= x - 128), never stored separately,
+    // so the two can never disagree.
+    //
+    // Read by the positional mouse controller (src/main/main.cpp, whose target
+    // clamp has to match the rail the game will actually enforce) and by the
+    // renderer (src/main/rt64_render_context.cpp, for the stub offset).
+    struct AimRails {
+        int32_t x = 128;
+        int32_t y = 84;
+        int32_t draw_bias = 0;
+    };
+    AimRails extended_aim_rails();
+
+    // Turns the two halves of the enhancement on/off. Call once from main(),
+    // before recomp::start(), with:
+    //
+    //   horizontal = extended_aim && widescreen && hud_relocation
+    //   vertical   = extended_aim && full_height
+    //
+    // widescreen/full_height because without them there is no extra visible
+    // area to pan into. hud_relocation because the horizontal half's draw side
+    // is built out of its machinery: the reticle's re-anchoring stub is what
+    // undoes the blit bias, and its prologue's scissor re-expression is what
+    // stops RT64 clipping the reticle at the centered 4:3 column's edge. The
+    // vertical half needs neither.
+    void set_extended_aim_enhancement(bool horizontal, bool vertical);
+
+    // The live window aspect ratio (width/height) the horizontal rail is
+    // derived from. Called from update_gfx() whenever the window size changes,
+    // for the same reason window_height is republished there: a rail computed
+    // from a stale aspect would let the reticle point at world the current
+    // window does not render.
+    void set_extended_aim_window_aspect(double aspect);
+
+    // Called with false by the renderer if its scratch RDRAM is not available,
+    // which is what the reticle's relocation stub is built in. Without that
+    // stub the blit bias would never be undone, so the horizontal half falls
+    // back to the vanilla rail instead. Fails safe; never called with true.
+    void set_extended_aim_draw_supported(bool supported);
 }

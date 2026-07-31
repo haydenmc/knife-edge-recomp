@@ -1063,3 +1063,588 @@ All headless, 1280x720 Xvfb + lavapipe, stage 1 driven end to end.
   occupy fixed slots in the pool; anything whose picture depends on a game
   value does not.
 * **Phase 2's §1 table row for the radio box is superseded by §4 above.**
+
+---
+
+# Reticle range extension: feasibility (2026-07-31)
+
+Read-only investigation. **Nothing was implemented and nothing in `src/` was
+touched.** The question: can the aiming reticle be made to pan to the full
+`widescreen` / `full_height` viewport instead of stopping at its original
+±128 / ±84 rails, using our runtime-toggleable patch mechanisms, with the
+input clamp, the hit ray and the draw staying mutually consistent?
+
+**Verdict: GO, with caveats.** The hard part — the hit ray — turns out to need
+no patch at all: the game maps reticle units to an aim direction with
+`atan(pixel / focal)`, using the *same* focal length RT64's `Expand` projection
+widens around, so drawn crosshair and shot direction agree by construction at
+any value, inside or outside the rails. The two things that do need patching
+are one clamp block (four `slti`s in one function) and one *sprite-library*
+scissor that is not RDP scissoring at all and was invisible to phases 1–3.
+
+All numbers below are measured on this tree at commit `c567dbd`, headless on
+`:94` (Xvfb 1600x900, window 1280x720 at root offset (160,90)), lavapipe,
+`--profile enhanced`, stage 1. Window coordinates below are root minus
+(160,90); the render scale is 3.0 host px per N64 px, so screen centre is
+window (640,360) and a reticle unit is 3 host px.
+
+## 1. The live-poke experiment
+
+Same methodology as `letterbox-full-height.md` §6: locate the process and the
+RDRAM base by the 4 GiB `rw-p` + `---p` mapping pair (`capture_wedge_state.sh`),
+then read/write `/proc/<pid>/mem` at `base + (vaddr & 0x0FFFFFFF)` as native
+little-endian words (`mouse-aim.md` §1.1). Reticle X `0x8011D4BC`, Y
+`0x8011D4CC`; sanity-checked against `mouse-aim.md`'s rails before any write.
+
+**The clamp re-applies every game frame with the stick neutral**, so a single
+poke is not observable: a write of 200 was back at 128 within 4 ms of sampling
+at 1 kHz, with exactly one transition and no intermediate value. Every
+screenshot below was therefore taken while a writer process held the value in a
+tight loop; that races the game's own store harmlessly (a lost race can only
+substitute the clamped value, never an out-of-range one).
+
+Green-pixel centroid / bounding box of the reticle sprite:
+
+| poked | predicted centre (window) | measured bbox (window) | reading |
+|---|---|---|---|
+| X=0, Y=0 | 640, 360 | centroid 639.5, 359.5 | exact |
+| X=+128 | 1024 | centroid 1023.5 | the vanilla rail, exact |
+| X=−128 | 256 | centroid 255.5 | exact |
+| X=+150 | 1090 | 1042 … **1119** | right half sliced off |
+| X=+160 | 1120 | 1072 … **1119** | ditto |
+| X=+170 | 1150 | 1102 … **1119** | ditto |
+| X=+190 | 1210 | *nothing drawn* | gone |
+| X=−150 | 190 | **160** … 237 | left half sliced off |
+| X=−170 | 130 | **160** … 177 | ditto |
+| X=−190 | 70 | *nothing drawn* | gone |
+| Y=−84 | 108 | 60 … 155 | the vanilla rail, unclipped |
+| Y=−110 | 30 | **0** … 71 | top sliced |
+| Y=+130 | 750 | 702 … **719** | bottom sliced |
+
+So: **proportionally extrapolated, not clamped, not wrapped, not glitched.**
+The centre keeps tracking `640 + 3·X` / `360 + 3·Y` well past the rails; what
+stops it is a *clip*, and the clip edges are window 160 / 1120 / 0 / 720 —
+i.e. exactly N64 x = 0 and x = 320, y = 0 and y = 240.
+
+Three further live results:
+
+* **The game survives.** ~7 minutes of a single run with repeated pokes to
+  ±190 and Y=±130, `KE_PERF` steady at 26–27 frames/s throughout, zero
+  `error`/`fail`/`assert` lines in the log, no wedge, no crash. The run ended
+  by the player dying in-game, normally.
+* **Stepping beyond the rail.** From a poked +190, holding `d` (toward the
+  rail): `190 → 128` and stays. Holding `a` (away): `190 → 128 → 108 → 88 →
+  … → −128`, i.e. it snaps to the rail first and then walks off it at the
+  usual 20 units/frame. From a poked −190 holding `a`: `−190 → −128` and
+  stays. Consistent with a clamp applied *after* integration, every frame.
+* **`hud_relocation` does not lift the clip.** Repeating X=±170 on a build
+  with `hud_relocation` on — which re-expresses the frame scissor against the
+  true window edges (phase 2 §4) — gives the same slivers (window 1113 / 157,
+  the ±3 px being phase 2's known misalignment shift). The limit is therefore
+  **not** RT64's scissor. §4 below says what it is.
+
+## 2. A — the input clamp
+
+**`func_8016E520_1501A0`** (`0x8016E520`–`0x8016ECF4`, in the shared in-game
+overlay `seg_1501A0`), called six times from `func_8016DF5C_1501A0`. `$a0` is a
+player slot; the state block is a structure-of-arrays at `0x8011D458 + slot*4`
+with reticle X at `+0x64` and Y at `+0x74`, so slot 0 is `0x8011D4BC` /
+`0x8011D4CC` — `mouse-aim.md`'s two words are element 0 of two four-element
+arrays.
+
+Shape of the function, in order:
+
+| range | what |
+|---|---|
+| `0x8016E520`–`0x8016E5A8` | if a per-scheme button was pressed, set bit `0x10<<slot` of the byte at `0x8011D1E2` |
+| `0x8016E5AC`–`0x8016E758` | **recentre path** (that bit set): step each axis 30/frame toward 0, clear the bit when both reach 0, then `b` straight to the `jr` — **bypassing the clamp entirely** |
+| `0x8016E75C`–`0x8016EA34` | read the control scheme (`0x801239A0 + slot*32`), fetch the per-frame max step from `0x8019F2D0[option]` into `0x80123D28` (live value **20**), and latch stick x/y from `0x8011BE26` / `0x8011BE27` (schemes 0/1) or ±40 from D-pad bits of `0x8011BE20` (schemes 2/3) |
+| `0x8016EA38`–`0x8016EC2C` | take absolute values + signs, then the two rate blocks: `\|stick\| ≥ 64` adds `step·sign`; `5 ≤ \|stick\| < 64` adds `((\|stick\|−5)·step / 58)·sign`. This *is* `mouse-aim.md` §3.1's formula, now read off the code rather than fitted |
+| `0x8016EC30`–`0x8016ECEC` | **the clamp** |
+| `0x8016ECF0` | `jr $ra` |
+
+The clamp is four independent load / `slti` / conditional-store blocks:
+
+| axis | test | store |
+|---|---|---|
+| X ≥ +129 | `0x8016EC44  slti $at, $t6, 0x81` | `0x8016EC58 addiu $t1, $zero, 0x80` / `0x8016EC5C sw` |
+| X < −128 | `0x8016EC74  slti $at, $t0, -0x80` | `0x8016EC88 addiu $t5, $zero, -0x80` / `0x8016EC8C sw` |
+| Y ≥ +85 | `0x8016ECA4  slti $at, $t4, 0x55` | `0x8016ECB8 addiu $t7, $zero, 0x54` / `0x8016ECBC sw` |
+| Y < −84 | `0x8016ECD4  slti $at, $t9, -0x54` | `0x8016ECE8 addiu $t8, $zero, -0x54` / `0x8016ECEC sw` |
+
+These are the only writes to the words other than the recentre path and
+`func_801736A0_1501A0` (`0x80173814` / `0x80173830`, the per-mission
+initialisation from a table). A scan of all 222 837 recompiled instructions for
+effective addresses in `0x8011D4B8`–`0x8011D4D8`, resolving `lui`/`addiu`/`addu`
+register chains per function, found no other writer.
+
+**Widening it runtime-toggleably: yes, mechanism (a), two `[[patches.hook]]`s.**
+`before_vram = 0x8016EC30` stashes the *unclamped* X and Y for slot `ctx->r4`;
+`before_vram = 0x8016ECF0` re-clamps the stash to our own bounds and stores it
+back, then invalidates the stash. `$a0` is live at both sites (every clamp block
+recomputes `slot*4` from it), and the stash's validity flag is what makes the
+three early exits into `0x8016ECF0` — the recentre path's `b`, and the two
+`bne … L_8016ECF0` at `0x8016E720` / `0x8016E734` — safe. With the flag off both
+hooks return on one atomic load and the game's own clamp is the only clamp, so
+vanilla is bit-identical.
+
+(The alternative — one hook per `slti` site that pre-clamps to our bound and
+then forces the compared register to 0 so the game's store is skipped — also
+works and needs no stash, but it is four hooks and its correctness argument is
+per-site rather than global. Prefer the pair.)
+
+An **instruction patch** of the four immediates is the fastest manual
+experiment but is not shippable: it cannot be runtime-gated, the same objection
+`letterbox-full-height.md` §7 records for the `0x240500C8` word.
+
+## 3. B — the aim/hit ray: no obstacle at all
+
+**Every** consumer of the reticle words funnels through one function.
+`func_8019C1D0_1501A0` (`0x8019C1D0`–`0x8019C384`), called from exactly three
+sites, all in `seg_1501A0`: `0x80170144` and `0x80170370` (in
+`func_80170058_1501A0`) and `0x80170788` (in `func_8017059C_1501A0`), each as
+`func_8019C1D0(X, Y)` loaded straight from `+0x64` / `+0x74`.
+
+What it computes, with the constants read out of the live process:
+
+```
+fov    = *(float)0x8011BE50                     measured 30.0
+pi     = *(float)0x801A0BF0/BF4/BF8             measured 3.141593 (all three)
+focal  = 120.0f / tanf((fov/2) * pi/180)        = 120 / tan(15°) = 447.85
+angle  = atan2f(pixel, focal) * 180/pi          per axis, degrees
+         → func_800D7120 builds a rotation matrix, func_800D6F30 concatenates,
+           result direction written to 0x80123E00..08
+```
+
+That is a textbook perspective-correct screen-to-ray mapping: **monotone,
+unbounded, no saturation, no lookup table, no clamp anywhere in the function or
+at any of its three call sites.** Values past ±128 extrapolate exactly as the
+projection says they should.
+
+Two checks that the focal constant is genuinely the projection's:
+
+* `atan(160 / 447.85) = 19.66°`, and the horizontal half-FOV of a 30° vertical
+  4:3 frustum is `atan(tan 15° · 4/3) = 19.66°`. The reticle's own coordinate
+  system and the game's frustum are the same one, to five digits.
+* `atan(213.3 / 447.85) = 25.44°`, and a 16:9 widening of the same frustum has
+  half-FOV `atan(tan 15° · 16/9) = 25.47°`. So a reticle at N64 x = 160+213
+  aims precisely at the widescreen frame edge — the extension lands where it
+  looks like it lands.
+
+`widescreen` sets `ar_option = Expand`, which widens the frustum *around* the
+unchanged 4:3 centre (this is already the premise of phase 2's CENTER pin for
+the reticle). The focal length is unchanged by it, so the ray stays registered
+with the extra columns too.
+
+**Conclusion: B needs no patch and imposes no bound.** The drawn crosshair and
+the shot direction are the same two integers, and they stay consistent at any
+value.
+
+## 4. C — the draw, and the one real blocker
+
+The draw call is the tail of `func_801757A0_1501A0`:
+
+```
+80175DB8  lw    $a1, 0x64($t0)        reticle X
+80175DBC  lw    $a2, 0x74($t0)        reticle Y
+80175DD0  lw    $a0, -0x279C($a0)     sprite object = *(0x8019D864 + slot*4)
+80175DDC  addiu $a1, $a1, 0x90        + 144 = 160 - 16
+80175DE0  jal   0x800C6C6C
+80175DE4  addiu $a2, $a2, 0x68        + 104 = 120 - 16
+```
+
+confirming phase 1 §3.1's `ul = (centre − 16)` from the code side.
+
+`func_800C6C6C` is the game's **generic 2D sprite blit** — 126 call sites — and
+it is Nintendo's `sprite` library underneath: our symbol table already names
+`spMove` (`0x800D3D78`), `spScissor` (`0x800D3D84`) and `spX2Draw`
+(`0x800D55F4`). Every call does:
+
+```
+spMove(sprite, x, y);  scale;  colour;
+if (*(u16)0x8010BAD0 & 0x1000)   spScissor(0, 0x27F, 0, 0x1DF);   // hi-res 640x480
+else                             spScissor(0, 0x13F, 0, 0xEF);    // lo-res 320x240
+push G_DL(spX2Draw(sprite));
+```
+
+`spScissor(ulx, lrx, uly, lry)` stores four **32-bit** words (lrx `0x80168090`,
+lry `0x80168094`, ulx `0x80168098`, uly `0x8016809C`), and `spX2Draw`'s clip
+(`0x800D60B8`–`0x800D6198`) is all **signed** `slt`: reject the rect outright if
+it lies wholly outside the box, otherwise clamp `ulx`/`uly` up to the box and
+`lrx`/`lry` down to box−1 **and advance the texture coordinates to match**.
+
+So the "clip" the poke experiment hit is a *software* clip inside the game's own
+sprite library, against a box `func_800C6C6C` re-asserts as `(0,0)-(319,239)` on
+every single call. That is why `hud_relocation`'s widened RDP scissor changed
+nothing.
+
+`KE_DL_DUMP` over 778 mission frames, with the reticle held at three values,
+shows exactly that and nothing else:
+
+```
+X=0     @1C8508 TEXRECT ul=144.00,104.00 lr=176.00,136.00 w=32.00 st=0,0
+X=+170  @1C8508 TEXRECT ul=314.00,104.00 lr=319.00,136.00 w=5.00  st=0,0
+X=-170  @1C8508 TEXRECT ul=0.00,104.00   lr=6.00,136.00   w=6.00  st=832,0
+```
+
+`st=832` is 26 texels in S10.5 — precisely the 26 px sliced off the left. And in
+**69 of the 778 frames** (the |X|=190 pokes) the reticle sub-DL ran its full
+tile setup and emitted **no `G_TEXRECT` at all**: a rect wholly outside the box
+is dropped, not wrapped and not garbage.
+
+So the answer to "what does the game-side computation do with out-of-range
+values" is: **it clips them, correctly, to 320x240, and drops them entirely when
+they leave it.** No wrap, no clamp of the *position*, no corruption — but also
+no way to draw into the widescreen columns without moving that box.
+
+Two consequences for the patch:
+
+1. **The box has to be widened, and only for the reticle.** It is global state
+   shared by 126 blit sites, so widening it unconditionally would un-clip every
+   2D sprite in the game.
+2. **The emitted coordinates must stay non-negative.** `spX2Draw`'s arithmetic
+   is signed and would happily emit `ulx = −26`, but the `G_TEXRECT` coordinate
+   fields are 12-bit unsigned 10.2, so −26 px becomes +978 px and the rect
+   vanishes off the right. This is the draw-side handling the brief anticipated,
+   and it composes with the reticle stub we already own.
+
+## 5. GO — the patch plan
+
+Gate: a new flag (say `reticle_range`) that only does anything when
+`widescreen` is on (there is no gap to pan into otherwise), with its vertical
+half additionally keyed off `full_height` — the same shape as phase 2's
+`hr_option` gate.
+
+**A. Integrator.** Mechanism (a), `gen_syms.py`, two hooks on
+`func_8016E520_1501A0` at `before_vram = 0x8016EC30` and `0x8016ECF0`, backed by
+a new `src/main/reticle_range.cpp` holding the resolved bounds in an atomic (the
+`rcp_timing.cpp` / `full_height.cpp` pattern). Bounds are computed from the live
+window aspect, not hard-coded.
+
+**B. Aim ray.** Nothing.
+
+**C. Draw.** Two more mechanism-(a) hooks plus one line in the existing stub
+table:
+
+* Entry hook on `func_800C6C6C`: if the flag is on and `ctx->r4` equals
+  `*(0x8019D864 + slot*4)`, add a constant bias `B` to `ctx->r5` (the x it will
+  pass to `spMove`) and set a one-shot "next `spScissor` is the reticle's" mark.
+* Entry hook on `spScissor` (`func_800D3D84`): if the mark is set, substitute
+  the widened, biased box `(0, 319+2B, 0, 239)` and clear the mark.
+  It has to be a **callee** hook, not a call-site one: `a3` is assigned in the
+  `jal`'s delay slot at `0x800C6D0C` and N64Recomp emits delay slots before the
+  call, so a `before_vram = 0x800C6D08` hook would be overwritten — the exact
+  trap `letterbox-full-height.md` §7 records.
+* The reticle's `hud_relocation` stub gains `ulxOffset = lrxOffset = −4B` (10.2
+  units) to undo the bias at draw time. `B = 32` covers a ±176 rail; the offsets
+  are `int16`, so B is bounded by 2047 px — not a constraint.
+  With `hud_relocation` off the reticle has no stub today; the extension would
+  have to emit an origins-`NONE`, offset-only one, which the existing stub
+  machinery already expresses.
+
+Nothing else in phases 1–3 changes. The reticle stays claimed by address in the
+fingerprint table, so phase 3 §3.1's region-match false-positive analysis is
+unaffected (its one noted geometric near-miss is still resolved by address
+first).
+
+### Which mapping: extend, or rescale about centre?
+
+**Extend at the same units/px.** Scale each rail by the factor the view
+actually opened: `X_rail = 128 · aspect/(4:3)` — **±170** at 16:9 — and
+`Y_rail = 84 · 240/200` = **±100** when `full_height` is on. This preserves the
+game's own edge margins (the vanilla rails sit at 80 % of the half-width and
+84 % of the half-height; the reticle is *designed* never to touch the frame
+edge) and preserves `1 unit = 1 N64 pixel`, so every constant in `mouse-aim.md`
+— the §3.1 stick→units curve, the 20 units/frame cap, §7's `240/window_h` host
+conversion and its deadbeat threshold table — stays literally valid. The cost is
+that a rail-to-rail flick takes ~33 % longer at 16:9, because the step is still
+20 units/frame.
+
+**Rescale about centre.** Widen the rails as above *and* scale the per-frame
+step by the same factor, which the game makes easy: the step is not an immediate
+but a word at `0x80123D28`, loaded each frame from a table at `0x8019F2D0`
+indexed by a per-player option (`0x801239A4 + slot*32`) — a hook at
+`0x8016E77C` or on the store can scale it. Rail-to-rail time, and therefore what
+a full stick deflection feels like, is then identical to vanilla.
+
+**Recommendation: ship the extension (option 1) and hold the step scaling as a
+follow-on knob** if the owner reports the reticle feels sluggish at 16:9.
+Option 1 changes exactly one number per axis and invalidates nothing that has
+been measured; option 2 additionally changes the stick→units curve, which is the
+single thing the positional mouse controller's deadbeat law is built on
+(`mouse-aim.md` §7's threshold table would have to be rebuilt and re-verified,
+and that table is the reason that controller has zero overshoot). Cheap,
+evidence-preserving change first.
+
+## 6. Effort and risk
+
+**Effort: about one day.** Half for the four hooks and
+`src/main/reticle_range.cpp`; half for the draw-side bias, the stub offset and
+the gating, most of that spent re-running the headless mission. The verification
+harness this investigation used already exists and gives a before/after in
+minutes: drive to stage 1 with the §3.1 held-key recipe, hold a reticle value
+from `/proc/<pid>/mem`, screenshot, green-centroid it, and diff a `KE_DL_DUMP`
+capture for the emitted `@1C8508 TEXRECT` line.
+
+**Risk register**, worst first.
+
+1. **Hit registration diverging from the drawn crosshair near the edges.**
+   Bounded about as hard as evidence can bound it: draw and ray are the *same
+   two integers*, through `X + 0x90` and `atan2(X, 120/tan 15°)` respectively,
+   and §3's two identity checks show that focal constant *is* the rendering
+   frustum's, at 4:3 and at 16:9. There is no second copy of the reticle
+   position anywhere in the binary. **What only owner hands-on can settle:**
+   that RT64's `Expand` really is a pure horizontal frustum extension about an
+   unchanged 4:3 centre rather than a rescale. If it rescaled, the crosshair
+   would already be misregistered *inside* ±128 in today's shipped `enhanced`
+   profile — so the existing owner-verified widescreen builds are themselves
+   the evidence — but nobody has aimed at a specific target near the far edge
+   and fired.
+2. **The bias/offset pair is two numbers that must agree.** A sign error shows
+   up as the reticle drawn a constant `B` px off centre, which is loud, but it
+   is worth an explicit assertion that `B` is used in exactly two places.
+3. **The sprite scissor is global.** The callee-hook + one-shot mark keeps it
+   reticle-only; verify with a `KE_DL_DUMP` diff that no texrect other than
+   `@1C8508` changes coordinates.
+4. **`mouse-aim.md` §7 hard-codes the rails.** The positional controller clamps
+   its target to ±128/±84, so it will refuse to follow past the old rails until
+   that clamp is driven from the same resolved bounds. This is the most likely
+   thing to be forgotten — it is a *second place the number lives*, in a
+   different file, and the symptom (mouse aim stops short while keyboard and
+   pad do not) looks like a mouse bug rather than a range bug.
+5. **Aspect must be live, not constant.** X beyond ±160 aims at world the
+   vanilla frustum never covered. With `widescreen` that world is rendered — but
+   only out to the *window's* aspect, so the rail has to be computed from the
+   live window aspect (which `update_gfx()` already republishes for mouse aim)
+   and must shrink on a narrow window.
+6. **`widescreen`'s existing culling caveat** (frustum culling tuned for 4:3;
+   pop-in at the widened edges) now applies to whatever the player aims at
+   there. The owner has already verified no pop-in at 16:9, which is exactly the
+   region this enhancement makes aimable.
+7. **Unexamined in-mission states** (phase 1 **O2**: pause, boss, results,
+   two-player). The integrator is per-slot and the widening applies to all four
+   slots by construction, and every consumer lives in the stage-independent
+   `seg_1501A0` overlay, with the rails measured identical in stages 1 and 2 —
+   but a mode that draws the reticle through some other path has not been ruled
+   out.
+8. **The recentre animation gets marginally longer.** The recentre path
+   (`0x8016E5AC`–`0x8016E758`, 30 units/frame toward 0, triggered by bit
+   `0x10<<slot` of `0x8011D1E2`) branches straight to the `jr` and so bypasses
+   the clamp entirely — it needs no change, but from a ±170 rail it takes two
+   more frames to centre than from ±128.
+
+## 7. Address quick-reference (this section)
+
+```
+0x8011D458 + slot*4        per-player reticle state block (SoA)
+             +0x64         reticle X   (slot 0 = 0x8011D4BC)
+             +0x74         reticle Y   (slot 0 = 0x8011D4CC)
+0x8011D1E2                 byte: bit 0x10<<slot = "recentre in progress"
+0x801239A0 + slot*32       control-scheme option (0..3)
+0x801239A4 + slot*32       stick-speed option -> table 0x8019F2D0
+0x80123D28                 per-frame max step for this frame (measured 20)
+0x8011BE26 / 0x8011BE27    stick x / y in the per-frame pad copy (slot 0)
+0x8011BE50                 float FOV, 30.0
+0x801A0BF0 / BF4 / BF8     float pi (three copies)
+0x80123E00..08             aim direction result (scratch; also holds focal)
+0x8019D864 + slot*4        pointer to the reticle's sprite object
+0x80168090/94/98/9C        sprite-library scissor lrx / lry / ulx / uly
+
+func_8016E520_1501A0   0x8016E520..0x8016ECF4   reticle integrator
+  0x8016EC30..0x8016ECEC                        the four clamp blocks
+  0x8016EC44 slti 0x81 / 0x8016EC58 addiu 0x80      X max +128
+  0x8016EC74 slti -0x80 / 0x8016EC88 addiu -0x80    X min -128
+  0x8016ECA4 slti 0x55 / 0x8016ECB8 addiu 0x54      Y max +84
+  0x8016ECD4 slti -0x54 / 0x8016ECE8 addiu -0x54    Y min -84
+  0x8016ECF0 jr $ra                             (three early exits land here)
+func_8016DF5C_1501A0                            calls the integrator (6 sites)
+func_801736A0_1501A0   0x80173814 / 0x80173830  per-mission init of X / Y
+func_8019C1D0_1501A0   0x8019C1D0..0x8019C384   reticle -> aim ray (atan2)
+  called from 0x80170144, 0x80170370, 0x80170788   (the only three readers)
+func_801757A0_1501A0   0x80175DB8..0x80175DE4   reticle -> sprite blit
+func_800C6C6C          0x800C6C6C               generic 2D sprite blit (126 sites)
+  0x800C6CEC  spScissor(0, 0x27F, 0, 0x1DF)     hi-res box
+  0x800C6D08  spScissor(0, 0x13F, 0, 0xEF)      lo-res box  <- the real limit
+spScissor_recomp       0x800D3D84
+spX2Draw_recomp        0x800D55F4; clip at 0x800D60B8..0x800D6198 (signed)
+```
+
+---
+
+# Reticle range extension: shipped as `extended_aim` (2026-07-31)
+
+Implementation of the plan above. Everything §5 specified was buildable as
+written; the deviations and the one new decision are called out below. Files:
+`analysis/gen_syms.py` (four hooks), `src/main/extended_aim.cpp` (new, the
+hook bodies + the resolved rails), `src/main/rt64_render_context.cpp` (the
+reticle stub's bias offset), `src/main/main.cpp` + `config.{h,cpp}` +
+`support.h` (flag, rails plumbing, mouse-aim target clamp).
+
+## 1. What shipped
+
+| | |
+|---|---|
+| flag | `extended_aim`, in the `enhanced` curated set pending owner hands-on |
+| horizontal rail | `floor(128 · aspect/(4:3))`, clamped to `[128, 256]` — **±170** at 16:9 |
+| vertical rail | **±100** (`84 · 240/200`, truncated) with `full_height` |
+| horizontal gate | `widescreen` **and** `hud_relocation` (see §3) |
+| vertical gate | `full_height` only — it needs no draw-side change at all |
+| aspect source | live window size, republished by `update_gfx()` each pass |
+| draw bias `B` | `rail − 128` = 42 at 16:9, derived at each use, never stored |
+| widened sprite box | `spScissor` lrx `0x13F → 0x13F + 2B`, that one call only |
+
+The rails are `§5`'s recommendation (extend, do not rescale): the per-frame
+step stays 20 units, so a rail-to-rail flick takes ~33 % longer at 16:9 and
+*nothing* measured in `mouse-aim.md` had to be re-derived. Scaling the step
+(the word at `0x80123D28`) remains the follow-on knob if the owner reports it
+feels sluggish.
+
+`B = rail − 128` rather than §5's illustrative `B = 32`: it is 0 exactly when
+the rail is vanilla — so the draw side is provably untouched whenever the
+clamp was not widened — and it leaves 16 px of left margin and 15 px of right
+headroom in the widened box at *any* rail (left: `−rail + 144 + B = 16`;
+right: `rail + 144 + B + 32 = 2·rail + 48` against a box of `319 + 2B =
+2·rail + 63`).
+
+## 2. The off-path invariant
+
+All four hooks exist in the recompiled C in every profile — vanilla included,
+since `config/*.toml` is profile-independent — so the fidelity guarantee is
+entirely in their early-outs. Each is one relaxed atomic load: the clamp hooks
+skip the stash (and therefore the write-back) whenever both rails are the
+vanilla ones, leaving the game's own four `slti` blocks as the only clamp; the
+blit hook returns on `bias == 0`; the scissor hook returns unless the blit hook
+marked it. The re-clamp itself is `std::clamp`, which reproduces those blocks
+exactly (they store +128 for `X ≥ +129` and −128 for `X < −128`, i.e. an
+inclusive clamp on both ends) — so even when it does run at vanilla rails it
+would write back exactly what the game just wrote.
+
+Measured, not asserted: `--profile vanilla` rails at exactly ±128 / ±84, and
+its stderr contains zero `[hud]` / `[hfr]` / `[aim]` lines.
+
+## 3. The `hud_relocation` interaction (the one new decision)
+
+**Decision: the horizontal half requires `hud_relocation`; the vertical half
+does not.** With `extended_aim` on and `hud_relocation` off, the horizontal
+rail falls back to the vanilla ±128 (and with it `B = 0`, so the draw side is
+untouched) while the vertical rail still opens to ±100. Verified as a custom
+profile: rails measured ±128 / ±100, no `[hud]` lines, reticle drawn at the
+exact geometric prediction.
+
+Why, rather than making the reticle stub work standalone (which §5 floated):
+the draw side of the horizontal extension *is* `hud_relocation`'s machinery,
+in two independent ways.
+
+1. **The stub.** Something has to subtract `B` at draw time, and the only
+   mechanism for that is the per-element re-anchoring stub — which exists
+   because `hud_relocation` walks the frame's display list and repoints the
+   element's `G_DL` push at it.
+2. **The scissor.** Even with the sprite library's software box widened, a
+   reticle beyond N64 x = 160 is outside the *centered 4:3 column*, and an
+   untagged scissor resolves to exactly that column
+   (`convertFixedRect()` — phase 2 §4). It is `hud_relocation`'s prologue
+   (`gEXSetScissorAlign(LEFT, RIGHT, …)`) that re-expresses the frame scissor
+   against the true window edges — a re-expression of the same numbers, not a
+   new scissor. Without it the widened reticle would be placed correctly and
+   then clipped away, which is precisely what phase 2 measured happening to
+   the health cluster before that prologue existed.
+
+So a standalone path would have had to duplicate both — a second consumer of
+the same scratch RDRAM, a second reason to rewrite the same display list, and
+a second mode through `hud_redirect_frame()`, the most delicate function in
+the project — for a combination the curated profile never produces (`enhanced`
+has both flags on). The gate is one line in `main()` and the degradation is
+graceful and logged. The vertical half is genuinely free: `100 + 16 = 116 <
+120`, so the sprite stays inside the box's own `0..239` and inside the frame
+scissor, needing neither stub nor prologue.
+
+The same reasoning drives a **fail-safe**: if `scratch_usable()` ever finds the
+scratch region occupied it now also calls
+`kerecomp::set_extended_aim_draw_supported(false)`, dropping the horizontal
+rail back to 128 rather than biasing a sprite nothing will un-bias. That
+resolves on the run's first display list, long before a mission.
+
+## 4. Verification (headless, `:94` Xvfb 1600×900, window 1280×720 at root
+offset (160,90), lavapipe, stage 1)
+
+Window coordinates below are root minus (160,90); one reticle unit is 3 host
+px and screen centre is window (640,360), same frame as §1's poke experiment.
+
+**Rails, `--profile enhanced`** (each axis held ~7–12 s, i.e. hundreds of
+frames past the rail):
+
+| held | reticle word | sprite bbox (window) | centroid | predicted |
+|---|---|---|---|---|
+| `d` | **x = +170** | (1099,12)–(1194,107), 96×96 | 1146.6 | 1150 |
+| `a` | **x = −170** | (79,12)–(174,107), 96×96 | 126.2 | 130 |
+| `w` | **y = +100** | (589,612)–(684,707), 96×96 | 659.5 | 660 |
+| `s` | **y = −100** | (589,12)–(684,107), 96×96 | 59.5 | 60 |
+
+96×96 host px is the sprite's full 32×32 N64 px — **not** the slivers §1's
+poke experiment got past ±128. The horizontal centroids sit 3.5 px inside the
+prediction; that is phase 2's known misalignment shift (the same ±3 px §1
+already recorded), and it is absent on the vertical axis and absent when the
+stub is not in play (the `hud_relocation`-off run measured 639.5 against a
+predicted 640). At the left rail the sprite spans window x 79..174 — the
+vanilla 4:3 column starts at 160, so 81 px of it are drawn in territory the
+software clip used to cut off entirely.
+
+The rails hold: the values above are after holding the key for 7–12 s at
+~27 fps, i.e. ~200 frames × 20 units/frame of demand against a rail that did
+not move. No wrap, no overflow, no drift.
+
+**Draw side, `KE_DL_DUMP`.** At the right rail the reticle's texrect is
+
+```
+@1C8508 TEXRECT ul=356.00,104.00 lr=388.00,136.00 w=32.00 st=0,0
+```
+
+`356 = 170 + 144 + 42`, full 32 px wide, `st = 0` — no clipping and no texture
+advance, against §1's `ul=314 lr=319 w=5 st=832` for a merely-poked +170. And
+**no other texrect moved**: every other rect in the dump is at its original
+coordinates (health cluster 20..86, S-BOMB 215..295, digits 67..83), which
+discharges risk 3 (the sprite scissor is global) empirically. At x = 0 the
+reticle sits at `ul=186 = 144 + 42`, i.e. the bias is a constant the stub
+cancels, not something that only appears near the rails.
+
+**Positional mouse aim.** With the pointer captured, pushing the mouse right
+drives the reticle to exactly **+170** and stops; pushing left, to **−170**.
+The closed loop settles on the widened rail with no oscillation, which is what
+widening the target clamp in `get_input()` was for — risk 4 in §6's register,
+the doc's "most likely thing to be forgotten".
+
+**Vanilla and smoke.** `--profile vanilla`: ±128 / ±84 exactly, zero
+`[hud]`/`[hfr]`/`[aim]` stderr lines. `scripts/smoke_test.sh` (enhanced
+default): PASS — alive, 34215 distinct colours, audio 99.3 % non-zero.
+
+**Regeneration.** `make -C analysis` run twice produces byte-identical
+`config/*.toml`, and `git diff -- config` contains only the four new
+`[[patches.hook]]` entries plus the four `extern` declarations they need in
+`recomp_include`. `config/knife_edge.us.syms.toml` is untouched.
+
+## 5. Nothing contradicted the feasibility study
+
+Every address, register and semantic claim in §2–§5 held: `$a0` live at both
+clamp sites, the three early exits into `0x8016ECF0` (N64Recomp emits the hook
+*after* the `L_8016ECF0:` label, so branches reach it — the stash flag is what
+makes them harmless), `a1` = x and `a1` = lrx in the two blit/scissor
+signatures, and the software box as the real limit. Two refinements rather
+than corrections: `B` is derived from the rail instead of the fixed 32, and
+the vertical rail is 100 (§5's own `84 · 240/200`), not the ±104 an
+"outermost pixel" reading would give — 104 + 16 = 120 would put the sprite's
+last row exactly on the frame edge and cost a pixel to the box's `0..239`.
+
+## 6. Still open
+
+* **Owner hands-on.** Whether ±170 *feels* right, whether the 33 % longer
+  rail-to-rail flick reads as sluggish (§5's step-scaling knob is the answer
+  if so), and risk 1: aiming at a specific target near the far edge and
+  firing, which is the only thing that can settle that RT64's `Expand` is a
+  pure frustum extension rather than a rescale.
+* **Unexamined in-mission states** (risk 7) are unchanged: pause, boss,
+  two-player. The clamp is per-slot and widens all four by construction, and
+  the blit hook keys off each slot's own sprite object, but no state other
+  than normal stage-1 gameplay has been driven.
+* **Resize mid-mission** re-derives the rail and rebuilds the reticle stub on
+  the next frame; a single frame could in principle draw with the old bias and
+  the new stub (a few px, one frame). Not observed, not worth a lock.
