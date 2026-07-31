@@ -360,15 +360,19 @@ default only affects fresh installs.
    confounded by the title screen auto-advancing and cannot decide it.
 3. `segment_map.md` §d Q1 — un-zeroed BSS tails on overlay reload. Ruled out as
    the cause of the one failure we caught; still theoretically open.
-4. HUD relocation: shipped headless-verified with screenshot evidence
-   (health bottom-left, S-BOMB bottom-right, reticle center-registered,
-   radio box to true top under full_height); owner hands-on pending.
-   Watch items: unfingerprinted HUD elements (pause, lock-on, boss bars,
-   results — `hud-relocation.md` O2) stay in the 4:3 column — a wide
-   top bar seen in stage 1 does this today and looks fine centered, but
-   any corner-anchored element from an unexamined state would visibly
-   split from its relocated neighbors; report + KE_DL_DUMP capture is
-   the fix path (add to the fingerprint table).
+4. HUD relocation: shipped; first owner hands-on round done (2026-07-31)
+   and its two findings fixed: the dynamic fills (health arc, S-BOMB
+   charge) draw from a 0x240-byte slot pool at VALUE-DEPENDENT sub-DL
+   addresses (13 arc / 3 charge variants — phase 1's near-full-health
+   captures saw only 2), now matched geometrically by region instead of
+   by address (`hud-relocation.md` phase 3); and the cutscene radio box
+   is deliberately left at its original position (owner decision —
+   cutscene effects misalign alongside it and its 4:3 placement reads
+   naturally). Verified headless at 20% health: fills ride with their
+   containers, nothing strands in the 4:3 column. Owner re-verification
+   pending. Watch item unchanged: elements from uncaptured states
+   (pause, boss bars, results — O2) stay in the 4:3 column; report +
+   KE_DL_DUMP capture is the fix path.
 5. High framerate: shipped and owner-verified (see Status); experimental
    opt-in, not in `enhanced` (owner decision 2026-07-31 — confirmed
    artifacts on lock-on effect + bullet trails). Deferred follow-up when

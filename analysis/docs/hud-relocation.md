@@ -510,9 +510,9 @@ repo.
 
 | element | anchor | vertical (only with `full_height`) |
 |---|---|---|
-| health cluster (backing, both arcs, jet glyph, number panel, % digits) | LEFT, keeping its 20 px margin | +20 px |
-| S-BOMB gauge + blinker | RIGHT, keeping its 25 px margin | +20 px |
-| radio / dialogue box (panel, glyphs, portrait frame, portrait) | CENTER | −20 px |
+| health cluster (backing, jet glyph, number panel, % digits, fill arc) | LEFT, keeping its 20 px margin | +20 px |
+| S-BOMB gauge + charge fill | RIGHT, keeping its 25 px margin | +20 px |
+| ~~radio / dialogue box (panel, glyphs, portrait frame, portrait)~~ | ~~CENTER~~ | ~~−20 px~~ **reverted, see phase 3 §4** |
 | aiming reticle | CENTER, **no offsets ever** | none |
 | full-screen flash | LEFT + RIGHT (stretched edge to edge) | none |
 
@@ -818,3 +818,248 @@ All headless, 1280x720 Xvfb + lavapipe, stage 1.
 * **O1** (the "info marquee") remains never-observed.
 * The RT64 letterbox-band colour bug (`letterbox-full-height.md` §4) is
   visible in the `full_height`-off screenshots, unchanged and unrelated.
+
+---
+
+# Phase 3: owner feedback round
+
+Shipped in phase 2, verified hands-on by the owner on 2026-07-31, two
+findings came back. One was a real bug in the identification (§1-§3 below),
+the other a design call (§4). Everything here was measured on this tree,
+headless, 1280x720 Xvfb + lavapipe, stage 1 driven with the §3.1 held-key
+recipe; dumps and screenshots live in the job scratch dir, not the repo.
+
+## 1. The report
+
+> The health dial container + percent digits relocated correctly to the
+> window's bottom-left -- but the yellow health **fill arc** still floats at
+> its old 4:3-column position, detached to the right of the dial. Likewise
+> the S-BOMB charge fill (small gold segmented bar) floats left of its
+> relocated container.
+
+Both strays are the **dynamic** parts -- the ones whose picture changes with
+the value being displayed. Every static element moved correctly. That shape
+is the clue: phase 1 identified elements by sub-DL *address*, and phase 2's
+fingerprint table is that identification frozen into code.
+
+## 2. What the fills turned out to be
+
+Four fresh `KE_DL_DUMP` captures (1769 mission frames, health driven from
+100% down to 7% by just playing, plus a state where the S-BOMB had charge),
+analysed by attributing every `G_TEXRECT` to the sub-DL that was executing
+when it was issued:
+
+| sub-DL @ | frames | rect | texture | what |
+|---|---|---|---|---|
+| `0x801BCE30` | 1769 | 64x48 @ (20,172) | `0x8003EC80` | dial backing (static, in table) |
+| `0x801BD070` | 1769 | 32x32 @ (28,180) | `0x8003F280` | jet glyph (static, in table) |
+| `0x801BD2B0` | 1769 | 32x24 @ (54,179) | `0x8003F480` | number panel (static, in table) |
+| `0x801BD4F0` | 259 | 48x48 @ (20,172) | `0x8003F600` | **health fill** |
+| `0x801BDBB0` | 36 | 48x48 @ (20,172) | `0x80040380` | health fill |
+| `0x801BE270` | 579 | 48x48 @ (20,172) | `0x80041100` | health fill |
+| `0x801BE4B0` | 239 | 48x48 @ (20,172) | `0x80041580` | health fill |
+| `0x801BE930` | 80 | 48x48 @ (20,172) | `0x80041E80` | health fill |
+| `0x801BF230` | 1 | 48x40 @ (20,180) | `0x80042E40` | health fill |
+| `0x801BF470` | 81 | 48x32 @ (20,188) | `0x80043200` | health fill |
+| `0x801BF6B0` | 14 | 48x32 @ (20,188) | `0x80043500` | health fill |
+| `0x801BF8F0` | 59 | 48x24 @ (20,196) | `0x80043800` | health fill |
+| `0x801BFB30` | 264 | 48x24 @ (20,196) | `0x80043A40` | health fill |
+| `0x801BFFB0` | 17 | 48x24 @ (20,196) | `0x80043EC0` | health fill |
+| `0x801C0AF0` | 43 | 32x24 @ (36,196) | `0x80044940` | health fill |
+| `0x801C13F0` | 97 | 16x24 @ (52,196) | `0x80044F40` | health fill |
+| `0x801C25F0` | 1769 | 5 x 16x32 @ y 188 | `0x80045100`+ | S-BOMB gauge (static, in table) |
+| `0x801C31F0` | 80 | 16x8 @ (215,207) | `0x80045880` | **S-BOMB fill** |
+| `0x801C3430` | 11 | 16x8 @ (215,207) | `0x800458C0` | S-BOMB fill |
+| `0x801C3670` | 565 | 16x8 @ (215,207) | `0x80045900` | S-BOMB fill |
+
+So the hypothesis list in the brief resolves to **"a variable-address push"**,
+and emphatically not to per-frame-generated inline commands: across all 1769
+mission frames the main display list contains **zero** inline `G_TEXRECT`s --
+every rect in the frame, without exception, comes from a sub-DL reached by a
+single `G_DL` push, exactly as phase 1 §4 found. The mechanism phase 2 built
+is right; the *identification* was wrong.
+
+Two further facts fell out and they are what decides the fix:
+
+* **The addresses come from a 0x240-byte display-list buffer pool, not from a
+  per-element buffer.** The whole health family is `0x801BCE30 + n*0x240` for
+  integer `n`: backing `n=0`, jet `n=1`, panel `n=2`, and the thirteen fill
+  variants at `n = 3, 6, 9, 10, 12, 16, 17, 18, 19, 20, 22, 27, 31`. The
+  S-BOMB gauge is `n=39` on the same grid, and the three charge-fill variants
+  are `0x801C31F0 + m*0x240` (a grid offset 0xC0 from the health one). The
+  static elements happen to sit at fixed slots; the fills do not.
+* **The fill's rect shrinks as the value drops.** The arc is a crop that keeps
+  its bottom-right corner at (68,220) and loses rows/columns off its top-left
+  as health falls -- 48x48, then 48x40, 48x32, 48x24, 32x24, 16x24. Thirteen
+  distinct (address, texture) pairs observed for the arc alone, and clearly
+  not all of them (health is displayed to the percent, and no capture reached
+  the top or bottom of the ramp).
+
+The two entries phase 2 *did* list for the arc (`0x801BD4F0`, `0x801BDBB0`)
+were two of those thirteen, which is exactly why the owner saw the arc move
+correctly at some health values and stay behind at others. Phase 1's open
+question **O4** -- "the two health-arc buffers... presumably two animation
+phases" -- is therefore answered and was wrong: they are two frames of a
+thirteen-plus-frame value ramp, and only looked like an alternating pair
+because both phase-1 captures were taken near full health. The same is true
+of phase 1's "S-BOMB blinker": it does not blink, it is the charge fill, it
+has at least three variants of its own, and it was absent from whole captures
+here because the S-BOMB had no charge in them.
+
+## 3. Mechanism: region matching
+
+An address list cannot be completed (the value ramp is longer than anything
+we can enumerate by playing), and an address *range* cannot separate the
+fills from their neighbours either -- the enemy bar at the top of the frame
+(`0x801C1AB0`, `0x801C1F30`, `0x801C23B0`, `0x801C24D0`) lives in the middle
+of the same pool. So the fills are matched by **content signature**, and the
+signature that is actually structural here is geometric:
+
+> a sub-DL called from the frame's main display list, **all** of whose
+> texrects fall inside a HUD cluster's own footprint, belongs to that cluster.
+
+`hud_regions[]` in `src/main/rt64_render_context.cpp`:
+
+| region | box (N64 px, inclusive) | anchor | vertical |
+|---|---|---|---|
+| health fill | x 20..90, y 172..220 | LEFT | +20 (full_height only) |
+| S-BOMB fill | x 215..300, y 185..220 | RIGHT | +20 (full_height only) |
+
+Implementation, all inside the existing per-frame redirect pass:
+
+* Every top-level `G_DL` push that the fingerprint table does **not** claim is
+  followed into (the walker already descended into these; nothing new is
+  read), and the bounding box of the texrects issued until control returns is
+  accumulated. `depth` mirrors `dl_walk`'s own call depth, which is why the
+  `SkipCall` return -- the one case where the walker does not descend -- must
+  not touch it.
+* A box match is **deferred**, resolved after the walk, behind the same
+  in-mission gate phase 2 built for the shared digit buffer (§5): the frame
+  must also have matched an element that can only be in a mission. So a
+  region match can never fire on a front-end frame, and no scratch RDRAM is
+  written on one.
+* Each match gets a stub from a small per-frame pool (`HUD_DYN_STUBS = 8`,
+  laid out immediately after the fixed per-element stubs; the scratch layout
+  comment and the one-time zero check cover it). The stub is identical in
+  form to the static ones -- `gEXSetRectAlign(anchor)` / push the real sub-DL
+  / `gEXSetRectAlign(reset)` / `G_ENDDL` -- but is rewritten each frame
+  because the address it calls moves. That is 12 stores, on a path that
+  already writes the prologue every frame.
+* The push word it carries is the exact `w1` the game's own push carried,
+  not a re-derived address, so whatever the game meant by it is preserved.
+  (It never means anything unusual: segment 0 is the only segment this game
+  ever sets, and always to 0 -- phase 1 §5.)
+* One stderr line per region, the first time it ever matches, naming the pool
+  slot: `[hud] health fill matched by region at sub-DL 0x801BD4F0`. Which
+  slot a fill landed in is the single most useful thing to have in a future
+  bug report about it.
+
+**The two arc addresses and the blinker address are removed from the
+fingerprint table.** They are three of the sixteen observed variants (two of
+thirteen for the arc, one of three for the charge fill), and leaving
+them would mean the same element took a different code path depending on the
+player's health -- a split that would have hidden this bug for another round.
+One element, one mechanism. The table now holds only genuinely static
+elements: reticle, dial backing, jet glyph, number panel, percent digits
+(shared buffer), S-BOMB gauge, full-screen flash.
+
+### 3.1 False-positive analysis
+
+The match requires *every* texrect in the sub-DL to be inside a box that is
+71x49 (health) or 86x36 (S-BOMB) N64 pixels, on a frame already known to be
+in a mission. Against all 1769 mission frames:
+
+* The only sub-DLs that qualify are the two fills. Nothing else, in any frame.
+* Every effect sprite seen anywhere near the bottom of the frame
+  (`0x801B8330`, `0x801B8450`, `0x801B8570`, ...) draws 64x64 rects, which
+  cannot fit inside a 49-tall or 36-tall box at any position -- the size
+  constraint does the work, not luck about where they happened to be.
+* The full-screen flash (319x239) and the enemy bar (y 0..37) are nowhere
+  near either box, and the flash is claimed by the table first anyway.
+* The cutscene overlay -- now unclaimed, see §4 -- also fails both boxes: the
+  panel is y 20..76, the portrait frame y 78..174.
+* The percent digits (x 59..83, y 183..196) *are* inside the health box, but
+  are claimed by the table by address first. In the front end the same buffer
+  draws at y 381, outside every box and on a frame with no in-mission
+  element, so both gates reject it independently.
+
+The one element that could geometrically qualify is the **reticle**: 32x32,
+and aimed at the bottom-left its rect does fit the health box. It is claimed
+by address first, and its address was `0x801C8470` in all 1769 frames of
+every capture ever taken of this game. If that ever changed, the reticle
+itself would visibly stop being relocated -- a loud failure, noticed before
+this rule could act on it.
+
+The residual risk is unchanged in kind from phase 2 and stated the same way:
+an unexamined in-mission state (pause, boss, results -- phase 1 **O2**) could
+contain a small rect inside one of the boxes. The failure mode would be a
+cosmetic misplacement of that one element, and the fix path is the same as
+ever: `KE_DL_DUMP`, then either a table entry or a tighter box.
+
+## 4. The radio box: reverted
+
+**Owner decision, 2026-07-31: the in-mission cutscene radio box goes back to
+its original, untouched position, in every mode.** Reasoning, recorded
+because it overrides phase 2's §1 table: the cutscene's own graphical effects
+are authored against the 4:3 column and read as misaligned next to a moved
+box, and the box's original position is not unnatural to begin with. There is
+nothing to gain and a visible inconsistency to lose.
+
+The revert is the removal of five fingerprint-table entries -- radio panel
+`0x801C88F0`, radio glyphs `0x80109550`, portrait frame `0x801D0AB0`,
+portraits `0x801D1110` / `0x801D1C50` -- and with them the whole `-20 px`
+vertical case. An unmatched push is executed exactly as the game wrote it, so
+no other code changes. `HudAnchor::Center` survives, used only by the
+reticle, and the `vertical_px` field is now `+20` or `0` everywhere.
+
+The reticle CENTER pin and the full-screen flash's edge-to-edge stretch are
+unchanged.
+
+## 5. Verification
+
+All headless, 1280x720 Xvfb + lavapipe, stage 1 driven end to end.
+
+* **Both fills ride with their containers.** `--profile enhanced`, mission
+  screenshot at 26% health. Health-fill-coloured pixels in the bottom band:
+  **1880 in x 17..162** (inside the relocated dial's own bbox, x 58..250) and
+  **0 anywhere in x 210..400**, the 4:3-column position the arc used to
+  occupy. S-BOMB charge fill at **x 976..984, y 684..698**, against a
+  predicted right-anchored box of x 963..1011, y 681..705; in the vanilla
+  screenshot of the same element it measures **x 820..822, y 624..638**,
+  against a predicted 4:3-column box of x 805..853, y 621..645. So the fill
+  moved **+156 px horizontally and +60 px vertically**, which is the same
+  delta phase 2 measured for the gauge container it belongs to (+156..167,
+  +60). Before this change the same measurement put it in the 4:3 column
+  while its container sat at the right edge.
+* **`[hud]` lines fire at mission start, not at boot.** First `[hud]` line
+  ~89 s into the run (gameplay begins ~87 s); 0 in the whole front end. The
+  in-mission gate on the region matches holds.
+* **The cutscene is byte-identical with the flag on and off.** Mission-1
+  intro frame, `--profile enhanced` vs a `custom` profile identical except
+  `hud_relocation = false`: **max per-channel pixel difference 0 over all
+  921600 pixels**. The radio box revert is exact, not approximate.
+* **Vanilla clean.** `--profile vanilla`, driven to gameplay: **0**
+  `[hud]` / `[hfr]` / `[gfx]` lines.
+* **Smoke test PASS** (`scripts/smoke_test.sh`): alive, 5932 distinct
+  colours, 99.3% non-zero audio samples.
+* **The phase-2 relocations still hold**, on the same screenshot: dial
+  backing, jet glyph, number panel and percent digits at the true
+  bottom-left; S-BOMB gauge at the true bottom-right; reticle centred over
+  the 3D scene.
+
+## 6. What this changes in the phase 1/2 record
+
+* **O4 is answered, and phase 1's guess was wrong.** The "two health-arc
+  buffers ... presumably two animation phases or a damage-flash pair" are two
+  frames of a value ramp with at least thirteen members, drawn from a shared
+  0x240-byte display-list buffer pool. Both phase-1 captures were near full health,
+  which is why only two appeared.
+* **The "S-BOMB blinker" is not a blinker.** It is the charge fill; the
+  110/150 frame count phase 1 recorded is charge state, not blinking, and it
+  has at least three variants of its own.
+* **"Sub-DL addresses are stable" (phase 1 §4) holds only for static
+  elements.** It was measured over 450 frames of near-full-health gameplay
+  and generalised one step too far. The corrected statement: static elements
+  occupy fixed slots in the pool; anything whose picture depends on a game
+  value does not.
+* **Phase 2's §1 table row for the radio box is superseded by §4 above.**

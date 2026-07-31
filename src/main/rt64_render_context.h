@@ -68,9 +68,9 @@ namespace kerecomp {
         // Turns the hud_relocation enhancement on/off (re-anchors the
         // in-mission HUD to the true window edges instead of the centered
         // 4:3 column). `vertical_shift` is the full_height correction: with
-        // the letterbox removed the bottom clusters must move 20 px down and
-        // the radio box 20 px up to reach the newly-exposed frame edges;
-        // with the letterbox still there they are already flush against it.
+        // the letterbox removed the bottom clusters must move 20 px down to
+        // reach the newly-exposed frame edge; with the letterbox still there
+        // they are already flush against it.
         // Call once, before recomp::start(), with the resolved
         // kerecomp::EnhancementFlags's values.
         void set_hud_relocation_enhancement(bool on, bool vertical_shift);

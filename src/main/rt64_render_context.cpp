@@ -678,10 +678,19 @@ namespace {
     //
     //   0x7FF000 .. 0x7FF03F   the display-list prologue (16 words of room;
     //                          12 is the longest form it emits)
-    //   0x7FF040 ..            one 12-word stub per HUD element
+    //   0x7FF040 ..            one 12-word stub per fingerprinted HUD element
+    //   (then)                 HUD_DYN_STUBS 12-word stubs for the
+    //                          dynamic fills, rebuilt every frame because
+    //                          the sub-DL they call moves (see
+    //                          hud_regions[] below)
     constexpr uint32_t SCRATCH_BASE = 0x7FF000u;
     constexpr uint32_t HUD_STUB_BASE = 0x7FF040u;
     constexpr uint32_t HUD_STUB_WORDS = 12;
+    // How many region-matched (variable-address) elements one frame can
+    // relocate. Two are expected -- the health fill arc and the S-BOMB
+    // charge fill -- and no capture has ever shown a third; the slack is so
+    // that an unexpected extra is dropped rather than overflowing.
+    constexpr size_t HUD_DYN_STUBS = 8;
 
     // How far inward the re-expressed scissor's left edge starts, in N64
     // pixels. See the long comment at its use site in
@@ -770,9 +779,10 @@ namespace {
 
         // Bottom-left health cluster: x 20..86, y 172..220 (a 20 px left
         // margin, flush against the letterbox floor).
+        // The fill arc is deliberately absent: it is a dynamic fill and is
+        // matched by region below. Phase 2 listed two of its addresses here,
+        // which is why it stayed behind at any health those two did not cover.
         { 0x801BCE30u, HudAnchor::Left, 20, false, "health backing" },
-        { 0x801BD4F0u, HudAnchor::Left, 20, false, "health arc" },
-        { 0x801BDBB0u, HudAnchor::Left, 20, false, "health arc (alt)" },
         { 0x801BD070u, HudAnchor::Left, 20, false, "health jet glyph" },
         { 0x801BD2B0u, HudAnchor::Left, 20, false, "health number panel" },
         // Drawn from a shared boot-segment buffer in its own 2D group after a
@@ -785,32 +795,91 @@ namespace {
 
         // Bottom-right S-BOMB cluster: x 215..295, y 188..220 (a 25 px right
         // margin, same letterbox floor).
+        // Likewise the charge fill (phase 2's "S-BOMB blinker") is a dynamic
+        // fill, matched by region below.
         { 0x801C25F0u, HudAnchor::Right, 20, false, "S-BOMB gauge" },
-        { 0x801C31F0u, HudAnchor::Right, 20, false, "S-BOMB blinker" },
 
         // A screen effect, not a widget: one 319x239 rect covering the whole
         // frame. Stretched to the true window edges rather than translated.
         { 0x801B6CB0u, HudAnchor::Stretch, 0, false, "full-screen flash" },
 
-        // In-mission cutscene overlay across the top of the frame; its panel
-        // top edge is 20, the mirror image of the HUD's 220 floor. Centred
-        // rather than stretched so the 133-tile panel plane, the text glyphs
-        // and the portrait stay in proportion with each other.
-        { 0x801C88F0u, HudAnchor::Center, -20, false, "radio panel" },
-        { 0x80109550u, HudAnchor::Center, -20, false, "radio glyphs" },
-        { 0x801D0AB0u, HudAnchor::Center, -20, false, "portrait frame" },
-        { 0x801D1110u, HudAnchor::Center, -20, false, "portrait image" },
-        { 0x801D1C50u, HudAnchor::Center, -20, false, "portrait image (alt)" },
+        // The in-mission cutscene radio box (dialogue panel 0x801C88F0,
+        // glyphs 0x80109550, portrait frame 0x801D0AB0, portraits
+        // 0x801D1110/0x801D1C50) is deliberately NOT here. Phase 2 centred
+        // it and lifted it 20 px to the true frame top; the owner's hands-on
+        // verdict (2026-07-31) was to put it back exactly where the game
+        // draws it -- the cutscene's own graphical effects are authored
+        // against the 4:3 column and looked misaligned beside a moved box,
+        // and the box does not read as out of place there. Leaving the
+        // addresses unlisted is the whole revert: unmatched pushes are
+        // executed untouched. See analysis/docs/hud-relocation.md phase 3.
     };
     constexpr size_t HUD_ELEMENT_COUNT = sizeof(hud_elements) / sizeof(hud_elements[0]);
+
+    // ------------------------------------------------------------------
+    // Region table -- the *dynamic* HUD fills.
+    //
+    // The table above fingerprints elements by sub-DL address, which works
+    // because those elements are rebuilt every frame at a fixed address.
+    // The two elements whose *content* varies are not like that: the health
+    // fill arc and the S-BOMB charge fill are drawn from a pool of 0x240-byte
+    // display-list buffers starting at 0x801BCE30, and which slot they land
+    // in changes with the value being displayed. Four KE_DL_DUMP captures
+    // (1769 mission frames) saw the health fill at thirteen distinct
+    // addresses and the S-BOMB fill at three, with the static dial parts
+    // sharing the same pool at fixed slots in between -- so no address list
+    // can ever be complete, and no address *range* can separate them from
+    // their neighbours in the pool (the top enemy bar lives in it too).
+    //
+    // They are matched geometrically instead: any sub-DL called from the
+    // frame's main list whose texrects all fall inside one of these boxes
+    // belongs to that cluster and rides with it. The boxes are the static
+    // containers' own footprints, so this is a statement about the HUD's
+    // layout rather than about the game's buffer allocator.
+    //
+    // False positives: the match requires *every* texrect in the sub-DL to
+    // be inside the box, which is 71x49 for the health dial and 86x36 for
+    // the S-BOMB gauge, and it only applies on frames that already matched
+    // an unambiguously in-mission element (same gate as the shared digit
+    // buffer). Across those 1769 mission frames the only sub-DLs that
+    // qualify are the two fills; every effect sprite seen near the bottom of
+    // the frame is a 64x64 or larger rect that cannot fit either box, and
+    // the full-screen flash (319x239) and the enemy bar (y 0..37) are
+    // nowhere near. The one element that *could* geometrically qualify is
+    // the reticle -- 32x32, and aimed at the bottom left its rect does fit
+    // the health box -- but it is matched by address first, and its address
+    // was identical in all 1769 frames of every capture.
+    struct HudRegion {
+        int16_t x0, y0, x1, y1;   // N64 pixels, inclusive
+        HudAnchor anchor;
+        int16_t vertical_px;      // applied only when full_height is also on
+        const char* name;
+    };
+
+    constexpr HudRegion hud_regions[] = {
+        // Health dial: backing 64x48 at (20,172), number panel out to x 86,
+        // the fill arc 48x48 at (20,172) shrinking towards its fixed
+        // bottom-right corner (68,220) as health drops.
+        { 20, 172, 90, 220, HudAnchor::Left, 20, "health fill" },
+        // S-BOMB gauge: five 16x32 segments spanning (215,188)..(295,220),
+        // charge fill 16x8 at (215,207).
+        { 215, 185, 300, 220, HudAnchor::Right, 20, "S-BOMB fill" },
+    };
+    constexpr size_t HUD_REGION_COUNT = sizeof(hud_regions) / sizeof(hud_regions[0]);
 
     // Total scratch footprint, prologue included -- what the one-time
     // zero-check below has to cover.
     constexpr uint32_t SCRATCH_WORDS =
-        (HUD_STUB_BASE - SCRATCH_BASE) / 4 + HUD_ELEMENT_COUNT * HUD_STUB_WORDS;
+        (HUD_STUB_BASE - SCRATCH_BASE) / 4 + (HUD_ELEMENT_COUNT + HUD_DYN_STUBS) * HUD_STUB_WORDS;
 
     uint32_t hud_stub_address(size_t index) {
         return HUD_STUB_BASE + uint32_t(index) * HUD_STUB_WORDS * 4u;
+    }
+
+    // The per-frame stubs for region matches live immediately after the
+    // fixed per-element ones.
+    uint32_t hud_dyn_stub_address(size_t slot) {
+        return hud_stub_address(HUD_ELEMENT_COUNT + slot);
     }
 
     // Horizontal alignment for one element, in RT64's terms.
@@ -865,38 +934,51 @@ namespace {
         }
     }
 
-    // Builds every stub, once. Direct native-u32 stores into the RDRAM
+    // Writes one 12-word stub. Direct native-u32 stores into the RDRAM
     // block, the same convention as the prologue and as RT64's own
     // DisplayList reads (and as the recompiled game's 4-byte-aligned SW
     // instructions).
+    //
+    // `sub_dl_word` is the address word the stub's own G_DL push carries --
+    // for a fingerprinted element the table's KSEG0 constant, for a region
+    // match the exact w1 the game's own push carried, so whatever the game
+    // meant by it (it never uses a nonzero segment: phase 1 §5) is preserved.
+    void hud_write_stub(uint8_t* rdram, uint32_t stub_addr, uint32_t sub_dl_word,
+                        HudAnchor anchor, int16_t vertical_px, bool vertical_shift) {
+        const HudAlign align = hud_align_for(anchor);
+        const int16_t v = vertical_shift ? int16_t(vertical_px * 4) : int16_t(0);
+
+        const uint32_t align_origins =
+            (align.lorigin & 0xFFFu) | ((align.rorigin & 0xFFFu) << 12);
+        const uint32_t align_ul =
+            (uint32_t(uint16_t(align.ulx_off)) << 16) | uint32_t(uint16_t(v));
+        const uint32_t align_lr =
+            (uint32_t(uint16_t(align.lrx_off)) << 16) | uint32_t(uint16_t(v));
+
+        uint32_t* p = reinterpret_cast<uint32_t*>(rdram + stub_addr);
+        p[0] = G_EX_SETRECTALIGN_W0;  p[1] = align_origins;   // gEXSetRectAlign(anchor)
+        p[2] = align_ul;              p[3] = align_lr;
+        p[4] = F3DEX2_DL_PUSH_W0;     p[5] = sub_dl_word;     // call the real element
+        // The reset is mandatory in EVERY stub, not once at the end of
+        // the group: RT64's rect alignment is global state that nothing
+        // in the game's display list ever restores (phase 1 landmine 1 --
+        // RDP::clearExtended() runs only from State::fullSync(), i.e. at
+        // the frame's G_RDPFULLSYNC, long after the whole HUD has been
+        // drawn). Without it, one element's anchor would displace every
+        // rect after it, starting with its own neighbours.
+        p[6] = G_EX_SETRECTALIGN_W0;
+        p[7] = (EX_ORIGIN_NONE & 0xFFFu) | ((EX_ORIGIN_NONE & 0xFFFu) << 12);
+        p[8] = 0;                     p[9] = 0;
+        p[10] = F3DEX2_ENDDL_W0;      p[11] = 0;              // back to the main DL
+    }
+
+    // Builds every fixed-address element's stub, once. The region stubs are
+    // not built here: the sub-DL they call moves from frame to frame, so
+    // they are rewritten on each frame that matches one.
     void hud_build_stubs(uint8_t* rdram, bool vertical_shift) {
         for (size_t i = 0; i < HUD_ELEMENT_COUNT; i++) {
-            const HudElement& element = hud_elements[i];
-            const HudAlign align = hud_align_for(element.anchor);
-            const int16_t v = vertical_shift ? int16_t(element.vertical_px * 4) : int16_t(0);
-
-            const uint32_t align_origins =
-                (align.lorigin & 0xFFFu) | ((align.rorigin & 0xFFFu) << 12);
-            const uint32_t align_ul =
-                (uint32_t(uint16_t(align.ulx_off)) << 16) | uint32_t(uint16_t(v));
-            const uint32_t align_lr =
-                (uint32_t(uint16_t(align.lrx_off)) << 16) | uint32_t(uint16_t(v));
-
-            uint32_t* p = reinterpret_cast<uint32_t*>(rdram + hud_stub_address(i));
-            p[0] = G_EX_SETRECTALIGN_W0;  p[1] = align_origins;   // gEXSetRectAlign(anchor)
-            p[2] = align_ul;              p[3] = align_lr;
-            p[4] = F3DEX2_DL_PUSH_W0;     p[5] = element.sub_dl;  // call the real element
-            // The reset is mandatory in EVERY stub, not once at the end of
-            // the group: RT64's rect alignment is global state that nothing
-            // in the game's display list ever restores (phase 1 landmine 1 --
-            // RDP::clearExtended() runs only from State::fullSync(), i.e. at
-            // the frame's G_RDPFULLSYNC, long after the whole HUD has been
-            // drawn). Without it, one element's anchor would displace every
-            // rect after it, starting with its own neighbours.
-            p[6] = G_EX_SETRECTALIGN_W0;
-            p[7] = (EX_ORIGIN_NONE & 0xFFFu) | ((EX_ORIGIN_NONE & 0xFFFu) << 12);
-            p[8] = 0;                     p[9] = 0;
-            p[10] = F3DEX2_ENDDL_W0;      p[11] = 0;              // back to the main DL
+            hud_write_stub(rdram, hud_stub_address(i), hud_elements[i].sub_dl,
+                           hud_elements[i].anchor, hud_elements[i].vertical_px, vertical_shift);
         }
     }
 
@@ -912,7 +994,7 @@ namespace {
     // 150 frames), so a rewritten word is dead the moment the frame is
     // submitted and is never read back by game code. The element sub-DLs
     // themselves are never written.
-    uint32_t hud_redirect_frame(uint8_t* rdram, uint32_t entry) {
+    uint32_t hud_redirect_frame(uint8_t* rdram, uint32_t entry, bool vertical_shift) {
         uint32_t segments[16] = {};
         uint32_t rewrites = 0;
 
@@ -925,8 +1007,70 @@ namespace {
         size_t deferred_count = 0;
         bool in_mission = false;
 
-        auto visit = [&](uint32_t here, int, uint8_t op, uint32_t, uint32_t,
+        // Region (geometric) matches. Deferred for the same reason and behind
+        // the same gate as the shared buffer, plus one of their own: a stub
+        // has to be written for each, and writing it before the frame is
+        // known to be in-mission would be a scratch write on a front-end
+        // frame.
+        struct DeferredRegion { uint32_t here; uint32_t sub_dl_word; size_t region; };
+        DeferredRegion dyn[HUD_DYN_STUBS];
+        size_t dyn_count = 0;
+
+        // Region-match probe state. Every push out of the main display list
+        // that is not a fingerprinted element is followed into, and the
+        // bounding box of the texrects it draws (its own, and any it calls in
+        // turn) is accumulated until control returns. `depth` mirrors the
+        // walker's own call depth, which is why SkipCall -- the one case
+        // where the walker does not descend -- must not touch it.
+        int depth = 0;
+        bool probing = false;
+        uint32_t probe_here = 0;
+        uint32_t probe_word = 0;
+        bool probe_has_rect = false;
+        int32_t bx0 = 0, by0 = 0, bx1 = 0, by1 = 0;   // 10.2, like the texrects
+
+        auto finish_probe = [&]() {
+            if (probe_has_rect && dyn_count < HUD_DYN_STUBS) {
+                for (size_t r = 0; r < HUD_REGION_COUNT; r++) {
+                    const HudRegion& region = hud_regions[r];
+                    if (bx0 >= int32_t(region.x0) * 4 && bx1 <= int32_t(region.x1) * 4 &&
+                        by0 >= int32_t(region.y0) * 4 && by1 <= int32_t(region.y1) * 4) {
+                        dyn[dyn_count++] = { probe_here, probe_word, r };
+                        break;
+                    }
+                }
+            }
+            probing = false;
+            probe_has_rect = false;
+        };
+
+        auto visit = [&](uint32_t here, int, uint8_t op, uint32_t w0, uint32_t w1,
                          bool push, uint32_t target) -> DLStep {
+            if (op == DL_G_TEXRECT || op == DL_G_TEXRECTFLIP) {
+                if (probing) {
+                    // rt64_gbi_rdp.cpp::texrect(): lr in w0, ul in w1, both
+                    // 10.2 fixed point.
+                    const int32_t lrx = int32_t(dl_bits(w0, 12, 12));
+                    const int32_t lry = int32_t(dl_bits(w0, 0, 12));
+                    const int32_t ulx = int32_t(dl_bits(w1, 12, 12));
+                    const int32_t uly = int32_t(dl_bits(w1, 0, 12));
+                    if (!probe_has_rect) {
+                        bx0 = ulx; by0 = uly; bx1 = lrx; by1 = lry;
+                        probe_has_rect = true;
+                    }
+                    else {
+                        bx0 = std::min(bx0, ulx); by0 = std::min(by0, uly);
+                        bx1 = std::max(bx1, lrx); by1 = std::max(by1, lry);
+                    }
+                }
+                return DLStep::Continue;
+            }
+            if (op == DL_G_ENDDL) {
+                if (depth > 0 && --depth == 0 && probing) {
+                    finish_probe();
+                }
+                return DLStep::Continue;
+            }
             if (op != DL_G_DL || !push) {
                 return DLStep::Continue;
             }
@@ -951,6 +1095,13 @@ namespace {
                 rewrites++;
                 return DLStep::SkipCall;
             }
+            if (depth == 0) {
+                probing = true;
+                probe_here = here;
+                probe_word = w1;
+                probe_has_rect = false;
+            }
+            depth++;
             return DLStep::Continue;
         };
 
@@ -972,6 +1123,29 @@ namespace {
                 const uint32_t stub = 0x80000000u | hud_stub_address(deferred[d].index);
                 std::memcpy(rdram + deferred[d].here + 4, &stub, 4);
                 rewrites++;
+            }
+            // The dynamic fills. Same gate, and the stub is built here rather
+            // than once at startup because the sub-DL it calls is whichever
+            // pool slot the game happened to use for this frame's health /
+            // charge value. Rebuilding is 12 stores.
+            for (size_t d = 0; d < dyn_count; d++) {
+                const HudRegion& region = hud_regions[dyn[d].region];
+                const uint32_t stub_addr = hud_dyn_stub_address(d);
+                hud_write_stub(rdram, stub_addr, dyn[d].sub_dl_word,
+                               region.anchor, region.vertical_px, vertical_shift);
+                const uint32_t stub = 0x80000000u | stub_addr;
+                std::memcpy(rdram + dyn[d].here + 4, &stub, 4);
+                rewrites++;
+
+                // One line per region, the first time it ever matches: which
+                // pool slot a fill lands in is the single most useful thing
+                // to have in a bug report about it.
+                static bool region_logged[HUD_REGION_COUNT] = {};
+                if (!region_logged[dyn[d].region]) {
+                    region_logged[dyn[d].region] = true;
+                    std::fprintf(stderr, "[hud] %s matched by region at sub-DL 0x%08X\n",
+                                 region.name, dyn[d].sub_dl_word);
+                }
             }
         }
         return rewrites;
@@ -1171,13 +1345,14 @@ uint32_t kerecomp::renderer::RT64Context::maybe_redirect_hud(uint32_t game_dl_ad
         return 0;
     }
 
-    static const bool built = [this]() {
-        hud_build_stubs(app->core.RDRAM, hud_vertical_shift_on.load(std::memory_order_relaxed));
+    const bool vertical_shift = hud_vertical_shift_on.load(std::memory_order_relaxed);
+    static const bool built = [this, vertical_shift]() {
+        hud_build_stubs(app->core.RDRAM, vertical_shift);
         return true;
     }();
     (void)built;
 
-    const uint32_t rewrites = hud_redirect_frame(app->core.RDRAM, game_dl_addr);
+    const uint32_t rewrites = hud_redirect_frame(app->core.RDRAM, game_dl_addr, vertical_shift);
 
     // One line, on the first frame that actually matches something -- this
     // runs at ~27 Hz, so anything per-frame would be a flood.
