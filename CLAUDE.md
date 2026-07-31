@@ -106,8 +106,10 @@ the way: the `.venv` tmpfs shadow died on crun's tmpcopyup (95 MB venv into
 a 16 MB tmpfs — replaced with `-DKE_PYTHON`/`PY=` overrides, 3cc4266), and
 `smoke_test.sh` dangled relative `--rom`/`--binary` paths after its
 scratch-dir `cd` (35ead54). Still unexercised: the rewritten workflow's
-first run on a GitHub runner (happens on next push), and `regen-verify` on
-the self-hosted podman runner.
+first run on a GitHub runner (happens on next push). (`regen-verify` was
+originally slated for the owner's self-hosted podman runner; the
+encrypted-ROM CI work below moved it to hosted runners instead — no
+self-hosted runner exists anywhere in the workflow now.)
 
 Flatpak packaging shipped (2026-07-30): `packaging/flatpak/` (manifest,
 launcher wrapper, desktop/metainfo/icon) + `scripts/build_flatpak.sh`. Two
@@ -134,11 +136,44 @@ a human), which only matters for automated testing under a bare Xvfb with no
 window manager — never for CI (no `DISPLAY` at all, confirmed clean exit 1
 in ~5 ms) or a real desktop/Flatpak session (always has a compositor and a
 user). Full design and the exact verification transcripts are in
-`analysis/docs/build-notes.md`, "Flatpak packaging". **Not yet run**:
-flatpak-builder itself and the manifest end-to-end (no working
-flatpak-builder/bwrap in this session's container) — pending the owner's
-host, along with a real interactive portal-picker dismissal and data-dir
-persistence across runs.
+`analysis/docs/build-notes.md`, "Flatpak packaging". **Owner-verified on
+the host (2026-07-30)**: flatpak-builder + manifest build and run. That
+test caught a real first-launch bug — the portal picker stored the ROM but
+the game still errored "no ROM present" until relaunch, because
+`select_rom()` writes to disk while validity is checked against an
+in-memory set populated only by an earlier `check_all_stored_roms()` scan —
+fixed by rescanning after a successful pick (6788841; owner retest on a
+fresh data dir pending). Same commit: default profile switched to
+`enhanced` (existing config.toml files pin their own profile and stay
+vanilla until edited/deleted) and a `flatpak-release` CI job (vX.Y.Z tag →
+build + attach bundle to the GitHub release).
+
+Encrypted-ROM CI shipped (2026-07-31): full-ROM CI jobs now run on
+GitHub-hosted runners with no self-hosted runner anywhere. The owner keeps
+an **age-encrypted** ROM in a private Backblaze B2 bucket;
+`scripts/fetch_rom.sh` (curl + age only — the B2 private-bucket signed
+fetch uses curl's native `--aws-sigv4` against B2's S3-compatible endpoint,
+no B2/AWS CLI) downloads, decrypts, md5-gates (mirrors
+`analysis/byteswap.py`'s `KNOWN_MD5`), and atomically installs the
+plaintext to `$RUNNER_TEMP` only (never in caches/artifacts/logs). Secrets:
+`KE_ROM_URL` + `KE_ROM_AGE_KEY` (+ optional `KE_B2_KEY_ID`/`KE_B2_APP_KEY`
+pair). A `rom-gate` job republishes "secrets configured?" as a job output
+(job-level `if:` can't read the `secrets` context), so ROM jobs skip
+cleanly on forks/PRs — the no-ROM/no-secrets fork-PR property is preserved
+structurally. Consequences: `regen-verify` is now **continuous on every
+main push** (plus dispatch); `release` fetches instead of needing a
+`rom_path` (input removed); `flatpak-release` moved to ubuntu-latest
+(apt-installed flatpak-builder, AppArmor userns sysctl for bwrap, cached
+flathub runtime, and a quarantine step that moves `build/knife_edge.z64`
+out of the tree before flatpak-builder's `dir` source stages the working
+tree, plus the asset-leak assertion now also run against the bundled
+binary). Verified here: full round-trip against a loopback server with the
+real ROM (byte-identical, mode 600), the entire failure matrix (wrong key,
+corrupt ciphertext, wrong plaintext, 404, env errors — all clean, no temp
+or secret leakage), and a SigV4-signed request accepted by live B2 (403 on
+fake creds = signing/region-parse correct). Design/threat model/owner
+setup: `analysis/docs/build-notes.md`, "Encrypted ROM in CI (Backblaze
+B2)".
 
 Agreed order for the rest: high framerate is the only item left (Flatpak
 above is done pending the owner's host verification; containerized builds,
@@ -290,13 +325,20 @@ default only affects fresh installs.
    abort (container-only).
 8. Containerized build: owner-verified end-to-end on the host (see Status).
    Remaining: first GitHub-runner execution of the rewritten workflow
-   (automatic on next push — check the Actions tab), and the `regen-verify`
-   job's containerized form on the self-hosted (podman) runner.
-9. Flatpak packaging: src-side changes (`KE_DATA_DIR`, portal ROM picker)
-   verified headless (see Status); the manifest/build itself has not run
-   anywhere (no working flatpak-builder/bwrap in this session's container)
-   — pending the owner's host: `scripts/build_flatpak.sh`, an interactive
-   portal-picker dismissal on a real desktop, and data-dir persistence
-   across runs. Report candidate added: the pre-existing modal-message-box
-   behavior under a bare-Xvfb-no-WM harness (`build-notes.md`, "Flatpak
-   packaging" — not a real-world defect, left alone).
+   (automatic on next push — check the Actions tab).
+9. Flatpak packaging: owner-verified build+run on the host (see Status).
+   Remaining: retest the first-launch picker fix (6788841) against a fresh
+   data dir (wipe `~/.var/app/io.github.haydenmc.KnifeEdgeRecompiled/data/`
+   or unset-`KE_DATA_DIR` equivalent), and data-dir persistence across
+   runs. Report candidate: the pre-existing modal-message-box behavior
+   under a bare-Xvfb-no-WM harness (`build-notes.md`, "Flatpak packaging"
+   — not a real-world defect, left alone).
+10. Encrypted-ROM CI (see Status): owner setup pending — age keypair,
+    encrypt + upload the ROM to a private B2 bucket, add the four repo
+    secrets (exact commands: `build-notes.md`, "Encrypted ROM in CI",
+    "Owner setup"). Then unverified-in-anger: `regen-verify`'s first
+    hosted run (automatic on the next main push once secrets exist), and
+    `flatpak-release`'s first tag run — first-ever flatpak-builder on a
+    hosted runner here (AppArmor userns sysctl, flathub runtime cache, and
+    the `build-flatpak/build/files/` layout assumption, which is
+    `test -f`-guarded so a layout change fails loudly).

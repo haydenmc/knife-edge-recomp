@@ -2,34 +2,45 @@ name: build
 
 # Repo policy (see README.md "Repository policy" and analysis/docs/build-notes.md):
 # recompiler output is NOT committed (it is a build artifact); the repo holds
-# only the analysis pipeline and metadata (config/*.toml,
-# config/*.toml) — only the ROM and asset/data dumps are excluded (.gitignore).
-# That means this workflow compiles committed sources only: no ROM fetch, no
-# secrets, no decryption step. See the `regen-verify` job at the bottom for
-# the (deliberately non-default) job that needs an actual ROM.
+# only the analysis pipeline and metadata (config/*.toml, analysis/*.py) —
+# only the ROM and asset/data dumps are excluded (.gitignore). That means the
+# `build` job below compiles committed sources only: no ROM fetch, no
+# secrets, no decryption step, so it works for pull requests from forks
+# (which cannot receive secrets) exactly as before.
 #
-# All three jobs below build through containers/Containerfile via
+# The jobs below that DO need a ROM (release, regen-verify, flatpak-release)
+# get one without any self-hosted runner: the project owner encrypts the ROM
+# once with `age` (asymmetric — CI only ever holds the private half) and
+# uploads the ciphertext to owner-controlled storage (Backblaze B2 in
+# practice, but scripts/fetch_rom.sh accepts any curl-fetchable URL). Each
+# ROM-needing job fetches that ciphertext and decrypts it in-run via
+# `scripts/fetch_rom.sh` — only ciphertext ever sits in the bucket; the
+# decrypted plaintext exists only in `$RUNNER_TEMP` (outside every
+# actions/cache and artifact path, wiped when the job ends) and is mounted
+# read-only into the build container. Fork PRs have no secrets, so those jobs
+# skip cleanly via the `rom-gate` job below rather than failing. Full design,
+# threat model, and the owner's one-time setup commands are in
+# analysis/docs/build-notes.md, "Encrypted ROM in CI (Backblaze B2)".
+#
+# All jobs below build through containers/Containerfile via
 # scripts/container_build.sh — the same script a developer runs locally (see
 # README.md "Building", Option C, and analysis/docs/build-notes.md
 # "Containerized build"). There is deliberately no separate inline
 # apt-get/cmake recipe here: the Containerfile is the one place the
 # toolchain is defined, so CI and local dev can never drift apart. GitHub's
 # hosted ubuntu-latest runners ship docker preinstalled, which is all these
-# jobs need on the host side.
+# jobs need on the host side — no self-hosted runner exists anywhere in this
+# workflow anymore.
 
 on:
   push:
   pull_request:
   workflow_dispatch:
-    inputs:
-      rom_path:
-        description: >-
-          Absolute path to a Knife Edge (USA) ROM ALREADY PRESENT on the
-          runner's filesystem. Leave empty to just run the normal build/smoke
-          job. Only used by the regen-verify job below, and only on a
-          self-hosted runner you control — see that job's comments.
-        required: false
-        default: ""
+    # No inputs: dispatching this workflow now just means "also run the
+    # ROM-needing jobs below, if KE_ROM_URL/KE_ROM_AGE_KEY secrets are
+    # configured" (see the rom-gate job). The ROM itself never comes from a
+    # workflow input — it's always fetched + decrypted from owner-controlled
+    # storage inside the job that needs it.
 
 permissions:
   contents: read
@@ -134,24 +145,44 @@ jobs:
           path: build-container/KnifeEdgeRecompiled
           if-no-files-found: error
 
+  # The `secrets` context is not available in job-level `if:` expressions, so
+  # this tiny job turns "are the ROM secrets configured?" into a job output
+  # the ROM-needing jobs below can gate on via `needs`. On fork PRs and
+  # secretless forks the answer is 'false' and those jobs skip cleanly —
+  # preserving the invariant that normal CI needs no ROM and no secrets.
+  rom-gate:
+    name: "rom-gate (are ROM secrets configured?)"
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      have: ${{ steps.check.outputs.have }}
+    steps:
+      - name: Check for ROM secrets
+        id: check
+        env:
+          HAVE: ${{ (secrets.KE_ROM_URL != '' && secrets.KE_ROM_AGE_KEY != '') && 'true' || 'false' }}
+        run: |
+          echo "have=$HAVE" >> "$GITHUB_OUTPUT"
+          if [ "$HAVE" != "true" ]; then
+            echo "::notice::KE_ROM_URL / KE_ROM_AGE_KEY secrets not configured — ROM-needing jobs will be skipped. See analysis/docs/build-notes.md, 'Encrypted ROM in CI'."
+          fi
+
   # ---------------------------------------------------------------------------
-  # Release build: the ONLY job that touches a ROM.
+  # Release build: produces the shippable binary, which contains recompiled
+  # game *code* but no assets or game data (verified: no ROM asset bytes are
+  # embedded — the game reads everything from the player's own ROM at
+  # runtime). Players must supply their own ROM; the binary refuses to run
+  # without a matching one.
   #
-  # Produces the shippable binary, which contains recompiled game *code* but no
-  # assets or game data (verified: no ROM asset bytes are embedded — the game
-  # reads everything from the player's own ROM at runtime). Players must supply
-  # their own ROM; the binary refuses to run without a matching one.
-  #
-  # Manual dispatch only. Supply the ROM by one of:
-  #   * self-hosted runner with the ROM already on disk -> set `rom_path`
-  #   * hosted runner + your own encrypted storage -> add a fetch+decrypt step
-  #     below (credentials in secrets; the ROM itself never enters the repo).
-  # Secrets are unavailable to fork PRs by design, which is why this is not part
-  # of the normal build.
+  # Manual dispatch only, and only when rom-gate found the ROM secrets
+  # configured (fork PRs and secretless forks never have them, so this job
+  # skips cleanly there rather than failing).
   # ---------------------------------------------------------------------------
   release:
     name: "release (needs a ROM, manual dispatch)"
-    if: github.event_name == 'workflow_dispatch' && inputs.rom_path != ''
+    needs: rom-gate
+    if: github.event_name == 'workflow_dispatch' && needs.rom-gate.outputs.have == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -181,18 +212,20 @@ jobs:
           path: deps/N64Recomp/build-container
           key: n64recomp-host-${{ runner.os }}-${{ hashFiles('containers/Containerfile') }}-${{ steps.submodules.outputs.n64recomp }}
 
-      # TODO(self-hosted encrypted ROM): replace/augment this with a fetch from
-      # your own storage, e.g.
-      #   curl -sSf "$ROM_URL" -o rom.enc && age -d -i <(echo "$AGE_KEY") rom.enc > rom.z64
-      # using secrets for the URL/key, then point ROM_PATH at the result.
-      - name: Locate the ROM
-        id: rom
-        run: |
-          if [ ! -f "${{ inputs.rom_path }}" ]; then
-            echo "::error::rom_path '${{ inputs.rom_path }}' not found on this runner"
-            exit 1
-          fi
-          echo "path=${{ inputs.rom_path }}" >> "$GITHUB_OUTPUT"
+      # Not preinstalled on the runner image.
+      - name: Install age
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+
+      # $RUNNER_TEMP is outside the workspace and outside every
+      # actions/cache path, and is wiped when the job ends; the ROM must
+      # never enter a cache or an artifact.
+      - name: Fetch + decrypt the ROM
+        env:
+          KE_ROM_URL: ${{ secrets.KE_ROM_URL }}
+          KE_ROM_AGE_KEY: ${{ secrets.KE_ROM_AGE_KEY }}
+          KE_B2_KEY_ID: ${{ secrets.KE_B2_KEY_ID }}
+          KE_B2_APP_KEY: ${{ secrets.KE_B2_APP_KEY }}
+        run: ./scripts/fetch_rom.sh "$RUNNER_TEMP/knife_edge.rom"
 
       # KE_ROM makes CMake normalize the ROM, run the analysis pipeline, and
       # invoke N64Recomp + RSPRecomp at configure time (see CMakeLists.txt) —
@@ -201,7 +234,7 @@ jobs:
       - name: Containerized build (regenerates game code from the ROM)
         env:
           KE_CONTAINER_RUNTIME: docker
-        run: ./scripts/container_build.sh --rom "${{ steps.rom.outputs.path }}"
+        run: ./scripts/container_build.sh --rom "$RUNNER_TEMP/knife_edge.rom"
 
       # Fails the release if any ROM asset bytes leaked into the binary. Runs
       # directly on the runner (not in the container) since it only needs the
@@ -240,32 +273,36 @@ jobs:
   # committed. Recompiler output itself is not committed, so there is nothing
   # else to diff.
   #
-  # This job is INTENTIONALLY not part of the normal push/pull_request build:
-  # per repo policy the ROM is never committed and is not provided to hosted
-  # runners as a secret (see the top-of-file comment and README.md). It only
-  # runs when someone explicitly dispatches this workflow AND supplies
-  # `rom_path` pointing at a ROM that already exists on the runner — which in
-  # practice means a self-hosted runner you control, not a GitHub-hosted one.
-  # Dispatching without `rom_path` set (the default) skips it entirely.
-  #
-  # KE_CONTAINER_RUNTIME is deliberately left unset here (unlike the two jobs
-  # above): this runs on a self-hosted runner, which per
-  # .devcontainer/devcontainer.json's comments is the project owner's own
-  # rootless-podman/SELinux host, not a docker one. scripts/container_build.sh
-  # auto-detects podman first, so this Just Works there; set
-  # KE_CONTAINER_RUNTIME explicitly if you point this job at a different
-  # self-hosted runner.
+  # This now runs on EVERY push to main (plus manual dispatch) — previously it
+  # was manual-dispatch-only because no ROM was available to a hosted runner
+  # at all. The encrypted-ROM fetch (scripts/fetch_rom.sh, see the top-of-file
+  # comment and analysis/docs/build-notes.md "Encrypted ROM in CI") finally
+  # makes a ROM available to ubuntu-latest, so this can be continuous instead
+  # of an occasional manual check. It still skips wherever the ROM secrets
+  # aren't configured (rom-gate), e.g. on a fork.
   # ---------------------------------------------------------------------------
   regen-verify:
-    name: "regen-verify (manual dispatch only, needs a local ROM)"
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rom_path != '' }}
-    runs-on: self-hosted
+    name: "regen-verify (every push to main, plus manual dispatch)"
+    needs: rom-gate
+    if: needs.rom-gate.outputs.have == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Install age
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+
+      - name: Fetch + decrypt the ROM
+        env:
+          KE_ROM_URL: ${{ secrets.KE_ROM_URL }}
+          KE_ROM_AGE_KEY: ${{ secrets.KE_ROM_AGE_KEY }}
+          KE_B2_KEY_ID: ${{ secrets.KE_B2_KEY_ID }}
+          KE_B2_APP_KEY: ${{ secrets.KE_B2_APP_KEY }}
+        run: ./scripts/fetch_rom.sh "$RUNNER_TEMP/knife_edge.rom"
 
       # One --exec call, all inside the container: build n64sym (the
       # analysis pipeline's identification oracle), build the N64Recomp host
@@ -276,8 +313,10 @@ jobs:
       # config/ via `make -C analysis`, run N64Recomp against the freshly
       # regenerated config, and diff config/ against what's committed.
       - name: Regenerate + verify (containerized)
+        env:
+          KE_CONTAINER_RUNTIME: docker
         run: |
-          ./scripts/container_build.sh --rom "${{ github.event.inputs.rom_path }}" --exec '
+          ./scripts/container_build.sh --rom "$RUNNER_TEMP/knife_edge.rom" --exec '
             set -euo pipefail
             echo "==> building n64sym (analysis pipeline identification oracle)"
             make -C deps/n64sym
@@ -307,22 +346,47 @@ jobs:
   # ---------------------------------------------------------------------------
   # Flatpak release: on a version-tag push (vX.Y.Z), build the .flatpak bundle
   # and attach it to the GitHub release for that tag (creating the release if
-  # the tag was pushed bare).
+  # the tag was pushed bare). Hosted runner, no self-hosted anything, like
+  # every other job in this workflow now.
   #
-  # Needs a ROM (recompiled game code is a required flatpak build input), so
-  # like regen-verify this only runs on a self-hosted runner. Runner
-  # requirements beyond the usual: a container runtime (podman/docker),
-  # flatpak-builder plus the org.freedesktop 25.08 runtime/Sdk and llvm20
-  # extension (scripts/build_flatpak.sh --runtime-install fetches them), the
-  # `gh` CLI, and the repository variable KE_ROM_PATH pointing at a
-  # Knife Edge (USA) ROM already on the runner's filesystem. The bundle
-  # contains recompiled code and zero game assets, same policy as the release
-  # binary (see the release job above).
+  # What this job installs beyond the usual and why:
+  #   - age: to decrypt the fetched ROM (see the top-of-file comment).
+  #   - flatpak + flatpak-builder: not preinstalled on ubuntu-latest.
+  #   - a sysctl tweak: ubuntu-24.04 runner images restrict unprivileged user
+  #     namespaces via AppArmor by default, which breaks bubblewrap (bwrap),
+  #     which flatpak-builder requires to sandbox its build. Without this the
+  #     build fails at the first sandboxed step.
+  #   - the flathub remote + freedesktop runtime/Sdk/llvm20 extension
+  #     (scripts/build_flatpak.sh --runtime-install), cached across runs
+  #     (keyed on the manifest, so a runtime-version bump busts it) since a
+  #     cold fetch is a ~1.5 GB flathub download.
+  #
+  # generated/us (where the flatpak manifest's `dir` source expects
+  # recompiled code) is produced the same way as every other ROM-touching
+  # job: fetch + decrypt the ROM, then run both recompilers against the
+  # committed config/*.toml inside the canonical build container.
+  #
+  # Dir-source staging hazard: the manifest's `dir` source copies the WHOLE
+  # working tree into flatpak-builder's sandbox with no exclusion mechanism
+  # (see analysis/docs/build-notes.md, "Flatpak packaging"). By the time
+  # sources are generated, build/knife_edge.z64 (the normalized ROM) sits in
+  # the tree — it must not even be *staged* into the sandbox, so the
+  # "Quarantine" step below moves it out to $RUNNER_TEMP and deletes
+  # build/build-container before the Flatpak bundle step runs. The bundle
+  # step's own output never receives ROM assets either way (no install()
+  # rule copies them — see build-notes.md), but staging is already more
+  # exposure than policy allows.
+  #
+  # The bundle contains recompiled code and zero game assets, same policy as
+  # the release binary above; the final assertion step proves it the same
+  # way, just against the flatpak-builder build tree's binary path instead of
+  # build-container/'s.
   # ---------------------------------------------------------------------------
   flatpak-release:
-    name: "flatpak release (version tags, self-hosted)"
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: self-hosted
+    name: "flatpak release (version tags)"
+    needs: rom-gate
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.rom-gate.outputs.have == 'true'
+    runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
       contents: write # creates/uploads the GitHub release for the tag
@@ -332,12 +396,38 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Locate the ROM (repository variable KE_ROM_PATH)
+      - name: Install age, flatpak and flatpak-builder
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age flatpak flatpak-builder
+
+      # ubuntu-24.04 runner images restrict unprivileged user namespaces via
+      # AppArmor, which breaks bubblewrap, which flatpak-builder requires.
+      - name: Allow unprivileged user namespaces (bwrap)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || echo "apparmor userns knob absent; continuing"
+
+      # Keyed on the manifest so a runtime-version bump busts it; a cold
+      # cache costs a ~1.5 GB flathub download.
+      - name: Cache flatpak runtimes
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/flatpak
+          key: flatpak-runtimes-${{ runner.os }}-${{ hashFiles('packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.yml') }}
+
+      # Fast no-op when the cache restored the refs.
+      - name: Install the freedesktop runtime
         run: |
-          if [ -z "${{ vars.KE_ROM_PATH }}" ] || [ ! -f "${{ vars.KE_ROM_PATH }}" ]; then
-            echo "::error::repository variable KE_ROM_PATH is unset or does not point at a file on this runner"
-            exit 1
-          fi
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          ./scripts/build_flatpak.sh --runtime-install
+
+      # $RUNNER_TEMP is outside the workspace and outside every
+      # actions/cache path, and is wiped when the job ends; the ROM must
+      # never enter a cache or an artifact.
+      - name: Fetch + decrypt the ROM
+        env:
+          KE_ROM_URL: ${{ secrets.KE_ROM_URL }}
+          KE_ROM_AGE_KEY: ${{ secrets.KE_ROM_AGE_KEY }}
+          KE_B2_KEY_ID: ${{ secrets.KE_B2_KEY_ID }}
+          KE_B2_APP_KEY: ${{ secrets.KE_B2_APP_KEY }}
+        run: ./scripts/fetch_rom.sh "$RUNNER_TEMP/knife_edge.rom"
 
       # Produce generated/us at the repo root, where the flatpak manifest's
       # dir source expects it: ingest the ROM to build/knife_edge.z64 (the
@@ -346,8 +436,10 @@ jobs:
       # generated/us and generated/us/rsp. All inside the canonical build
       # container, same as every other ROM-touching job.
       - name: Generate recompiled sources (containerized)
+        env:
+          KE_CONTAINER_RUNTIME: docker
         run: |
-          ./scripts/container_build.sh --rom "${{ vars.KE_ROM_PATH }}" --exec '
+          ./scripts/container_build.sh --rom "$RUNNER_TEMP/knife_edge.rom" --exec '
             set -euo pipefail
             echo "==> building N64Recomp + RSPRecomp host tools"
             cmake -S deps/N64Recomp -B deps/N64Recomp/build-container -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
@@ -360,10 +452,50 @@ jobs:
             deps/N64Recomp/build-container/RSPRecomp config/aspMain.us.toml
           '
 
+      # The flatpak manifest's `dir` source copies the whole working tree
+      # into flatpak-builder's build sandbox with no exclusion mechanism, and
+      # the step above left the normalized ROM at build/knife_edge.z64 — it
+      # must not even be *staged* into the sandbox (it was never *installed*
+      # into /app, but staging it is already more exposure than policy
+      # allows). Keep a copy outside the tree for the leak assertion below,
+      # then remove it from the tree entirely.
+      - name: Quarantine ROM-derived files out of the source tree
+        run: |
+          mv build/knife_edge.z64 "$RUNNER_TEMP/knife_edge.z64"
+          rm -rf build build-container
+
       # flatpak-builder runs on the runner host itself (not in the container):
       # it needs its own bwrap sandboxing, which nested containers break.
       - name: Build the Flatpak bundle
         run: ./scripts/build_flatpak.sh --bundle KnifeEdgeRecompiled.flatpak
+
+      # Fails the release if any ROM asset bytes leaked into the bundled
+      # binary. Same sampling approach as the release job's assertion above,
+      # against the flatpak-builder build tree's binary path instead of
+      # build-container/'s.
+      - name: Assert the flatpak binary embeds no game assets
+        run: |
+          if [ ! -f build-flatpak/build/files/bin/knife-edge-recompiled-bin ]; then
+            echo "::error::expected binary not found at build-flatpak/build/files/bin/knife-edge-recompiled-bin — flatpak-builder's build tree layout assumption is stale, update this step"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import random, sys, os
+          rom = open(os.environ["RUNNER_TEMP"] + "/knife_edge.z64", "rb").read()
+          binary = open("build-flatpak/build/files/bin/knife-edge-recompiled-bin", "rb").read()
+          random.seed(1)
+          leaked = tried = 0
+          for _ in range(400):
+              off = random.randrange(0x2E000, len(rom) - 64)   # past the boot code segment
+              chunk = rom[off:off + 64]
+              if len(set(chunk)) < 8:
+                  continue
+              tried += 1
+              if chunk in binary:
+                  leaked += 1
+          print(f"sampled {tried} distinctive ROM data blocks; embedded in binary: {leaked}")
+          sys.exit(1 if leaked else 0)
+          PY
 
       - name: Attach the bundle to the GitHub release for this tag
         env:

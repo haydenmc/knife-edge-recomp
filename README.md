@@ -364,11 +364,16 @@ analysis pipeline itself:
    "Building" above.
 
 `.github/workflows/build.yml` has a `regen-verify` job that automates this
-recipe and fails if step 5 finds a diff — but it's gated to
-`workflow_dispatch` with an explicit `rom_path` input and targets a
-self-hosted runner, since (per the policy above) no ROM is ever available to
-GitHub-hosted CI runners. It exists as executable documentation of this
-recipe, not as something that runs on every push.
+recipe and fails if step 5 finds a diff. Unlike the rest of this section
+(which assumes you're supplying your own local ROM), that job runs on a
+plain hosted `ubuntu-latest` runner: it fetches an age-encrypted ROM from
+owner-configured private storage and decrypts it in-run using repo secrets
+(see analysis/docs/build-notes.md, "Encrypted ROM in CI (Backblaze B2)" for
+the full design and setup). It runs on every push to `main`, plus manual
+dispatch. The `release` (manual dispatch) and `flatpak-release` (version-tag
+pushes) jobs fetch the ROM the same way. All three skip automatically
+wherever those secrets aren't configured — forks and pull requests still
+need no ROM and no secrets, unchanged from the policy above.
 
 ## Architecture
 

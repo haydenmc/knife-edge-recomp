@@ -26,3 +26,8 @@ compile_commands.json
 *.jpg
 *.wav
 *.pcm
+
+# Flatpak build output (bundle + flatpak-builder work dir) — binary artifacts,
+# never committed (same policy as every other build output).
+*.flatpak
+/build-flatpak/

@@ -562,3 +562,212 @@ workflow thin seemed more valuable than the minutes saved.
   every callsite in `ultramodern`/`librecomp` that reads them null-checks
   first, confirmed by reading `ultramodern/src/{audio,input,threads,
   error_handling}.cpp`.
+
+## Encrypted ROM in CI (Backblaze B2)
+
+### Motivation
+
+Every ROM-needing job (`release`, `regen-verify`, `flatpak-release`) used to
+be gated to `workflow_dispatch` and require either a `rom_path` pointing at
+a ROM already sitting on the runner's filesystem, or (for `flatpak-release`)
+a repository variable `KE_ROM_PATH` doing the same — which in practice meant
+a self-hosted runner the project owner controlled, since GitHub-hosted
+runners start with an empty, ephemeral filesystem and no ROM can legally
+live in the repo. That worked but had real costs: it required maintaining a
+self-hosted runner at all (a machine to keep patched, online, and secure),
+and it meant `regen-verify` — the proof that the analysis pipeline
+regenerates exactly what's committed in `config/` — only ran when someone
+remembered to dispatch it by hand, not on every change that could plausibly
+affect it.
+
+This work replaces all of that with an age-encrypted ROM fetched from
+owner-controlled cloud storage (Backblaze B2 in practice) and decrypted
+in-run on a plain hosted `ubuntu-latest` runner. Consequences: `regen-verify`
+now runs continuously, on every push to `main` (plus manual dispatch)
+instead of only when hand-triggered; `release` and `flatpak-release` stay
+manual-dispatch/tag-push-gated as before but no longer need a self-hosted
+runner at all; and there is no self-hosted runner anywhere in
+`.github/workflows/build.yml` any more.
+
+### Design
+
+**age, not ad-hoc `openssl`.** [age](https://age-encryption.org/) is
+authenticated encryption (ChaCha20-Poly1305 under the hood): a wrong key,
+corrupted upload, or wrong object all fail loudly at decrypt time rather
+than silently producing garbage bytes that only fail later at some unrelated
+step (e.g. the md5 gate, or worse, a confusing build failure three steps
+downstream). Just as importantly, age's X25519 recipients are asymmetric —
+the owner encrypts with a *public* key, CI only ever holds the *private*
+identity. That means re-encrypting and re-uploading a new ciphertext (a ROM
+revision, or just re-keying) never requires touching a single GitHub secret;
+the existing `KE_ROM_AGE_KEY` keeps working against any ciphertext encrypted
+to the matching public key. An ad-hoc symmetric scheme (`openssl enc
+-aes-256-cbc -k "$PASSWORD"`) would tie the secret and the ciphertext
+together — rotating either means updating both, and unauthenticated modes
+like plain CBC don't fail cleanly on a wrong key or corrupted stream, they
+just decrypt to noise.
+
+**Ciphertext-only in the bucket.** The bucket (or plain URL, if the
+`KE_B2_*` secrets are omitted) never holds anything but the `age`-encrypted
+blob. There is no plaintext ROM anywhere outside the owner's own machine and
+each CI job's `$RUNNER_TEMP`.
+
+**`scripts/fetch_rom.sh` contract.** `scripts/fetch_rom.sh <output-path>`,
+required env `KE_ROM_URL` (any curl-fetchable URL — https in CI, http/file
+for local testing) and `KE_ROM_AGE_KEY` (the age identity line), optional
+`KE_B2_KEY_ID`/`KE_B2_APP_KEY` pair (must be set together or neither) for a
+signed fetch against a private B2 bucket. It downloads the ciphertext to a
+`mktemp` file, decrypts with `age -d`, gates the plaintext against the exact
+two md5 hashes in `KNOWN_MD5` in `analysis/byteswap.py` (either the v64
+byteswapped dump or the z64 normalized dump — this script doesn't normalize
+byte order itself, the build's own `analysis/byteswap.py` ingestion step
+does that later, so either dump order passing here is fine), and only then
+`chmod 600` + atomically `mv`s the plaintext into place (the intermediate
+plaintext temp file is created in the *same directory* as the output path
+specifically so that final `mv` is a same-filesystem rename, not a copy —
+see the script's own comments for why). A `trap ... EXIT` removes every temp
+file it created, on both success and failure paths. It never prints
+`KE_ROM_URL` or any of the four secret env vars, on any path, including
+errors — there is no `set -x` anywhere in it, deliberately.
+
+**Private-bucket support via curl's native SigV4, deliberately no B2/AWS
+CLI.** When `KE_B2_KEY_ID`/`KE_B2_APP_KEY` are set, the script requires
+`KE_ROM_URL` to be B2's S3-compatible endpoint form
+(`https://s3.<region>.backblazeb2.com/<bucket>/<file>`, not B2's "friendly"
+native URL, which SigV4 can't address), parses the region out of the host,
+and adds `--user "$KE_B2_KEY_ID:$KE_B2_APP_KEY" --aws-sigv4
+"aws:amz:<region>:s3"` to the curl call. `--aws-sigv4` has been in curl
+since 7.75 (2021); GitHub-hosted runners carry curl 8.x, so no version
+detection is needed. The point of doing it this way instead of installing
+the B2 CLI or the AWS CLI is that this script then runs anywhere with `curl`
+and `age` on `PATH` — no additional CLI dependency, no Python SDK, works
+identically in this workflow and in a bare local test with
+`python3 -m http.server`.
+
+### Threat model
+
+Confidentiality lives in the encryption, not in the bucket's access control.
+A leaked `KE_ROM_URL` — logged accidentally somewhere, or a bucket
+misconfigured to public-read — leaks only ciphertext; without
+`KE_ROM_AGE_KEY` (which never leaves GitHub's encrypted secrets store and is
+never printed by this script) that ciphertext is useless. The private
+bucket plus a read-only application key scoped to that one bucket is
+defense in depth on top of that, not the primary control — worth doing
+(it also caps blast radius if the B2 credentials themselves ever leaked:
+read-only, one bucket), but the design does not depend on it. GitHub itself
+masks any string that equals a configured secret's value in job logs, and
+`scripts/fetch_rom.sh` independently never echoes `KE_ROM_URL` or any of the
+three other secret env vars (the *md5* of the decrypted plaintext, printed
+on a mismatch, is not secret — it's just a hash of already-public game
+data, useful for diagnosing "wrong file uploaded").
+
+Decrypted plaintext exists only in `$RUNNER_TEMP` — a directory GitHub
+Actions creates per-job, outside the workspace, outside every
+`actions/cache` and `actions/upload-artifact` path, and wiped when the job
+ends. It's mounted read-only into the build container
+(`scripts/container_build.sh --rom` already did this for local ROMs; nothing
+changed there). It is never written into the git working tree except
+transiently, inside the `regen-verify`/`flatpak-release` `--exec` scripts,
+as `build/knife_edge.z64` — the normalized copy `analysis/byteswap.py`
+produces, which was already how those recipes worked before this change and
+remains outside git (`build/` is gitignored) either way.
+
+Fork PRs get no secrets — GitHub's own rule, unrelated to anything in this
+design — so ROM-needing jobs must not simply fail when the secrets are
+absent; they must skip. The complication: a job-level `if:` condition cannot
+read the `secrets` context directly (GitHub Actions restricts `secrets` to
+`env:`/`with:`/`run:` inside steps). `rom-gate` works around this: one small
+job whose single step reads `secrets.KE_ROM_URL`/`KE_ROM_AGE_KEY` via `env:`
+and republishes the boolean as a `steps.check.outputs.have` job output,
+which downstream jobs' `if:` conditions *can* read via `needs.rom-gate.outputs.have`.
+Every ROM-needing job now `needs: rom-gate` and gates on that output.
+
+### The flatpak-on-hosted specifics
+
+Three things `flatpak-release` needed that the other ROM-jobs didn't, all
+because it's the first job in this workflow to run `flatpak-builder` on a
+GitHub-hosted runner rather than a machine the owner had already tuned by
+hand:
+
+- **AppArmor userns sysctl for bwrap.** Ubuntu 24.04 runner images restrict
+  unprivileged user namespaces via AppArmor by default (a hardening change
+  upstream Ubuntu shipped and GitHub's runner images inherited), which
+  breaks `bubblewrap` — the sandboxing tool `flatpak-builder` requires for
+  every build step. The fix is one `sysctl -w
+  kernel.apparmor_restrict_unprivileged_userns=0`, tolerantly `||`-guarded
+  in case some future runner image removes the knob entirely (rather than
+  failing the job over a hardening detail that stopped applying).
+- **The flathub runtime cache.** `org.freedesktop.Platform`/`Sdk` 25.08 plus
+  the `llvm20` extension is roughly 1.5 GB from flathub — fine once, wasteful
+  on every run. `actions/cache@v4` over `~/.local/share/flatpak`, keyed on a
+  hash of the manifest file itself (so a runtime-version bump in the
+  manifest correctly busts the cache instead of silently reusing a stale
+  runtime), makes every run after the first a fast no-op through
+  `scripts/build_flatpak.sh --runtime-install`.
+- **The `dir`-source staging hazard, and the quarantine step.** As covered
+  under "Flatpak packaging" above, the manifest's `type: dir` source copies
+  the *entire* checked-out working tree into flatpak-builder's sandbox, with
+  no exclusion mechanism. On a self-hosted runner this was already true, but
+  it mattered less: the owner's own machine, ROM handling already scoped to
+  that one job. On a shared, ephemeral hosted runner the same staging is
+  worth actively defending: by the time `generated/us` exists,
+  `build/knife_edge.z64` — a decrypted, normalized copy of the ROM — is
+  sitting in the working tree too, and without intervention it would get
+  copied into `/run/build/knife-edge-recompiled/` inside the sandbox along
+  with everything else. It was never *installed* into `/app` (no
+  `install()` rule touches it — see "Flatpak packaging" above), so it never
+  reached the actual `.flatpak` bundle either way, but staging it into the
+  sandbox is still more exposure than this project's ROM-handling policy
+  allows. The `flatpak-release` job's "Quarantine ROM-derived files out of
+  the source tree" step runs *between* generating sources and invoking
+  `scripts/build_flatpak.sh`: it moves `build/knife_edge.z64` out to
+  `$RUNNER_TEMP` (kept only so the final asset-leak assertion still has
+  something to sample against) and `rm -rf`s `build/` and `build-container/`
+  entirely before flatpak-builder ever runs.
+- **The bundle-binary asset assertion.** Same sampling approach as the
+  `release` job's `Assert the binary embeds no game assets` step — 400
+  random 64-byte slices of the ROM's data region, checked for exact
+  containment in the binary — just pointed at flatpak-builder's own build
+  tree layout (`build-flatpak/build/files/bin/knife-edge-recompiled-bin`)
+  and at the quarantined ROM copy in `$RUNNER_TEMP` instead of
+  `build-container/`'s. A `test -f` guard fails loudly with a clear
+  `::error::` if that path ever turns out to be wrong (flatpak-builder's
+  internal build-directory layout is not something this project controls),
+  rather than the assertion silently no-oping on a missing file.
+
+### Owner setup
+
+One-time, done on the owner's own machine — nothing here ever touches CI:
+
+```sh
+age-keygen -o ke_rom.agekey        # prints "Public key: age1..."; keep this file OFFLINE, never in the repo
+age -r age1<publickey> -o knifeedge.z64.age <path-to-rom>
+# B2: create a PRIVATE bucket, upload knifeedge.z64.age (web UI or b2 CLI)
+# B2: create an application key, READ-ONLY, scoped to that one bucket
+# GitHub repo secrets (Settings → Secrets and variables → Actions):
+#   KE_ROM_URL     = https://s3.<region>.backblazeb2.com/<bucket>/knifeedge.z64.age
+#   KE_ROM_AGE_KEY = the AGE-SECRET-KEY-1... line from ke_rom.agekey
+#   KE_B2_KEY_ID   = the application keyID
+#   KE_B2_APP_KEY  = the application key itself
+# (public-bucket alternative: skip the two KE_B2_* secrets and use the
+#  bucket's friendly URL — the ciphertext is the protection either way)
+```
+
+### Local test recipe
+
+No B2 bucket needed to exercise the script end-to-end — a loopback HTTP
+server is enough:
+
+```sh
+age-keygen -o test.agekey                       # note the "Public key: age1..." line
+age -r age1<publickey> -o rom.age /path/to/a/known-dump/rom
+python3 -m http.server 8099 &                    # serves the cwd; rom.age must be in it
+KE_ROM_URL=http://127.0.0.1:8099/rom.age \
+KE_ROM_AGE_KEY="$(grep AGE-SECRET-KEY test.agekey)" \
+  scripts/fetch_rom.sh /tmp/knife_edge.rom
+```
+
+A wrong `KE_ROM_AGE_KEY` fails at the `age -d` step with the diagnostic
+described above; a ciphertext that decrypts to something other than a known
+Knife Edge (USA) dump fails at the md5 gate instead, with the actual
+(non-secret) md5 printed for comparison.
