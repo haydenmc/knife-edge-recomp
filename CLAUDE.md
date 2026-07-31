@@ -257,7 +257,9 @@ candidate enhancement.
   `analysis/docs/build-notes.md`, "Containerized build".
 - Live diagnosis of a running/hung game: `scripts/capture_wedge_state.sh` and
   `scripts/capture_voice_state.sh` (they locate the process and game RAM
-  themselves). Env: `KE_PERF=1` (VI/s + frames/s), `KE_AUDIO_DUMP=<path>` (PCM).
+  themselves). Env: `KE_PERF=1` (VI/s + frames/s), `KE_AUDIO_DUMP=<path>` (PCM),
+  `KE_DL_DUMP=<path>` (+ `KE_DL_DUMP_AFTER_S` / `KE_DL_DUMP_FRAMES`) — decoded
+  display lists, see `analysis/docs/hud-relocation.md` §1.
 - Every binary prints its git commit at startup — always ask for that line in a
   bug report.
 
@@ -288,6 +290,7 @@ binary embeds no ROM data before publishing.
 | `analysis/docs/overlay-tracking.md` | Why overlay DMA is hooked and how. |
 | `analysis/docs/enhancements.md` | **Read before adding any feature.** Policy, mechanism menu, current flags, deferred candidates. |
 | `analysis/docs/mouse-aim.md` | The aiming reticle in RDRAM: layout + byte-order proof, 20-units/frame step and its stick-deflection curve, no auto-centering, out-of-mission staleness, and which word actually means "in a mission" (§6.2). Then the positional (closed-loop) mouse controller built on it, its three gates, and the fail-closed limitation that buys (§9.1). |
+| `analysis/docs/hud-relocation.md` | The `KE_DL_DUMP` display-list dumper, and the phase-1 identification of every in-mission HUD element (all `G_TEXRECT`, fixed sub-DL addresses, fingerprint table) plus the `gEXSetRectAlign` feasibility verdict. |
 | `analysis/docs/build-notes.md` | CMake/dependency integration details. |
 
 Git history is deliberately verbose — commit messages carry root causes and

@@ -4,6 +4,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
+#include <cstring>
+#include <string>
 
 #include "hle/rt64_application.h"
 
@@ -161,6 +164,422 @@ namespace {
         std::fprintf(stderr, "Unhandled RT64::UserConfiguration::GraphicsAPI\n");
         std::abort();
     }
+
+    // ------------------------------------------------------------------
+    // KE_DL_DUMP -- display list dumper (diagnostic; see
+    // analysis/docs/hud-relocation.md)
+    //
+    // When KE_DL_DUMP is set to a path, every display list the game submits
+    // is walked and appended there as compact text, one line per interesting
+    // command. Read-only: it never writes RDRAM and never changes what is
+    // handed to RT64. When the variable is unset the whole thing costs one
+    // cached pointer test per frame.
+    //
+    // Two companion knobs, because a mission display list is ~2200 commands
+    // (~150 KB of text) per frame at ~27 fps -- dumping from boot would blow
+    // any cap long before scripted input reaches gameplay:
+    //   KE_DL_DUMP_AFTER_S=<sec>   start dumping this long after the first
+    //                              display list (default 0 = immediately)
+    //   KE_DL_DUMP_FRAMES=<n>      stop after n dumped frames (default 0 =
+    //                              unlimited, subject to the byte cap)
+    //
+    // Decoding follows deps/rt64/src/gbi/rt64_gbi_f3dex2.cpp and
+    // rt64_gbi_rdp.cpp exactly (F3DEX2 opcode numbering, RDP command
+    // numbering, texrect's two continuation words, moveword's segment
+    // writes), so what is logged is what RT64 itself acts on.
+    // ------------------------------------------------------------------
+
+    constexpr uint32_t DL_RDRAM_SIZE = 8u * 1024u * 1024u;
+    constexpr int DL_DUMP_MAX_DEPTH = 8;
+    constexpr int DL_DUMP_MAX_CMDS = 16384;
+    constexpr size_t DL_DUMP_MAX_BYTES = 40u * 1024u * 1024u;
+
+    // F3DEX2 opcodes (deps/rt64/src/gbi/rt64_gbi_f3dex2.h).
+    enum : uint8_t {
+        DL_G_VTX = 0x01, DL_G_MODIFYVTX = 0x02, DL_G_CULLDL = 0x03,
+        DL_G_BRANCH_Z = 0x04, DL_G_TRI1 = 0x05, DL_G_TRI2 = 0x06,
+        DL_G_QUAD = 0x07,
+        DL_G_TEXTURE = 0xD7, DL_G_POPMTX = 0xD8, DL_G_GEOMETRYMODE = 0xD9,
+        DL_G_MTX = 0xDA, DL_G_MOVEWORD = 0xDB, DL_G_MOVEMEM = 0xDC,
+        DL_G_LOAD_UCODE = 0xDD, DL_G_DL = 0xDE, DL_G_ENDDL = 0xDF,
+        DL_G_SPNOOP = 0xE0, DL_G_RDPHALF_1 = 0xE1,
+        DL_G_SETOTHERMODE_L = 0xE2, DL_G_SETOTHERMODE_H = 0xE3,
+        DL_G_RDPHALF_2 = 0xF1,
+        // RDP (deps/rt64/src/shared/rt64_f3d_defines.h).
+        DL_G_TEXRECT = 0xE4, DL_G_TEXRECTFLIP = 0xE5,
+        DL_G_RDPLOADSYNC = 0xE6, DL_G_RDPPIPESYNC = 0xE7,
+        DL_G_RDPTILESYNC = 0xE8, DL_G_RDPFULLSYNC = 0xE9,
+        DL_G_SETKEYGB = 0xEA, DL_G_SETKEYR = 0xEB, DL_G_SETCONVERT = 0xEC,
+        DL_G_SETSCISSOR = 0xED, DL_G_SETPRIMDEPTH = 0xEE,
+        DL_G_RDPSETOTHERMODE = 0xEF, DL_G_LOADTLUT = 0xF0,
+        DL_G_SETTILESIZE = 0xF2, DL_G_LOADBLOCK = 0xF3, DL_G_LOADTILE = 0xF4,
+        DL_G_SETTILE = 0xF5, DL_G_FILLRECT = 0xF6, DL_G_SETFILLCOLOR = 0xF7,
+        DL_G_SETFOGCOLOR = 0xF8, DL_G_SETBLENDCOLOR = 0xF9,
+        DL_G_SETPRIMCOLOR = 0xFA, DL_G_SETENVCOLOR = 0xFB,
+        DL_G_SETCOMBINE = 0xFC, DL_G_SETTIMG = 0xFD, DL_G_SETZIMG = 0xFE,
+        DL_G_SETCIMG = 0xFF,
+    };
+
+    inline uint32_t dl_bits(uint32_t w, uint8_t pos, uint8_t bits) {
+        return (w >> pos) & ((bits == 32) ? 0xFFFFFFFFu : ((1u << bits) - 1u));
+    }
+
+    struct DLDumpState {
+        std::FILE* file = nullptr;
+        size_t written = 0;
+        bool capped = false;
+        uint64_t frame = 0;
+        uint64_t seen = 0;
+        uint64_t max_frames = 0;
+        double after_s = 0.0;
+        std::chrono::steady_clock::time_point start{};
+        bool started = false;
+        uint32_t segments[16]{};
+        std::string out;
+        char line[256]{};
+
+        void emit() {
+            out.append(line);
+            out.push_back('\n');
+        }
+
+        // RT64: RSP::fromSegmented() + the 0x00FFFFF8 DMA mask
+        // (deps/rt64/src/hle/rt64_rsp.cpp).
+        uint32_t resolve(uint32_t seg_addr) const {
+            uint32_t phys = segments[(seg_addr >> 24) & 0x0F] + (seg_addr & 0x00FFFFFF);
+            return phys & 0x00FFFFF8u;
+        }
+    };
+
+    bool dl_read(const uint8_t* rdram, uint32_t addr, uint32_t& w0, uint32_t& w1) {
+        if (addr + 8u > DL_RDRAM_SIZE) {
+            return false;
+        }
+        // Same convention RT64 uses: RT64::DisplayList is two native u32s read
+        // straight out of the RDRAM block (deps/rt64/src/gbi/rt64_display_list.h).
+        std::memcpy(&w0, rdram + addr, 4);
+        std::memcpy(&w1, rdram + addr + 4, 4);
+        return true;
+    }
+
+    void dl_dump_walk(DLDumpState& st, const uint8_t* rdram, uint32_t entry) {
+        uint32_t ret_stack[DL_DUMP_MAX_DEPTH];
+        int depth = 0;
+        uint32_t addr = entry & 0x00FFFFF8u;
+        int index = 0;
+
+        // Consecutive triangle commands are aggregated into one TRIxN line.
+        int tri_run = 0;
+        uint32_t tri_start_addr = 0;
+        int tri_start_index = 0;
+        auto flush_tris = [&]() {
+            if (tri_run > 0) {
+                std::snprintf(st.line, sizeof(st.line), "%llu %d @%06X TRIx%d",
+                              (unsigned long long)st.frame, tri_start_index, tri_start_addr, tri_run);
+                st.emit();
+                tri_run = 0;
+            }
+        };
+
+        while (index < DL_DUMP_MAX_CMDS) {
+            uint32_t w0 = 0, w1 = 0;
+            if (!dl_read(rdram, addr, w0, w1)) {
+                flush_tris();
+                std::snprintf(st.line, sizeof(st.line), "%llu %d @%06X BADADDR",
+                              (unsigned long long)st.frame, index, addr);
+                st.emit();
+                return;
+            }
+
+            const uint8_t op = uint8_t(w0 >> 24);
+            const uint32_t here = addr;
+            const int here_index = index;
+            addr += 8;
+            index++;
+
+            if (op == DL_G_TRI1 || op == DL_G_TRI2 || op == DL_G_QUAD) {
+                if (tri_run == 0) {
+                    tri_start_addr = here;
+                    tri_start_index = here_index;
+                }
+                tri_run += (op == DL_G_TRI1) ? 1 : 2;
+                continue;
+            }
+            flush_tris();
+
+            char* p = st.line;
+            const size_t n = sizeof(st.line);
+            int used = std::snprintf(p, n, "%llu %d @%06X ",
+                                     (unsigned long long)st.frame, here_index, here);
+            char* q = p + used;
+            size_t qn = (used < int(n)) ? n - used : 0;
+            bool print = true;
+
+            switch (op) {
+            case DL_G_TEXRECT:
+            case DL_G_TEXRECTFLIP: {
+                // rt64_gbi_rdp.cpp::texrect(): coords 10.2 fixed point, and the
+                // two following Gfx words (G_RDPHALF_1 / G_RDPHALF_2) carry
+                // s/t and dsdx/dtdy in their w1.
+                const uint32_t lrx = dl_bits(w0, 12, 12), lry = dl_bits(w0, 0, 12);
+                const uint32_t ulx = dl_bits(w1, 12, 12), uly = dl_bits(w1, 0, 12);
+                const uint32_t tile = dl_bits(w1, 24, 3);
+                uint32_t h0w0 = 0, h0w1 = 0, h1w0 = 0, h1w1 = 0;
+                dl_read(rdram, addr, h0w0, h0w1);
+                dl_read(rdram, addr + 8, h1w0, h1w1);
+                const int16_t uls = int16_t(h0w1 >> 16), ult = int16_t(h0w1 & 0xFFFF);
+                const int16_t dsdx = int16_t(h1w1 >> 16), dtdy = int16_t(h1w1 & 0xFFFF);
+                std::snprintf(q, qn,
+                    "%s ul=%.2f,%.2f lr=%.2f,%.2f w=%.2f h=%.2f tile=%u st=%d,%d d=%d,%d",
+                    (op == DL_G_TEXRECT) ? "TEXRECT" : "TEXRECTFLIP",
+                    ulx / 4.0, uly / 4.0, lrx / 4.0, lry / 4.0,
+                    (lrx - ulx) / 4.0, (lry - uly) / 4.0,
+                    tile, int(uls), int(ult), int(dsdx), int(dtdy));
+                addr += 16;   // skip the two continuation words
+                index += 2;
+                break;
+            }
+            case DL_G_FILLRECT: {
+                const uint32_t lrx = dl_bits(w0, 12, 12), lry = dl_bits(w0, 0, 12);
+                const uint32_t ulx = dl_bits(w1, 12, 12), uly = dl_bits(w1, 0, 12);
+                std::snprintf(q, qn, "FILLRECT ul=%.2f,%.2f lr=%.2f,%.2f",
+                              ulx / 4.0, uly / 4.0, lrx / 4.0, lry / 4.0);
+                break;
+            }
+            case DL_G_SETTIMG:
+                std::snprintf(q, qn, "SETTIMG fmt=%u siz=%u w=%u addr=%08X phys=%06X",
+                              dl_bits(w0, 21, 3), dl_bits(w0, 19, 2), dl_bits(w0, 0, 12) + 1,
+                              w1, st.resolve(w1));
+                break;
+            case DL_G_SETCIMG:
+                std::snprintf(q, qn, "SETCIMG fmt=%u siz=%u w=%u addr=%08X",
+                              dl_bits(w0, 21, 3), dl_bits(w0, 19, 2), dl_bits(w0, 0, 12) + 1, w1);
+                break;
+            case DL_G_SETZIMG:
+                std::snprintf(q, qn, "SETZIMG addr=%08X", w1);
+                break;
+            case DL_G_SETTILE:
+                std::snprintf(q, qn, "SETTILE tile=%u fmt=%u siz=%u line=%u tmem=%u pal=%u",
+                              dl_bits(w1, 24, 3), dl_bits(w0, 21, 3), dl_bits(w0, 19, 2),
+                              dl_bits(w0, 9, 9), dl_bits(w0, 0, 9), dl_bits(w1, 20, 4));
+                break;
+            case DL_G_SETTILESIZE:
+                std::snprintf(q, qn, "SETTILESIZE tile=%u uls=%.2f ult=%.2f lrs=%.2f lrt=%.2f",
+                              dl_bits(w1, 24, 3), dl_bits(w0, 12, 12) / 4.0, dl_bits(w0, 0, 12) / 4.0,
+                              dl_bits(w1, 12, 12) / 4.0, dl_bits(w1, 0, 12) / 4.0);
+                break;
+            case DL_G_LOADBLOCK:
+                std::snprintf(q, qn, "LOADBLOCK tile=%u uls=%u ult=%u lrs=%u dxt=%u",
+                              dl_bits(w1, 24, 3), dl_bits(w0, 12, 12), dl_bits(w0, 0, 12),
+                              dl_bits(w1, 12, 12), dl_bits(w1, 0, 12));
+                break;
+            case DL_G_LOADTILE:
+                std::snprintf(q, qn, "LOADTILE tile=%u uls=%u ult=%u lrs=%u lrt=%u",
+                              dl_bits(w1, 24, 3), dl_bits(w0, 12, 12), dl_bits(w0, 0, 12),
+                              dl_bits(w1, 12, 12), dl_bits(w1, 0, 12));
+                break;
+            case DL_G_LOADTLUT:
+                std::snprintf(q, qn, "LOADTLUT tile=%u count=%u",
+                              dl_bits(w1, 24, 3), dl_bits(w1, 14, 10));
+                break;
+            case DL_G_SETSCISSOR:
+                std::snprintf(q, qn, "SETSCISSOR mode=%u ul=%.2f,%.2f lr=%.2f,%.2f",
+                              dl_bits(w1, 24, 2), dl_bits(w0, 12, 12) / 4.0, dl_bits(w0, 0, 12) / 4.0,
+                              dl_bits(w1, 12, 12) / 4.0, dl_bits(w1, 0, 12) / 4.0);
+                break;
+            case DL_G_MOVEMEM: {
+                const uint32_t idx = dl_bits(w0, 0, 8);
+                std::snprintf(q, qn, "MOVEMEM idx=%u%s off=%u addr=%08X phys=%06X",
+                              idx, (idx == 8) ? "(VIEWPORT)" : "", dl_bits(w0, 8, 8) * 8,
+                              w1, st.resolve(w1));
+                break;
+            }
+            case DL_G_MOVEWORD: {
+                const uint32_t type = dl_bits(w0, 16, 8);
+                if (type == 0x06) {   // G_MW_SEGMENT
+                    const uint32_t seg = dl_bits(w0, 2, 4);
+                    st.segments[seg] = w1;
+                    std::snprintf(q, qn, "MOVEWORD SEGMENT seg=%u -> %08X", seg, w1);
+                }
+                else {
+                    std::snprintf(q, qn, "MOVEWORD type=%02X off=%u val=%08X",
+                                  type, dl_bits(w0, 0, 16), w1);
+                }
+                break;
+            }
+            case DL_G_MTX:
+                std::snprintf(q, qn, "MTX params=%02X addr=%08X phys=%06X",
+                              dl_bits(w0, 0, 8), w1, st.resolve(w1));
+                break;
+            case DL_G_POPMTX:
+                std::snprintf(q, qn, "POPMTX %08X", w1);
+                break;
+            case DL_G_VTX:
+                std::snprintf(q, qn, "VTX n=%u vbidx=%u addr=%08X phys=%06X",
+                              dl_bits(w0, 12, 8), dl_bits(w0, 1, 7), w1, st.resolve(w1));
+                break;
+            case DL_G_TEXTURE:
+                std::snprintf(q, qn, "TEXTURE tile=%u lvl=%u on=%u sc=%u tc=%u",
+                              dl_bits(w0, 8, 3), dl_bits(w0, 11, 3), dl_bits(w0, 1, 7),
+                              dl_bits(w1, 16, 16), dl_bits(w1, 0, 16));
+                break;
+            case DL_G_GEOMETRYMODE:
+                std::snprintf(q, qn, "GEOMETRYMODE clr=%06X set=%08X", dl_bits(w0, 0, 24), w1);
+                break;
+            case DL_G_SETCOMBINE:
+                std::snprintf(q, qn, "SETCOMBINE %08X %08X", w0, w1);
+                break;
+            case DL_G_SETOTHERMODE_H:
+                std::snprintf(q, qn, "SETOTHERMODE_H %08X %08X", w0, w1);
+                break;
+            case DL_G_SETOTHERMODE_L:
+                std::snprintf(q, qn, "SETOTHERMODE_L %08X %08X", w0, w1);
+                break;
+            case DL_G_RDPSETOTHERMODE:
+                std::snprintf(q, qn, "RDPSETOTHERMODE %08X %08X", w0, w1);
+                break;
+            case DL_G_SETPRIMCOLOR:
+                std::snprintf(q, qn, "SETPRIMCOLOR %08X", w1);
+                break;
+            case DL_G_SETENVCOLOR:
+                std::snprintf(q, qn, "SETENVCOLOR %08X", w1);
+                break;
+            case DL_G_SETBLENDCOLOR:
+                std::snprintf(q, qn, "SETBLENDCOLOR %08X", w1);
+                break;
+            case DL_G_SETFOGCOLOR:
+                std::snprintf(q, qn, "SETFOGCOLOR %08X", w1);
+                break;
+            case DL_G_SETFILLCOLOR:
+                std::snprintf(q, qn, "SETFILLCOLOR %08X", w1);
+                break;
+            case DL_G_SPNOOP:
+                std::snprintf(q, qn, "SPNOOP %08X %08X", w0, w1);
+                break;
+            case DL_G_RDPHALF_1:
+                std::snprintf(q, qn, "RDPHALF_1 %08X", w1);
+                break;
+            case DL_G_RDPHALF_2:
+                std::snprintf(q, qn, "RDPHALF_2 %08X", w1);
+                break;
+            case DL_G_RDPFULLSYNC:
+                std::snprintf(q, qn, "RDPFULLSYNC");
+                break;
+            case DL_G_RDPPIPESYNC:
+            case DL_G_RDPLOADSYNC:
+            case DL_G_RDPTILESYNC:
+                print = false;   // pure noise, one per state change
+                break;
+            case DL_G_DL: {
+                // rt64_gbi_f3dex2 maps G_DL to GBI_F3D::runDl: w0 bit 16 clear
+                // == push (call), set == branch (no return address pushed).
+                const bool branch = dl_bits(w0, 16, 1) != 0;
+                const uint32_t target = st.resolve(w1);
+                std::snprintf(q, qn, "DL %s addr=%08X phys=%06X",
+                              branch ? "branch" : "push", w1, target);
+                st.emit();
+                print = false;
+                if (!branch) {
+                    if (depth < DL_DUMP_MAX_DEPTH) {
+                        ret_stack[depth++] = addr;
+                    }
+                    else {
+                        std::snprintf(st.line, sizeof(st.line), "%llu %d @%06X DEPTHCAP",
+                                      (unsigned long long)st.frame, here_index, here);
+                        st.emit();
+                        return;
+                    }
+                }
+                addr = target;
+                break;
+            }
+            case DL_G_ENDDL:
+                std::snprintf(q, qn, "ENDDL");
+                st.emit();
+                print = false;
+                if (depth == 0) {
+                    return;
+                }
+                addr = ret_stack[--depth];
+                break;
+            default:
+                std::snprintf(q, qn, "OP_%02X %08X %08X", op, w0, w1);
+                break;
+            }
+
+            if (print) {
+                st.emit();
+            }
+        }
+
+        flush_tris();
+        std::snprintf(st.line, sizeof(st.line), "%llu %d CMDCAP",
+                      (unsigned long long)st.frame, index);
+        st.emit();
+    }
+
+    // Called once per submitted display list, with the game's own entry
+    // address (before any high_framerate prologue injection).
+    void dl_dump_maybe(const uint8_t* rdram, uint32_t entry) {
+        static DLDumpState* st = []() -> DLDumpState* {
+            const char* path = std::getenv("KE_DL_DUMP");
+            if (path == nullptr || path[0] == '\0') {
+                return nullptr;
+            }
+            std::FILE* f = std::fopen(path, "ab");
+            if (f == nullptr) {
+                std::fprintf(stderr, "[dldump] cannot open '%s' for append; dumping disabled\n", path);
+                return nullptr;
+            }
+            auto* s = new DLDumpState();
+            s->file = f;
+            if (const char* after = std::getenv("KE_DL_DUMP_AFTER_S")) {
+                s->after_s = std::atof(after);
+            }
+            if (const char* frames = std::getenv("KE_DL_DUMP_FRAMES")) {
+                s->max_frames = std::strtoull(frames, nullptr, 10);
+            }
+            std::fprintf(stderr, "[dldump] writing display lists to '%s' (after %.1f s, max %llu frames)\n",
+                         path, s->after_s, (unsigned long long)s->max_frames);
+            return s;
+        }();
+
+        if (st == nullptr || st->capped) {
+            return;
+        }
+
+        st->seen++;
+        if (!st->started) {
+            if (st->seen == 1) {
+                st->start = std::chrono::steady_clock::now();
+            }
+            const double elapsed =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - st->start).count();
+            if (elapsed < st->after_s) {
+                return;
+            }
+            st->started = true;
+            std::fprintf(stderr, "[dldump] starting at display list %llu (%.1f s in)\n",
+                         (unsigned long long)st->seen, elapsed);
+        }
+
+        st->out.clear();
+        std::snprintf(st->line, sizeof(st->line), "=== frame %llu entry=%06X ===",
+                      (unsigned long long)st->frame, entry & 0x00FFFFF8u);
+        st->emit();
+        std::memset(st->segments, 0, sizeof(st->segments));
+        dl_dump_walk(*st, rdram, entry);
+
+        std::fwrite(st->out.data(), 1, st->out.size(), st->file);
+        st->written += st->out.size();
+        st->frame++;
+        if (st->written >= DL_DUMP_MAX_BYTES || (st->max_frames != 0 && st->frame >= st->max_frames)) {
+            st->capped = true;
+            std::fflush(st->file);
+            std::fprintf(stderr, "[dldump] %llu frames / %zu bytes written; dumping stopped\n",
+                         (unsigned long long)st->frame, st->written);
+        }
+    }
 }
 
 kerecomp::renderer::RT64Context::RT64Context(uint8_t* rdram, ultramodern::renderer::WindowHandle window_handle, bool debug) {
@@ -296,6 +715,10 @@ void kerecomp::renderer::RT64Context::send_dl(const OSTask* task) {
     }
 
     uint32_t dl_addr = task->t.data_ptr & 0x3FFFFFF;
+    // Diagnostic only (KE_DL_DUMP unset => one cached null test): walk the
+    // game's own display list before any prologue injection changes the entry
+    // address RT64 will be handed.
+    dl_dump_maybe(app->core.RDRAM, dl_addr);
     uint32_t entry = maybe_inject_rate_prologue(dl_addr);
     app->processDisplayLists(app->core.RDRAM, entry, 0, true);
 }
