@@ -383,9 +383,9 @@ default only affects fresh installs.
    gen_syms hooks (clamp stash/re-apply, blit x-bias, scissor widen) +
    draw-side bias compensation in the reticle stub. THE OFF-PATH IS THE
    FIDELITY GUARANTEE (hooks exist in every profile; vanilla measured
-   railing at exactly ±128/±84). In `enhanced`; owner hands-on pending
-   — edge-of-screen hit-registration feel is the one thing only play
-   can confirm. Full RE + plan: `hud-relocation.md`, "Reticle range
+   railing at exactly ±128/±84). In `enhanced`; **owner-verified
+   hands-on (2026-07-31): "works great"** — edge hit-registration feel
+   included. Full RE + plan: `hud-relocation.md`, "Reticle range
    extension".
 5. High framerate: shipped and owner-verified (see Status); experimental
    opt-in, not in `enhanced` (owner decision 2026-07-31 — confirmed
