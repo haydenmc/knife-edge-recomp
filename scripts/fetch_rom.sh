@@ -26,10 +26,12 @@
 #                    the download is signed with curl's native AWS SigV4
 #                    support against B2's S3-compatible endpoint -- no B2 or
 #                    AWS CLI dependency, so this script runs anywhere with
-#                    curl and age. Requires KE_ROM_URL to be of the form
-#                    https://s3.<region>.backblazeb2.com/<bucket>/<file>
-#                    (B2's S3-compatible endpoint, not the "friendly" B2
-#                    native URL, which SigV4 cannot address). Omit both to
+#                    curl and age. Requires KE_ROM_URL to be B2's
+#                    S3-compatible endpoint, either style:
+#                    https://s3.<region>.backblazeb2.com/<bucket>/<file> or
+#                    https://<bucket>.s3.<region>.backblazeb2.com/<file>
+#                    (not the "friendly" B2 native URL, which SigV4 cannot
+#                    address). Omit both to
 #                    fetch from a public URL instead (a public flat file, or
 #                    a B2 bucket with public-read access) -- the ciphertext
 #                    is the protection either way.
@@ -97,14 +99,22 @@ fi
 # ---------------------------------------------------------------------------
 curl_extra_args=()
 if [ "$b2_signed" -eq 1 ]; then
-    # Parse the region out of the host: https://s3.<region>.backblazeb2.com/...
+    # Parse the region out of the host. B2's S3-compatible endpoint comes in
+    # two equivalent shapes and curl can sign either (SigV4 covers the Host
+    # header, so bucket-in-host vs bucket-in-path makes no difference):
+    #   path-style:           https://s3.<region>.backblazeb2.com/<bucket>/<file>
+    #   virtual-hosted style: https://<bucket>.s3.<region>.backblazeb2.com/<file>
+    # The B2 web UI hands out the virtual-hosted form ("S3-friendly URL"), so
+    # both must pass this check.
     host="$(printf '%s\n' "$KE_ROM_URL" | sed -E 's#^https?://([^/]+)/.*#\1#')"
-    if ! printf '%s\n' "$host" | grep -qE '^s3\.[A-Za-z0-9-]+\.backblazeb2\.com$'; then
-        echo "error: KE_B2_KEY_ID/KE_B2_APP_KEY are set, but KE_ROM_URL's host is not the B2 S3-compatible endpoint shape." >&2
-        echo "  Signed fetch requires: https://s3.<region>.backblazeb2.com/<bucket>/<file>" >&2
+    if ! printf '%s\n' "$host" | grep -qE '(^|\.)s3\.[A-Za-z0-9-]+\.backblazeb2\.com$'; then
+        echo "error: KE_B2_KEY_ID/KE_B2_APP_KEY are set, but KE_ROM_URL's host is not a B2 S3-compatible endpoint." >&2
+        echo "  Signed fetch requires one of:" >&2
+        echo "    https://s3.<region>.backblazeb2.com/<bucket>/<file>" >&2
+        echo "    https://<bucket>.s3.<region>.backblazeb2.com/<file>" >&2
         exit 2
     fi
-    region="$(printf '%s\n' "$host" | sed -E 's#^s3\.([A-Za-z0-9-]+)\.backblazeb2\.com$#\1#')"
+    region="$(printf '%s\n' "$host" | sed -E 's#^.*s3\.([A-Za-z0-9-]+)\.backblazeb2\.com$#\1#')"
     curl_extra_args+=(--user "$KE_B2_KEY_ID:$KE_B2_APP_KEY" --aws-sigv4 "aws:amz:$region:s3")
 fi
 

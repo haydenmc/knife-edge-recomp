@@ -61,8 +61,9 @@ requests from forks, which cannot receive secrets.
 **Release binaries contain recompiled code but no game data.** The player
 supplies their own ROM at runtime and the game reads assets, audio and level
 data directly out of it, exactly as it did on hardware — there is no asset
-extraction step. The `release` workflow job asserts this by sampling the ROM's
-data regions and failing if any of those bytes appear in the binary.
+extraction step. The `linux-build` workflow job asserts this via
+`scripts/assert_no_rom_assets.py`, which samples the ROM's data regions and
+fails if any of those bytes appear in the binary.
 
 ## Building
 
@@ -369,11 +370,21 @@ recipe and fails if step 5 finds a diff. Unlike the rest of this section
 plain hosted `ubuntu-latest` runner: it fetches an age-encrypted ROM from
 owner-configured private storage and decrypts it in-run using repo secrets
 (see analysis/docs/build-notes.md, "Encrypted ROM in CI (Backblaze B2)" for
-the full design and setup). It runs on every push to `main`, plus manual
-dispatch. The `release` (manual dispatch) and `flatpak-release` (version-tag
-pushes) jobs fetch the ROM the same way. All three skip automatically
-wherever those secrets aren't configured — forks and pull requests still
-need no ROM and no secrets, unchanged from the policy above.
+the full design and setup). It runs on every push to `main`, every same-repo
+pull request (so config/ drift is caught before merge, not after), and
+manual dispatch.
+
+`linux-build` and `flatpak-build` fetch the ROM the same way and run on the
+same events plus version-tag pushes, producing a downloadable Linux tarball
+and Flatpak bundle artifact respectively on every one of those runs (PR,
+push to `main`, tag, or dispatch) — not just tagged releases. A `v*` tag
+push additionally triggers `publish`, which attaches those two artifacts
+from the same run to the GitHub release for that tag (creating it if it
+doesn't exist yet); `publish` is the only job in the workflow with write
+permissions and does no building of its own. All ROM-needing jobs skip
+automatically wherever the ROM secrets aren't configured — forks and their
+pull requests still need no ROM and no secrets, unchanged from the policy
+above.
 
 ## Architecture
 

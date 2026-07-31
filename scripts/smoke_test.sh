@@ -3,8 +3,11 @@
 # run through part of the attract sequence, and asserts it is actually alive and
 # producing real audio/video rather than hanging or drawing a blank screen.
 #
-# Requires a ROM, so this is a LOCAL/self-hosted check - CI cannot run it (see
-# .github/workflows/build.yml, which does the no-ROM smoke test instead).
+# Requires a ROM. CI runs this INSIDE the build container via
+# scripts/container_build.sh --smoke (see the linux-build job in
+# .github/workflows/build.yml), and it remains runnable locally the same way
+# (./scripts/container_build.sh --rom <path> --smoke), or directly against a
+# host build by invoking this script itself.
 #
 # Usage: scripts/smoke_test.sh [--rom PATH] [--binary PATH] [--seconds N] [--keep-artifacts]
 set -uo pipefail

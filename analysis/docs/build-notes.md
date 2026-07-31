@@ -359,20 +359,35 @@ SELinux label separation, which otherwise denies `container_t` access to
 the host's `user_home_t`-labelled source. Docker instead gets
 `--user "$(id -u):$(id -g)")`, which needs no SELinux workaround.
 
-**CI integration.** `.github/workflows/build.yml`'s three jobs each call
+**CI integration.** `.github/workflows/build.yml`'s ROM-independent `build`
+job and its three ROM-needing jobs (`linux-build`, `flatpak-build`,
+`regen-verify` — renamed from `release`/`flatpak-release`/`regen-verify`
+respectively as part of the 2026-07-31 CI restructure that made same-repo
+PRs produce full artifacts, see "Encrypted ROM in CI" below) each call
 `scripts/container_build.sh` instead of an inline apt-get/cmake recipe:
 `build` uses `--check` (build + the no-ROM graceful-failure assertion),
-`release` uses `--rom <path>` (build only; the asset-leak check runs
-separately, directly on the runner, since it only needs the stdlib),
+`linux-build` uses `--rom <path> --smoke` (build, then the full
+Xvfb/lavapipe smoke test *inside* the container — previously smoke-testing
+was local/self-hosted only; the asset-leak check still runs separately,
+directly on the runner, since it only needs the stdlib — see
+`scripts/assert_no_rom_assets.py`, shared verbatim with `flatpak-build`),
 `regen-verify` uses `--rom <path> --exec '<script>'` to run the analysis
-pipeline's regen-and-diff recipe inside the container. Caching is keyed on
+pipeline's regen-and-diff recipe inside the container. The ROM fetch+decrypt
+steps that used to be duplicated across all three ROM-needing jobs (install
+age, then `scripts/fetch_rom.sh`) are now the single composite action
+`.github/actions/fetch-rom/action.yml`; composite actions can't read the
+`secrets` context directly, so each caller passes the four secret values
+through as `with:` inputs (GitHub's log masking is by value, not by context
+path, so this doesn't weaken masking). Caching is keyed on
 `hashFiles('containers/Containerfile')` in place of the old literal
 `clang19` string, so a toolchain change (image edit) busts the cache exactly
-like a submodule bump does. The `build` and `release` jobs deliberately do
-NOT share a `build-container/` cache under the same key formula: `release`
-always configures with `-DKE_ROM=...` and `build` never does, and since the
-cache key doesn't encode that distinction, sharing it risks one job's stub
-configure silently winning the cache slot for the other's ROM-driven one.
+like a submodule bump does. The `build` and `linux-build` jobs deliberately
+do NOT share a `build-container/` cache under the same key formula:
+`linux-build` always configures with `-DKE_ROM=...` and `build` never does,
+and since the cache key doesn't encode that distinction, sharing it risks
+one job's stub configure silently winning the cache slot for the other's
+ROM-driven one — see "Encrypted ROM in CI" below for a second, more serious
+reason `build-container/` must never be cached from a ROM-driven job at all.
 Only the ROM-independent `deps/N64Recomp/build-container/` (the host tools)
 is shared between them. No registry push/pull machinery was added — the
 image builds fresh (well, cached by the runner's local docker/podman image
@@ -567,27 +582,38 @@ workflow thin seemed more valuable than the minutes saved.
 
 ### Motivation
 
-Every ROM-needing job (`release`, `regen-verify`, `flatpak-release`) used to
-be gated to `workflow_dispatch` and require either a `rom_path` pointing at
-a ROM already sitting on the runner's filesystem, or (for `flatpak-release`)
-a repository variable `KE_ROM_PATH` doing the same — which in practice meant
-a self-hosted runner the project owner controlled, since GitHub-hosted
-runners start with an empty, ephemeral filesystem and no ROM can legally
-live in the repo. That worked but had real costs: it required maintaining a
-self-hosted runner at all (a machine to keep patched, online, and secure),
-and it meant `regen-verify` — the proof that the analysis pipeline
-regenerates exactly what's committed in `config/` — only ran when someone
-remembered to dispatch it by hand, not on every change that could plausibly
-affect it.
+Every ROM-needing job (originally named `release`, `regen-verify`,
+`flatpak-release`) used to be gated to `workflow_dispatch` and require
+either a `rom_path` pointing at a ROM already sitting on the runner's
+filesystem, or (for `flatpak-release`) a repository variable `KE_ROM_PATH`
+doing the same — which in practice meant a self-hosted runner the project
+owner controlled, since GitHub-hosted runners start with an empty,
+ephemeral filesystem and no ROM can legally live in the repo. That worked
+but had real costs: it required maintaining a self-hosted runner at all (a
+machine to keep patched, online, and secure), and it meant `regen-verify` —
+the proof that the analysis pipeline regenerates exactly what's committed
+in `config/` — only ran when someone remembered to dispatch it by hand, not
+on every change that could plausibly affect it.
 
 This work replaces all of that with an age-encrypted ROM fetched from
 owner-controlled cloud storage (Backblaze B2 in practice) and decrypted
 in-run on a plain hosted `ubuntu-latest` runner. Consequences: `regen-verify`
 now runs continuously, on every push to `main` (plus manual dispatch)
-instead of only when hand-triggered; `release` and `flatpak-release` stay
-manual-dispatch/tag-push-gated as before but no longer need a self-hosted
-runner at all; and there is no self-hosted runner anywhere in
-`.github/workflows/build.yml` any more.
+instead of only when hand-triggered; `release` and `flatpak-release` no
+longer need a self-hosted runner at all; and there is no self-hosted runner
+anywhere in `.github/workflows/build.yml` any more.
+
+A second restructure (2026-07-31) went further: `release` and
+`flatpak-release` were renamed `linux-build` and `flatpak-build` and moved
+off manual-dispatch/tag-push-only gating onto the same trigger set as
+`regen-verify` — same-repo pull request, push to `main`, version tag, or
+manual dispatch, wherever `rom-gate` finds the secrets configured — so every
+PR now produces a downloadable tarball and Flatpak bundle artifact, not just
+tagged releases. Publishing those artifacts to an actual GitHub release
+stayed tag-triggered, but moved into a new, separate `publish` job that
+holds the workflow's only write-permission grant (see "The flatpak-on-hosted
+specifics" below, and the composite action note under "CI integration"
+above, for what else changed in that pass).
 
 ### Design
 
@@ -632,9 +658,14 @@ errors — there is no `set -x` anywhere in it, deliberately.
 
 **Private-bucket support via curl's native SigV4, deliberately no B2/AWS
 CLI.** When `KE_B2_KEY_ID`/`KE_B2_APP_KEY` are set, the script requires
-`KE_ROM_URL` to be B2's S3-compatible endpoint form
-(`https://s3.<region>.backblazeb2.com/<bucket>/<file>`, not B2's "friendly"
-native URL, which SigV4 can't address), parses the region out of the host,
+`KE_ROM_URL` to be B2's S3-compatible endpoint, in either style —
+path-style `https://s3.<region>.backblazeb2.com/<bucket>/<file>` or
+virtual-hosted `https://<bucket>.s3.<region>.backblazeb2.com/<file>` (the
+"S3-friendly URL" the B2 web UI hands out; SigV4 signs the Host header, so
+bucket-in-host vs bucket-in-path makes no difference to curl). B2's
+"friendly" native URL (`f00N.backblazeb2.com/file/...`) is rejected with a
+clear error — SigV4 can't address it. The script parses the region out of
+the host either way,
 and adds `--user "$KE_B2_KEY_ID:$KE_B2_APP_KEY" --aws-sigv4
 "aws:amz:<region>:s3"` to the curl call. `--aws-sigv4` has been in curl
 since 7.75 (2021); GitHub-hosted runners carry curl 8.x, so no version
@@ -667,10 +698,25 @@ Actions creates per-job, outside the workspace, outside every
 ends. It's mounted read-only into the build container
 (`scripts/container_build.sh --rom` already did this for local ROMs; nothing
 changed there). It is never written into the git working tree except
-transiently, inside the `regen-verify`/`flatpak-release` `--exec` scripts,
+transiently, inside the `regen-verify`/`flatpak-build` `--exec` scripts,
 as `build/knife_edge.z64` — the normalized copy `analysis/byteswap.py`
 produces, which was already how those recipes worked before this change and
 remains outside git (`build/` is gitignored) either way.
+
+There is a second cache-related exposure the design has to avoid, distinct
+from the `secrets` context problem above: `actions/cache` entries saved from
+a run on the default branch are restorable by workflow runs triggered from a
+fork PR. `linux-build`'s `build-container/` directory contains
+`knife_edge.z64` (the decrypted, normalized ROM) whenever that job ran with
+`-DKE_ROM=...`, so that directory must never be cached under a key a fork PR
+run could hit — caching it would hand the ROM to arbitrary fork-authored
+code. This is on top of, not instead of, the pre-existing key-collision
+reason (`build` vs. `linux-build` configuring CMake differently under what
+would otherwise be the same cache key formula) documented under "CI
+integration" above. Path-excluding just the `.z64` from the cached directory
+was considered and rejected as too fragile to bet the policy on; the only
+robust rule is that `build-container/` is never cached from a ROM-driven job
+at all, full stop.
 
 Fork PRs get no secrets — GitHub's own rule, unrelated to anything in this
 design — so ROM-needing jobs must not simply fail when the secrets are
@@ -684,10 +730,11 @@ Every ROM-needing job now `needs: rom-gate` and gates on that output.
 
 ### The flatpak-on-hosted specifics
 
-Three things `flatpak-release` needed that the other ROM-jobs didn't, all
-because it's the first job in this workflow to run `flatpak-builder` on a
-GitHub-hosted runner rather than a machine the owner had already tuned by
-hand:
+Three things `flatpak-build` (renamed from `flatpak-release` in the
+2026-07-31 restructure — see "Motivation"/"Design" above) needed that the
+other ROM-jobs didn't, all because it's the first job in this workflow to
+run `flatpak-builder` on a GitHub-hosted runner rather than a machine the
+owner had already tuned by hand:
 
 - **AppArmor userns sysctl for bwrap.** Ubuntu 24.04 runner images restrict
   unprivileged user namespaces via AppArmor by default (a hardening change
@@ -718,22 +765,33 @@ hand:
   `install()` rule touches it — see "Flatpak packaging" above), so it never
   reached the actual `.flatpak` bundle either way, but staging it into the
   sandbox is still more exposure than this project's ROM-handling policy
-  allows. The `flatpak-release` job's "Quarantine ROM-derived files out of
+  allows. The `flatpak-build` job's "Quarantine ROM-derived files out of
   the source tree" step runs *between* generating sources and invoking
   `scripts/build_flatpak.sh`: it moves `build/knife_edge.z64` out to
   `$RUNNER_TEMP` (kept only so the final asset-leak assertion still has
   something to sample against) and `rm -rf`s `build/` and `build-container/`
   entirely before flatpak-builder ever runs.
-- **The bundle-binary asset assertion.** Same sampling approach as the
-  `release` job's `Assert the binary embeds no game assets` step — 400
-  random 64-byte slices of the ROM's data region, checked for exact
-  containment in the binary — just pointed at flatpak-builder's own build
-  tree layout (`build-flatpak/build/files/bin/knife-edge-recompiled-bin`)
-  and at the quarantined ROM copy in `$RUNNER_TEMP` instead of
-  `build-container/`'s. A `test -f` guard fails loudly with a clear
-  `::error::` if that path ever turns out to be wrong (flatpak-builder's
-  internal build-directory layout is not something this project controls),
-  rather than the assertion silently no-oping on a missing file.
+- **The bundle-binary asset assertion.** Same shared script as `linux-build`'s
+  `Assert the binary embeds no game assets` step —
+  `scripts/assert_no_rom_assets.py`, 400 random 64-byte slices of the ROM's
+  data region, checked for exact containment in the binary — just pointed at
+  flatpak-builder's own build tree layout
+  (`build-flatpak/build/files/bin/knife-edge-recompiled-bin`) and at the
+  quarantined ROM copy in `$RUNNER_TEMP` instead of `build-container/`'s. A
+  `test -f` guard fails loudly with a clear `::error::` if that path ever
+  turns out to be wrong (flatpak-builder's internal build-directory layout is
+  not something this project controls), rather than the assertion silently
+  no-oping on a missing file. (Both jobs used to carry their own copy of this
+  check as an inline Python heredoc; the 2026-07-31 restructure extracted it
+  into the one shared script so the two copies couldn't drift apart.)
+
+Publishing the bundle to a GitHub release is no longer this job's
+responsibility: `flatpak-build` ends at `actions/upload-artifact` (name
+`KnifeEdgeRecompiled-flatpak`), and it no longer carries a `permissions:
+contents: write` grant at all. The separate `publish` job (tag pushes only)
+downloads that artifact by name, alongside `linux-build`'s tarball artifact,
+and is the sole place in the workflow that calls `gh release create`/`gh
+release upload` — see "Motivation"/"Design" above.
 
 ### Owner setup
 
@@ -746,6 +804,8 @@ age -r age1<publickey> -o knifeedge.z64.age <path-to-rom>
 # B2: create an application key, READ-ONLY, scoped to that one bucket
 # GitHub repo secrets (Settings → Secrets and variables → Actions):
 #   KE_ROM_URL     = https://s3.<region>.backblazeb2.com/<bucket>/knifeedge.z64.age
+#                    (or the bucket's "S3-friendly URL" from the B2 web UI:
+#                     https://<bucket>.s3.<region>.backblazeb2.com/knifeedge.z64.age)
 #   KE_ROM_AGE_KEY = the AGE-SECRET-KEY-1... line from ke_rom.agekey
 #   KE_B2_KEY_ID   = the application keyID
 #   KE_B2_APP_KEY  = the application key itself

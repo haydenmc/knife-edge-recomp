@@ -173,7 +173,34 @@ corrupt ciphertext, wrong plaintext, 404, env errors — all clean, no temp
 or secret leakage), and a SigV4-signed request accepted by live B2 (403 on
 fake creds = signing/region-parse correct). Design/threat model/owner
 setup: `analysis/docs/build-notes.md`, "Encrypted ROM in CI (Backblaze
-B2)".
+B2)". Owner configured the bucket + secrets 2026-07-31; two first-run
+issues surfaced and were fixed: a secret-name typo (`KR_`→`KE_ROM_AGE_KEY`,
+owner-side) and a real script bug — the B2 URL shape check only accepted
+path-style S3 URLs, rejecting the virtual-hosted "S3-friendly URL" the B2
+web UI hands out (`<bucket>.s3.<region>.backblazeb2.com`); both styles now
+pass (verified against live B2: signed request accepted, 403 only on fake
+creds).
+
+CI restructure shipped (2026-07-31, owner-requested): every push-to-main
+and **same-repo PR** now produces the full artifact set — a Linux x86_64
+tarball (binary + COPYING + `packaging/linux/README.txt`) from
+`linux-build` (renamed `release`; now also runs the containerized
+Xvfb/lavapipe smoke test every build) and a `.flatpak` from `flatpak-build`
+(renamed `flatpak-release`) — plus `regen-verify` on PRs too (config/
+drift caught pre-merge). A `v*` tag additionally triggers the new thin
+`publish` job: downloads the two artifacts **by name** (a glob would catch
+the stub binary) and attaches them to the GitHub release; it is the *only*
+job with `contents: write` and runs no checked-out code. Fork PRs stay
+stub-only (`pull_request_target` deliberately never used; rom-gate has no
+checkout). Dedup: `.github/actions/fetch-rom` composite action +
+`scripts/assert_no_rom_assets.py` (replaces the two identical heredocs;
+verified pass on real ROM vs /bin/ls and fail on a planted
+sampled-offset chunk — note a fixed-offset plant does NOT trip it, the
+sampling is seeded-random). Security note recorded in build-notes:
+`build-container/` must never be cached from ROM jobs — it contains the
+decrypted z64 and **default-branch caches are restorable by fork-PR
+runs**. `on.push` is now filtered to `main` + `v*` (PRs cover branches);
+workflow `concurrency` cancels superseded PR runs only.
 
 Agreed order for the rest: high framerate is the only item left (Flatpak
 above is done pending the owner's host verification; containerized builds,
@@ -333,12 +360,13 @@ default only affects fresh installs.
    runs. Report candidate: the pre-existing modal-message-box behavior
    under a bare-Xvfb-no-WM harness (`build-notes.md`, "Flatpak packaging"
    — not a real-world defect, left alone).
-10. Encrypted-ROM CI (see Status): owner setup pending — age keypair,
-    encrypt + upload the ROM to a private B2 bucket, add the four repo
-    secrets (exact commands: `build-notes.md`, "Encrypted ROM in CI",
-    "Owner setup"). Then unverified-in-anger: `regen-verify`'s first
-    hosted run (automatic on the next main push once secrets exist), and
-    `flatpak-release`'s first tag run — first-ever flatpak-builder on a
-    hosted runner here (AppArmor userns sysctl, flathub runtime cache, and
-    the `build-flatpak/build/files/` layout assumption, which is
-    `test -f`-guarded so a layout change fails loudly).
+10. Encrypted-ROM CI: owner setup done (2026-07-31, see Status).
+    Unverified-in-anger after the restructure: first full run on the next
+    main push (linux-build with in-CI smoke + tarball, flatpak-build —
+    first-ever flatpak-builder on a hosted runner: AppArmor userns sysctl,
+    flathub runtime cache, `test -f`-guarded `build-flatpak/build/files/`
+    layout assumption — and regen-verify), and `publish` on the first
+    `v*` tag. Watch-items for the in-CI smoke test: docker's 64 MB
+    default /dev/shm and lavapipe speed on 4-vCPU runners — if it flakes,
+    raise smoke `--seconds`, don't loosen the color/audio thresholds;
+    only add `--shm-size` plumbing if an actual XShm error appears.

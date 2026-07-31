@@ -8,19 +8,31 @@ name: build
 # secrets, no decryption step, so it works for pull requests from forks
 # (which cannot receive secrets) exactly as before.
 #
-# The jobs below that DO need a ROM (release, regen-verify, flatpak-release)
-# get one without any self-hosted runner: the project owner encrypts the ROM
-# once with `age` (asymmetric — CI only ever holds the private half) and
-# uploads the ciphertext to owner-controlled storage (Backblaze B2 in
-# practice, but scripts/fetch_rom.sh accepts any curl-fetchable URL). Each
-# ROM-needing job fetches that ciphertext and decrypts it in-run via
-# `scripts/fetch_rom.sh` — only ciphertext ever sits in the bucket; the
-# decrypted plaintext exists only in `$RUNNER_TEMP` (outside every
-# actions/cache and artifact path, wiped when the job ends) and is mounted
-# read-only into the build container. Fork PRs have no secrets, so those jobs
-# skip cleanly via the `rom-gate` job below rather than failing. Full design,
-# threat model, and the owner's one-time setup commands are in
+# The jobs below that DO need a ROM (linux-build, flatpak-build, regen-verify
+# — plus publish, which needs no ROM at all, only the artifacts the first two
+# produce) get one without any self-hosted runner: the project owner
+# encrypts the ROM once with `age` (asymmetric — CI only ever holds the
+# private half) and uploads the ciphertext to owner-controlled storage
+# (Backblaze B2 in practice, but scripts/fetch_rom.sh accepts any
+# curl-fetchable URL). Each ROM-needing job fetches that ciphertext and
+# decrypts it in-run via the `.github/actions/fetch-rom` composite action
+# (which wraps `scripts/fetch_rom.sh`) — only ciphertext ever sits in the
+# bucket; the decrypted plaintext exists only in `$RUNNER_TEMP` (outside
+# every actions/cache and artifact path, wiped when the job ends) and is
+# mounted read-only into the build container. Fork PRs have no secrets, so
+# those jobs skip cleanly via the `rom-gate` job below rather than failing.
+# Same-repo PRs DO receive repository secrets normally, so they now produce
+# the full artifact set too — this used to be manual-dispatch/tag-only, see
+# "Status" in each job below for what changed. Full design, threat model,
+# and the owner's one-time setup commands are in
 # analysis/docs/build-notes.md, "Encrypted ROM in CI (Backblaze B2)".
+#
+# `pull_request_target` is never used anywhere in this workflow, deliberately:
+# it would hand repository secrets to a workflow run checked out from
+# untrusted fork code, which is exactly the hole this whole ROM-secrecy
+# design exists to avoid. Plain `pull_request` only runs with the *base*
+# repo's workflow file and secrets scoped normally (empty for forks) — that
+# is the only PR trigger this file uses.
 #
 # All jobs below build through containers/Containerfile via
 # scripts/container_build.sh — the same script a developer runs locally (see
@@ -30,20 +42,39 @@ name: build
 # toolchain is defined, so CI and local dev can never drift apart. GitHub's
 # hosted ubuntu-latest runners ship docker preinstalled, which is all these
 # jobs need on the host side — no self-hosted runner exists anywhere in this
-# workflow anymore.
+# workflow.
+#
+# `publish` is the sole job in this workflow with write permissions
+# (`contents: write`, granted at job level only). Every other job — including
+# linux-build and flatpak-build, which used to hold that grant when they were
+# the ones creating/uploading to the release directly — runs with the
+# workflow-level `contents: read` below. linux-build/flatpak-build now only
+# upload build artifacts (actions/upload-artifact); publish downloads those
+# same artifacts by name and is the only thing that ever touches the GitHub
+# Releases API.
+#
+# The full Xvfb/lavapipe smoke test (scripts/smoke_test.sh) now runs inside
+# the container on every full build (linux-build's `--smoke`), not just
+# locally — see that job for details.
 
 on:
   push:
+    branches: [main]   # feature branches get CI via pull_request instead —
+    tags: ['v*']       # unfiltered push + pull_request would run everything twice
   pull_request:
   workflow_dispatch:
-    # No inputs: dispatching this workflow now just means "also run the
-    # ROM-needing jobs below, if KE_ROM_URL/KE_ROM_AGE_KEY secrets are
-    # configured" (see the rom-gate job). The ROM itself never comes from a
-    # workflow input — it's always fetched + decrypted from owner-controlled
-    # storage inside the job that needs it.
+    # No inputs: dispatching means "also run the ROM-needing jobs on this
+    # ref, if the ROM secrets are configured" (see rom-gate).
+
+# One run per ref (PR merge refs are unique per PR). Superseded PR runs are
+# cancelled; push/tag/dispatch runs never are — for push groups a newer
+# QUEUED run replaces an older still-pending one, which is fine.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  contents: read
+  contents: read   # `publish` alone widens this, at job level
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -147,12 +178,27 @@ jobs:
 
   # The `secrets` context is not available in job-level `if:` expressions, so
   # this tiny job turns "are the ROM secrets configured?" into a job output
-  # the ROM-needing jobs below can gate on via `needs`. On fork PRs and
-  # secretless forks the answer is 'false' and those jobs skip cleanly —
-  # preserving the invariant that normal CI needs no ROM and no secrets.
+  # the ROM-needing jobs below can gate on via `needs`. Same-repo `pull_request`
+  # runs receive repository secrets normally, exactly like a push — only runs
+  # from a forked repository (and Dependabot-authored PRs, which read a
+  # separate secrets store) get an empty `secrets` context, so `have` comes
+  # back 'false' and those jobs skip cleanly, preserving the invariant that
+  # normal CI needs no ROM and no secrets. `pull_request_target` is never used
+  # in this workflow, deliberately: untrusted PR code must never run with
+  # secrets in scope. This job itself has no checkout step and executes no
+  # repository code at all — keep it that way; it exists purely to read
+  # `secrets` and republish a boolean.
   rom-gate:
     name: "rom-gate (are ROM secrets configured?)"
-    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    # Belt-and-suspenders: the `on:` filters above already guarantee this job
+    # never fires on a feature-branch push, but a future widening of
+    # `on.push` (e.g. dropping the `branches:` filter) must not silently
+    # start fetching the ROM on every branch — this `if:` is an independent
+    # backstop against that.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -169,20 +215,24 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Release build: produces the shippable binary, which contains recompiled
+  # linux build: produces the shippable tarball, which contains recompiled
   # game *code* but no assets or game data (verified: no ROM asset bytes are
   # embedded — the game reads everything from the player's own ROM at
   # runtime). Players must supply their own ROM; the binary refuses to run
   # without a matching one.
   #
-  # Manual dispatch only, and only when rom-gate found the ROM secrets
+  # Status: runs on every same-repo PR, every push to main, every version
+  # tag, and manual dispatch — anywhere rom-gate found the ROM secrets
   # configured (fork PRs and secretless forks never have them, so this job
-  # skips cleanly there rather than failing).
+  # skips cleanly there rather than failing). This used to be
+  # manual-dispatch-only (job name `release`); it's now continuous so a PR
+  # proves the full build works, and produces a downloadable artifact,
+  # before merge — not just after a hand-triggered dispatch.
   # ---------------------------------------------------------------------------
-  release:
-    name: "release (needs a ROM, manual dispatch)"
+  linux-build:
+    name: "linux build (full ROM, tarball artifact)"
     needs: rom-gate
-    if: github.event_name == 'workflow_dispatch' && needs.rom-gate.outputs.have == 'true'
+    if: needs.rom-gate.outputs.have == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -202,70 +252,91 @@ jobs:
       # depending on whether -DKE_ROM was passed (this job always passes it;
       # the build job above never does), while sharing the exact same cache
       # key formula as the build job would. Caching it under a
-      # ROM-independent key would risk a `build` job run and a `release` job
-      # run silently colliding on the same cache slot despite configuring
+      # ROM-independent key would risk a `build` job run and a `linux-build`
+      # job run silently colliding on the same cache slot despite configuring
       # CMake differently. The host-tool build has no such issue — it does
       # not depend on KE_ROM at all — so it's safe to share verbatim.
+      #
+      # There's a second, more serious reason build-container/ specifically
+      # must never be cached from this job: it contains knife_edge.z64, the
+      # decrypted, normalized ROM. actions/cache entries saved from a run on
+      # the default branch are restorable by workflow runs triggered from a
+      # fork PR (GitHub's cache-scoping rules permit reads across that
+      # boundary for the base branch's caches). Caching build-container/ here
+      # would hand the ROM to arbitrary fork-authored code the next time a
+      # fork PR happened to request this key. Excluding just the z64 file
+      # from the cached path would be too fragile to bet this policy on (one
+      # missed path pattern and the ROM is back in the cache) — the only
+      # robust rule is: this directory is never cached from a ROM-driven job,
+      # full stop.
       - name: Cache N64Recomp host tools
         uses: actions/cache@v4
         with:
           path: deps/N64Recomp/build-container
           key: n64recomp-host-${{ runner.os }}-${{ hashFiles('containers/Containerfile') }}-${{ steps.submodules.outputs.n64recomp }}
 
-      # Not preinstalled on the runner image.
-      - name: Install age
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
-
-      # $RUNNER_TEMP is outside the workspace and outside every
-      # actions/cache path, and is wiped when the job ends; the ROM must
-      # never enter a cache or an artifact.
-      - name: Fetch + decrypt the ROM
-        env:
-          KE_ROM_URL: ${{ secrets.KE_ROM_URL }}
-          KE_ROM_AGE_KEY: ${{ secrets.KE_ROM_AGE_KEY }}
-          KE_B2_KEY_ID: ${{ secrets.KE_B2_KEY_ID }}
-          KE_B2_APP_KEY: ${{ secrets.KE_B2_APP_KEY }}
-        run: ./scripts/fetch_rom.sh "$RUNNER_TEMP/knife_edge.rom"
+      - name: Fetch + decrypt the ROM (to $RUNNER_TEMP)
+        uses: ./.github/actions/fetch-rom
+        with:
+          rom-url: ${{ secrets.KE_ROM_URL }}
+          rom-age-key: ${{ secrets.KE_ROM_AGE_KEY }}
+          b2-key-id: ${{ secrets.KE_B2_KEY_ID }}
+          b2-app-key: ${{ secrets.KE_B2_APP_KEY }}
 
       # KE_ROM makes CMake normalize the ROM, run the analysis pipeline, and
       # invoke N64Recomp + RSPRecomp at configure time (see CMakeLists.txt) —
       # scripts/container_build.sh --rom does all of this inside the
       # container, landing output in build-container/.
-      - name: Containerized build (regenerates game code from the ROM)
+      #
+      # --smoke runs scripts/smoke_test.sh INSIDE the container (the image
+      # ships Xvfb, lavapipe, imagemagick, bc, procps — see
+      # containers/Containerfile), asserting the game actually boots with
+      # real video and non-silent audio on every full build — unlike the
+      # stub job's `--check` above, which deliberately runs with no display
+      # at all (a no-ROM build has nothing playable to smoke-test).
+      - name: Containerized build + full smoke test (regenerates game code from the ROM)
         env:
           KE_CONTAINER_RUNTIME: docker
-        run: ./scripts/container_build.sh --rom "$RUNNER_TEMP/knife_edge.rom"
+        run: ./scripts/container_build.sh --rom "$RUNNER_TEMP/knife_edge.rom" --smoke
 
-      # Fails the release if any ROM asset bytes leaked into the binary. Runs
-      # directly on the runner (not in the container) since it only needs the
-      # stdlib (random, sys) and both files are readable straight off the
-      # bind-mounted build-container/ directory the container just wrote to.
+      # Fails the build if any ROM asset bytes leaked into the binary. Runs
+      # directly on the runner (not in the container), stdlib only; shared
+      # with flatpak-build below (scripts/assert_no_rom_assets.py).
       - name: Assert the binary embeds no game assets
-        run: |
-          python3 - <<'PY'
-          import random, sys
-          rom = open("build-container/knife_edge.z64", "rb").read()
-          binary = open("build-container/KnifeEdgeRecompiled", "rb").read()
-          random.seed(1)
-          leaked = tried = 0
-          for _ in range(400):
-              off = random.randrange(0x2E000, len(rom) - 64)   # past the boot code segment
-              chunk = rom[off:off + 64]
-              if len(set(chunk)) < 8:
-                  continue
-              tried += 1
-              if chunk in binary:
-                  leaked += 1
-          print(f"sampled {tried} distinctive ROM data blocks; embedded in binary: {leaked}")
-          sys.exit(1 if leaked else 0)
-          PY
+        run: python3 scripts/assert_no_rom_assets.py build-container/knife_edge.z64 build-container/KnifeEdgeRecompiled
 
-      - name: Upload release binary
+      - name: Assemble release tarball
+        id: tarball
+        run: |
+          # Tags name the artifact; PR/dispatch/main runs get the short SHA.
+          # ($GITHUB_REF_NAME is unusable on PRs: "123/merge" contains '/'.)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="$GITHUB_REF_NAME"
+          else
+            version="$(git rev-parse --short=8 HEAD)"
+          fi
+          dir="KnifeEdgeRecompiled-linux-x86_64-${version}"
+          tarball="${dir}.tar.gz"
+          # Stage in $RUNNER_TEMP/stage — a clean dir; the decrypted ROM sits
+          # at $RUNNER_TEMP/knife_edge.rom, OUTSIDE stage/, so it cannot be
+          # swept into the archive.
+          mkdir -p "$RUNNER_TEMP/stage/$dir"
+          cp build-container/KnifeEdgeRecompiled COPYING packaging/linux/README.txt \
+             "$RUNNER_TEMP/stage/$dir/"
+          # Deterministic-ish archive: fixed ownership + name-sorted entries
+          # (mtimes still vary with the build; good enough for CI).
+          tar --owner=0 --group=0 --numeric-owner --sort=name \
+              -czf "$tarball" -C "$RUNNER_TEMP/stage" "$dir"
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+
+      - name: Upload tarball artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KnifeEdgeRecompiled-linux
-          path: build-container/KnifeEdgeRecompiled
+          name: KnifeEdgeRecompiled-linux-x86_64   # fixed name; the version lives in the filename
+          path: ${{ steps.tarball.outputs.tarball }}
           if-no-files-found: error
+          compression-level: 0    # contents are already gzip
+          retention-days: 14      # PR/inspection artifacts; publish consumes in-run
 
   # ---------------------------------------------------------------------------
   # Prove the analysis pipeline is deterministic: regenerate the symbol/config
@@ -273,18 +344,21 @@ jobs:
   # committed. Recompiler output itself is not committed, so there is nothing
   # else to diff.
   #
-  # This now runs on EVERY push to main (plus manual dispatch) — previously it
-  # was manual-dispatch-only because no ROM was available to a hosted runner
-  # at all. The encrypted-ROM fetch (scripts/fetch_rom.sh, see the top-of-file
-  # comment and analysis/docs/build-notes.md "Encrypted ROM in CI") finally
-  # makes a ROM available to ubuntu-latest, so this can be continuous instead
-  # of an occasional manual check. It still skips wherever the ROM secrets
-  # aren't configured (rom-gate), e.g. on a fork.
+  # Status: runs on every same-repo PR now too (config/ drift is caught
+  # before merge, not just after push to main), plus every push to main and
+  # manual dispatch. Deliberately NOT run on tag pushes — tags are cut from
+  # main, which already verified this, and `publish` below doesn't depend on
+  # this job at all. It still skips wherever the ROM secrets aren't
+  # configured (rom-gate), e.g. on a fork.
   # ---------------------------------------------------------------------------
   regen-verify:
-    name: "regen-verify (every push to main, plus manual dispatch)"
+    name: "regen-verify (PRs, pushes to main, manual dispatch)"
     needs: rom-gate
-    if: needs.rom-gate.outputs.have == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    if: >-
+      needs.rom-gate.outputs.have == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event_name == 'pull_request' ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -293,16 +367,13 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install age
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
-
-      - name: Fetch + decrypt the ROM
-        env:
-          KE_ROM_URL: ${{ secrets.KE_ROM_URL }}
-          KE_ROM_AGE_KEY: ${{ secrets.KE_ROM_AGE_KEY }}
-          KE_B2_KEY_ID: ${{ secrets.KE_B2_KEY_ID }}
-          KE_B2_APP_KEY: ${{ secrets.KE_B2_APP_KEY }}
-        run: ./scripts/fetch_rom.sh "$RUNNER_TEMP/knife_edge.rom"
+      - name: Fetch + decrypt the ROM (to $RUNNER_TEMP)
+        uses: ./.github/actions/fetch-rom
+        with:
+          rom-url: ${{ secrets.KE_ROM_URL }}
+          rom-age-key: ${{ secrets.KE_ROM_AGE_KEY }}
+          b2-key-id: ${{ secrets.KE_B2_KEY_ID }}
+          b2-app-key: ${{ secrets.KE_B2_APP_KEY }}
 
       # One --exec call, all inside the container: build n64sym (the
       # analysis pipeline's identification oracle), build the N64Recomp host
@@ -344,14 +415,22 @@ jobs:
           '
 
   # ---------------------------------------------------------------------------
-  # Flatpak release: on a version-tag push (vX.Y.Z), build the .flatpak bundle
-  # and attach it to the GitHub release for that tag (creating the release if
-  # the tag was pushed bare). Hosted runner, no self-hosted anything, like
-  # every other job in this workflow now.
+  # Flatpak build: builds the .flatpak bundle. Hosted runner, no self-hosted
+  # anything, like every other job in this workflow.
+  #
+  # Status: runs on every same-repo PR, push to main, version tag, and manual
+  # dispatch — anywhere rom-gate found the ROM secrets configured. This used
+  # to be tag-push-only (job name `flatpak-release`, and it created/uploaded
+  # the GitHub release itself); it's now continuous, so a PR proves the
+  # bundle builds and leaks nothing pre-merge, and it only produces an
+  # artifact — publishing to a release for tag pushes moved to the `publish`
+  # job below, which is now the only place in this workflow with write
+  # permissions.
   #
   # What this job installs beyond the usual and why:
-  #   - age: to decrypt the fetched ROM (see the top-of-file comment).
-  #   - flatpak + flatpak-builder: not preinstalled on ubuntu-latest.
+  #   - flatpak + flatpak-builder: not preinstalled on ubuntu-latest. (age is
+  #     no longer installed here directly — the fetch-rom composite action
+  #     handles it.)
   #   - a sysctl tweak: ubuntu-24.04 runner images restrict unprivileged user
   #     namespaces via AppArmor by default, which breaks bubblewrap (bwrap),
   #     which flatpak-builder requires to sandbox its build. Without this the
@@ -378,26 +457,24 @@ jobs:
   # exposure than policy allows.
   #
   # The bundle contains recompiled code and zero game assets, same policy as
-  # the release binary above; the final assertion step proves it the same
-  # way, just against the flatpak-builder build tree's binary path instead of
-  # build-container/'s.
+  # the linux-build tarball above; the final assertion step proves it the
+  # same way (the shared scripts/assert_no_rom_assets.py), just against the
+  # flatpak-builder build tree's binary path instead of build-container/'s.
   # ---------------------------------------------------------------------------
-  flatpak-release:
-    name: "flatpak release (version tags)"
+  flatpak-build:
+    name: "flatpak build (full ROM, bundle artifact)"
     needs: rom-gate
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.rom-gate.outputs.have == 'true'
+    if: needs.rom-gate.outputs.have == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    permissions:
-      contents: write # creates/uploads the GitHub release for the tag
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install age, flatpak and flatpak-builder
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq age flatpak flatpak-builder
+      - name: Install flatpak and flatpak-builder
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq flatpak flatpak-builder
 
       # ubuntu-24.04 runner images restrict unprivileged user namespaces via
       # AppArmor, which breaks bubblewrap, which flatpak-builder requires.
@@ -418,16 +495,13 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           ./scripts/build_flatpak.sh --runtime-install
 
-      # $RUNNER_TEMP is outside the workspace and outside every
-      # actions/cache path, and is wiped when the job ends; the ROM must
-      # never enter a cache or an artifact.
-      - name: Fetch + decrypt the ROM
-        env:
-          KE_ROM_URL: ${{ secrets.KE_ROM_URL }}
-          KE_ROM_AGE_KEY: ${{ secrets.KE_ROM_AGE_KEY }}
-          KE_B2_KEY_ID: ${{ secrets.KE_B2_KEY_ID }}
-          KE_B2_APP_KEY: ${{ secrets.KE_B2_APP_KEY }}
-        run: ./scripts/fetch_rom.sh "$RUNNER_TEMP/knife_edge.rom"
+      - name: Fetch + decrypt the ROM (to $RUNNER_TEMP)
+        uses: ./.github/actions/fetch-rom
+        with:
+          rom-url: ${{ secrets.KE_ROM_URL }}
+          rom-age-key: ${{ secrets.KE_ROM_AGE_KEY }}
+          b2-key-id: ${{ secrets.KE_B2_KEY_ID }}
+          b2-app-key: ${{ secrets.KE_B2_APP_KEY }}
 
       # Produce generated/us at the repo root, where the flatpak manifest's
       # dir source expects it: ingest the ROM to build/knife_edge.z64 (the
@@ -469,40 +543,70 @@ jobs:
       - name: Build the Flatpak bundle
         run: ./scripts/build_flatpak.sh --bundle KnifeEdgeRecompiled.flatpak
 
-      # Fails the release if any ROM asset bytes leaked into the bundled
-      # binary. Same sampling approach as the release job's assertion above,
-      # against the flatpak-builder build tree's binary path instead of
-      # build-container/'s.
+      # Fails the build if any ROM asset bytes leaked into the bundled
+      # binary. Same shared script as linux-build's assertion above
+      # (scripts/assert_no_rom_assets.py), against the flatpak-builder build
+      # tree's binary path instead of build-container/'s. The `test -f`
+      # guard stays: flatpak-builder's internal build-directory layout is not
+      # something this project controls, so a stale-layout assumption must
+      # fail loudly with a clear message rather than the assertion silently
+      # no-oping on a missing file.
       - name: Assert the flatpak binary embeds no game assets
         run: |
           if [ ! -f build-flatpak/build/files/bin/knife-edge-recompiled-bin ]; then
             echo "::error::expected binary not found at build-flatpak/build/files/bin/knife-edge-recompiled-bin — flatpak-builder's build tree layout assumption is stale, update this step"
             exit 1
           fi
-          python3 - <<'PY'
-          import random, sys, os
-          rom = open(os.environ["RUNNER_TEMP"] + "/knife_edge.z64", "rb").read()
-          binary = open("build-flatpak/build/files/bin/knife-edge-recompiled-bin", "rb").read()
-          random.seed(1)
-          leaked = tried = 0
-          for _ in range(400):
-              off = random.randrange(0x2E000, len(rom) - 64)   # past the boot code segment
-              chunk = rom[off:off + 64]
-              if len(set(chunk)) < 8:
-                  continue
-              tried += 1
-              if chunk in binary:
-                  leaked += 1
-          print(f"sampled {tried} distinctive ROM data blocks; embedded in binary: {leaked}")
-          sys.exit(1 if leaked else 0)
-          PY
+          python3 scripts/assert_no_rom_assets.py "$RUNNER_TEMP/knife_edge.z64" build-flatpak/build/files/bin/knife-edge-recompiled-bin
 
-      - name: Attach the bundle to the GitHub release for this tag
+      - name: Upload flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KnifeEdgeRecompiled-flatpak
+          path: KnifeEdgeRecompiled.flatpak
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Publish: the ONLY job in this workflow with write permissions. Thin by
+  # design — it builds nothing and runs no checked-out code (no checkout
+  # step); it downloads the two artifacts the build jobs above produced in
+  # THIS run and attaches them to the GitHub release for the tag (creating
+  # the release if the tag was pushed bare). A skipped dependency (ROM
+  # secrets missing) auto-skips this job via the implicit success() on
+  # `needs` — do not add always()/!cancelled() here, ever.
+  #
+  # The two download steps are BY NAME, not a KnifeEdgeRecompiled-* pattern:
+  # a pattern would also match the stub job's KnifeEdgeRecompiled-linux-stub
+  # artifact, and the stub binary must never be attached to a release.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: "publish (version tags)"
+    needs: [linux-build, flatpak-build]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the release + upload assets; replaces the workflow-level read-only grant for this job only
+    steps:
+      - name: Download the linux tarball artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: KnifeEdgeRecompiled-linux-x86_64
+          path: dist
+
+      - name: Download the flatpak artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: KnifeEdgeRecompiled-flatpak
+          path: dist
+
+      - name: Create the release if needed, then upload both assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${GITHUB_REF_NAME}"
-          if ! gh release view "$tag" >/dev/null 2>&1; then
-            gh release create "$tag" --title "$tag" --generate-notes
+          tag="$GITHUB_REF_NAME"
+          if ! gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" -R "$GITHUB_REPOSITORY" --title "$tag" --generate-notes
           fi
-          gh release upload "$tag" KnifeEdgeRecompiled.flatpak --clobber
+          gh release upload "$tag" -R "$GITHUB_REPOSITORY" dist/* --clobber
