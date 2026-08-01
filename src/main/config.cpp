@@ -40,6 +40,22 @@ namespace {
         return value;
     }
 
+    // Integer counterpart of clamp_input_value, same warning shape (whole
+    // numbers read better as "= 7" than "= 7.000000" in the message, and the
+    // TOML values are genuinely integers).
+    int clamp_input_int(const char* key, int64_t value, int lo, int hi) {
+        if (value < lo || value > hi) {
+            int clamped = static_cast<int>(std::clamp<int64_t>(value, lo, hi));
+            char buf[192];
+            std::snprintf(buf, sizeof(buf),
+                "input.%s = %lld is out of range [%d, %d]; clamping to %d",
+                key, static_cast<long long>(value), lo, hi, clamped);
+            warn(buf);
+            return clamped;
+        }
+        return static_cast<int>(value);
+    }
+
     const char* profile_name(Profile p) {
         switch (p) {
             case Profile::Vanilla: return "vanilla";
@@ -149,7 +165,22 @@ namespace {
         "mouse_mode = \"positional\"\n"
         "# Inverts the vertical mouse axis in both modes. Off (default) is\n"
         "# mouse-up = reticle-up; on restores the game's own flight-inverted aim.\n"
-        "mouse_invert_y = false\n";
+        "mouse_invert_y = false\n"
+        "# Multiplayer port assignment. Keyboard and mouse are always N64\n"
+        "# controller 1 (port 0); pads take ports in connection order starting\n"
+        "# at pad_start_port, lowest free port first, and keep them until\n"
+        "# unplugged. 0 (default) puts the first pad on port 0 too, merged with\n"
+        "# keyboard and mouse -- the single-player behavior. Set it to 1 for\n"
+        "# keyboard-on-P1 plus pads on P2..P4. Range [0, 3].\n"
+        "pad_start_port = 0\n"
+        "# How many controller ports to report to the game. The game only\n"
+        "# offers its TEAM/BATTLE multiplayer modes when it sees at least 2, and\n"
+        "# it checks once at startup. 0 (default) = auto: port 0 always, ports\n"
+        "# 1-3 while a pad is assigned to them. 1-4 reports exactly that many\n"
+        "# whatever is plugged in, so you can reach multiplayer with fewer pads\n"
+        "# than players (the empty ports just never press anything). Range\n"
+        "# [0, 4].\n"
+        "ports = 0\n";
 
     // Parses argv for --profile <name> and --config <path> only, matching
     // main.cpp's existing minimal --rom parsing style.
@@ -268,7 +299,7 @@ namespace {
                 std::string_view k = key.str();
                 if (k != "stick_deadzone" && k != "stick_curve" && k != "stick_sensitivity" &&
                     k != "mouse_aim" && k != "mouse_sensitivity" && k != "mouse_mode" &&
-                    k != "mouse_invert_y") {
+                    k != "mouse_invert_y" && k != "pad_start_port" && k != "ports") {
                     unknown.emplace_back(std::string("input.") + std::string(k));
                 }
             }
@@ -310,6 +341,16 @@ namespace {
             }
             if (auto v = (*input_tbl)["mouse_invert_y"].value<bool>()) {
                 cfg.input.mouse_invert_y = *v;
+            }
+            // Multiplayer port assignment (see InputTuning in config.h). Read
+            // as integers -- a float or a string is left at the default, same
+            // as every other type mismatch in this file -- and clamped with
+            // the same single warning the stick knobs get.
+            if (auto v = (*input_tbl)["pad_start_port"].value<int64_t>()) {
+                cfg.input.pad_start_port = clamp_input_int("pad_start_port", *v, 0, 3);
+            }
+            if (auto v = (*input_tbl)["ports"].value<int64_t>()) {
+                cfg.input.ports = clamp_input_int("ports", *v, 0, 4);
             }
         }
 
@@ -472,6 +513,16 @@ std::string kerecomp::describe_config(const Config& cfg) {
     }
     if (cfg.input.mouse_invert_y) {
         parts.emplace_back("mouse_invert_y=on");
+    }
+    if (cfg.input.pad_start_port != default_input.pad_start_port) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "pad_start_port=%d", cfg.input.pad_start_port);
+        parts.emplace_back(buf);
+    }
+    if (cfg.input.ports != default_input.ports) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "ports=%d", cfg.input.ports);
+        parts.emplace_back(buf);
     }
 
     std::string line = std::string("profile: ") + profile_name(cfg.profile);

@@ -222,10 +222,16 @@ CI's smoke test checks — see below).
 ### Controls
 
 Keyboard, and any SDL-recognized game controller — both work at once, and a
-gamepad can be hot-plugged in or out at any time. If more than one pad is
-connected, they all act as controller 1 (buttons OR'd together, sticks
-summed), so whichever pad happens to be in hand works with no pad-selection
-step.
+gamepad can be hot-plugged in or out at any time.
+
+**Keyboard and mouse are always N64 controller 1** (port 0). Pads are handed
+ports in the order they connect, starting at `pad_start_port` (default `0`),
+each new pad taking the lowest free port from there; a pad keeps its port
+until it is unplugged, and unplugging frees that port for the next
+connection. With the default, a single pad also lands on port 0 and merges
+with the keyboard and mouse — the same "whichever controller is in hand
+works" behavior as before — while a second and third pad become controllers 2
+and 3. See "Multiplayer" below for the two-player recipe.
 
 | N64 input | Key |
 |---|---|
@@ -300,6 +306,44 @@ GTK_IM_MODULE=` to take the input method out of the path entirely.
 Analog-stick deadzone, response curve, and sensitivity can be tuned via the
 `[input]` table — see "Configuration" below.
 
+### Multiplayer
+
+Knife Edge has four-player TEAM (co-op) and BATTLE (team versus) modes on the
+GAME MODE SELECT carousel. The game only lets you pick them when it sees at
+least **two controllers**, and it checks once at startup — so plug pads in
+before launching, or tell it how many ports to report with `ports`.
+
+Two `[input]` keys cover this (full table under "Configuration" below):
+
+- `ports` — how many controller ports to report. `0` (default) is automatic:
+  port 0 always, ports 1–3 while a pad is assigned to them. Setting it to
+  `2`–`4` reports that many regardless of what is plugged in; the ports with
+  nothing on them simply never press anything, which is enough to enter a
+  multiplayer game and play it with fewer humans than players.
+- `pad_start_port` — which port pads start claiming from. `0` (default) merges
+  the first pad with the keyboard and mouse on controller 1.
+
+**Two humans, one keyboard and one pad:**
+
+```toml
+[input]
+pad_start_port = 1   # keyboard + mouse stay P1; the pad becomes P2
+ports = 2            # report 2 controllers so TEAM/BATTLE are selectable
+```
+
+`ports` can be left at `0` there if the pad is genuinely plugged in before
+launch — it is only needed when you want the game to believe in a controller
+that is not there.
+
+In TEAM mode each player gets their own coloured reticle, and the colour is
+fixed by port: **P1 green, P2 red, P3 yellow, P4 magenta**. All four gun for
+the same aircraft, so there is one shared health dial.
+
+Multiplayer is newly reachable in this port and is still being worked through
+(`analysis/docs/multiplayer.md` has the details, including two known
+cosmetic HUD faults in BATTLE mode on the `enhanced` profile — `vanilla` is
+correct in every mode measured).
+
 ## Configuration
 
 Settings live in `<app folder>/config.toml` (the `ke_recomp_data/` directory
@@ -365,6 +409,8 @@ stderr.
 | `mouse_sensitivity` | `1.0` | `0.05`–`20.0` | Multiplier on mouse-derived aiming: reticle travel per unit of mouse movement in `positional` mode, stick deflection per unit of mouse *speed* in `velocity` mode. |
 | `mouse_mode` | `"positional"` | `"positional"` \| `"velocity"` | How mouse motion becomes aim — 1:1 absolute reticle following, or mouse-speed-to-stick drift. See Controls above. |
 | `mouse_invert_y` | `false` | boolean | Inverts the vertical mouse axis in both modes. Off is mouse-up = reticle-up; on restores the game's own flight-style inverted aim. |
+| `pad_start_port` | `0` | `0`–`3` | Which N64 port pads start claiming, lowest free port first, in connection order. `0` merges the first pad with keyboard and mouse on controller 1; `1` keeps controller 1 keyboard-only and makes pads P2–P4. See "Multiplayer" above. |
+| `ports` | `0` | `0`–`4` | How many controller ports to report to the game. `0` = automatic (port 0 always, ports 1–3 while a pad is assigned there). `2`–`4` reports that many whatever is plugged in, which is what makes the TEAM/BATTLE modes selectable with fewer pads than players. The `KE_FORCE_PORTS` environment variable overrides this. |
 
 ## Regenerating from a ROM
 

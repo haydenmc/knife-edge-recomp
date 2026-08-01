@@ -166,6 +166,31 @@ struct InputTuning {
     // analysis/docs/mouse-aim.md), so turning this on restores that
     // convention for players who prefer it.
     bool mouse_invert_y = false;
+
+    // ---- multiplayer port assignment (analysis/docs/multiplayer.md) -------
+    //
+    // Keyboard and mouse are always port 0 (N64 controller 1). Pads take
+    // ports in connection order starting here, each new pad taking the lowest
+    // free port >= this value; a disconnect frees its port and the pads that
+    // remain keep theirs.
+    //
+    // 0 (default) puts the first pad on port 0, where it merges with keyboard
+    // and mouse -- exactly the single-player behavior every build so far had.
+    // 1 gives a keyboard-only P1 with pads as P2..P4, which is the
+    // two-humans-one-pad setup. Range [0, 3].
+    int pad_start_port = 0;
+
+    // How many controller ports to report to the game. The game gates its
+    // multiplayer modes on this count and latches it at osContInit, so it is
+    // what decides whether TEAM/BATTLE are selectable at all (>= 2 enables
+    // them -- measured, analysis/docs/multiplayer.md section 2).
+    //
+    // 0 (default) = auto: port 0 always, ports 1..3 reported connected only
+    // while a pad is assigned to them. 1..4 reports exactly that many ports
+    // regardless of what is plugged in, which is how you reach multiplayer
+    // with fewer pads than players (the extra ports read neutral). The
+    // KE_FORCE_PORTS environment variable overrides this. Range [0, 4].
+    int ports = 0;
 };
 
 struct Config {

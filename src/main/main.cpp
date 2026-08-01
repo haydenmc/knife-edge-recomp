@@ -295,21 +295,89 @@ namespace {
         { SDL_CONTROLLER_BUTTON_DPAD_LEFT,      BTN_DL },    { SDL_CONTROLLER_BUTTON_DPAD_RIGHT,     BTN_DR },
     };
 
+    // The N64 has four controller ports; librecomp calls get_input() and
+    // get_connected_device_info() once per port (0..3, zero-indexed -- see
+    // ultramodern/input.hpp).
+    constexpr int max_ports = 4;
+
+    // ---- pads and ports ---------------------------------------------------
+    //
+    // Port assignment policy (multiplayer phase 2, analysis/docs/multiplayer.md):
+    //
+    //   * Keyboard and mouse are PORT 0's, always, and only port 0's. Every
+    //     keyboard/mouse path below is single-instance for that reason.
+    //   * Pads take ports in CONNECTION ORDER, starting at
+    //     config.input.pad_start_port (default 0). Each new pad takes the
+    //     lowest free port >= that. With the default and a single pad this is
+    //     port 0, where it merges with keyboard/mouse -- i.e. exactly the
+    //     behavior every previous build had for one pad. pad_start_port = 1
+    //     gives keyboard-only P1 and pads as P2..P4 (one human on the
+    //     keyboard, one on a pad).
+    //   * Disconnect frees that port; the pads that stay keep their ports
+    //     (assignment is sticky, never renumbered under a player's hands). A
+    //     reconnect then takes the lowest free port again.
+    //
+    // This replaces the old "every pad acts as controller 1" policy (buttons
+    // OR'd, sticks summed across all pads). That merge now happens only within
+    // a single port, which at most one pad can occupy -- so in practice only
+    // port 0 ever merges anything, and only with keyboard/mouse.
+    struct OpenPad {
+        SDL_GameController* gc;
+        // 0..3, or -1 for a pad with no port left to take (more pads than
+        // ports at/above pad_start_port). Such a pad stays open and named in
+        // the log but contributes nothing; it is not retroactively promoted
+        // when a port later frees, because assignment is sticky by design.
+        int port;
+    };
+
     // Open SDL_GameController handles, keyed by joystick instance id. Every
     // SDL_GameController* call (open/close/get-state) happens only here in
     // update_gfx(), on the thread that pumps SDL events -- get_input() runs
     // on a separate ~15 Hz controller-read thread and never touches SDL
     // gamepad state directly, only the atomics below, same division of labor
-    // as input_latching_enabled/latched_buttons.
-    std::unordered_map<SDL_JoystickID, SDL_GameController*> open_controllers;
+    // as input_latching_enabled/latched_buttons. This map likewise belongs to
+    // the event thread alone; cross-thread readers use port_has_pad below.
+    std::unordered_map<SDL_JoystickID, OpenPad> open_pads;
 
-    // Combined state of every open pad, published once per update_gfx()
-    // iteration and consumed by get_input(). Multiple pads deliberately all
-    // act as N64 controller 1 -- buttons OR'd, stick contributions summed --
-    // so whichever pad is in hand works, with no pad-selection step.
-    std::atomic<uint16_t> pad_buttons{0};
-    std::atomic<float> pad_stick_x{0.0f};
-    std::atomic<float> pad_stick_y{0.0f};
+    // config.input.pad_start_port. Set once at startup, before any event pump,
+    // same pattern as the stick_* atomics below.
+    std::atomic<int> pad_start_port{0};
+
+    // Whether a pad is currently assigned to each port. Written by the event
+    // thread on connect/disconnect, read by get_connected_device_info() (which
+    // librecomp calls from the game's own threads). Port 0 is not driven by
+    // this -- it is always reported connected, keyboard/mouse being there.
+    std::atomic<bool> port_has_pad[max_ports] = {};
+
+    // Per-port pad state, published once per update_gfx() iteration and
+    // consumed by get_input(). One entry per N64 port rather than the single
+    // process-wide set this used to be; the memory-ordering discipline is
+    // unchanged (relaxed; event thread writes, the controller-read thread
+    // reads -- there is nothing to order these against, each value stands
+    // alone and a one-iteration-stale read is indistinguishable from having
+    // sampled a moment earlier).
+    std::atomic<uint16_t> pad_buttons[max_ports] = {};
+    std::atomic<float> pad_stick_x[max_ports] = {};
+    std::atomic<float> pad_stick_y[max_ports] = {};
+
+    // Lowest port with no pad assigned, at or above pad_start_port; -1 if
+    // there is none. Event thread only (it is the only writer of open_pads).
+    int lowest_free_port() {
+        const int start = std::clamp(pad_start_port.load(std::memory_order_relaxed), 0, max_ports - 1);
+        for (int port = start; port < max_ports; port++) {
+            bool taken = false;
+            for (const auto& [id, pad] : open_pads) {
+                if (pad.port == port) {
+                    taken = true;
+                    break;
+                }
+            }
+            if (!taken) {
+                return port;
+            }
+        }
+        return -1;
+    }
 
     // config.input.stick_* (analysis/docs/enhancements.md is the enhancement
     // doc; these are NOT enhancements -- see InputTuning in config.h). Set
@@ -327,12 +395,15 @@ namespace {
     // for. Vanilla (false) leaves both functions doing exactly what they did
     // before this flag existed: raw per-read sampling.
     std::atomic<bool> input_latching_enabled{false};
-    // Accumulates buttons pressed since the last get_input() call. Only
-    // written/read when input_latching_enabled is set; update_gfx() ORs
+    // Accumulates buttons pressed since the last get_input() call, per port.
+    // Only written/read when input_latching_enabled is set; update_gfx() ORs
     // fresh presses in (it runs once per host render-loop iteration, far
     // more often than the game's ~15 Hz controller read), and get_input()
-    // drains it into the buttons it returns.
-    std::atomic<uint16_t> latched_buttons{0};
+    // drains its own port's entry into the buttons it returns.
+    //
+    // Port 0's entry collects keyboard, mouse and port-0-pad presses (the
+    // sources that merge there); ports 1..3 collect only their own pad's.
+    std::atomic<uint16_t> latched_buttons[max_ports] = {};
 
     // ---- mouse aim -----------------------------------------------------
     // config.input.mouse_aim / mouse_sensitivity (see InputTuning in
@@ -424,7 +495,8 @@ namespace {
                 const SDL_Scancode sc = event.key.keysym.scancode;
                 for (const Binding& b : bindings) {
                     if (b.key == sc) {
-                        latched_buttons.fetch_or(b.mask, std::memory_order_relaxed);
+                        // Keyboard is port 0's, always.
+                        latched_buttons[0].fetch_or(b.mask, std::memory_order_relaxed);
                         break;
                     }
                 }
@@ -436,20 +508,54 @@ namespace {
                 SDL_GameController* gc = SDL_GameControllerOpen(event.cdevice.which);
                 if (gc != nullptr) {
                     const SDL_JoystickID id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gc));
-                    open_controllers[id] = gc;
+                    const int port = lowest_free_port();
+                    open_pads[id] = OpenPad{ gc, port };
+                    if (port >= 0) {
+                        port_has_pad[port].store(true, std::memory_order_relaxed);
+                    }
                     // SDL_GameControllerName can return NULL for a nameless device.
                     const char* name = SDL_GameControllerName(gc);
-                    std::fprintf(stdout, "Gamepad connected: %s\n", name != nullptr ? name : "(unnamed)");
+                    if (port >= 0) {
+                        std::fprintf(stdout, "Gamepad connected: pad '%s' -> port %d\n",
+                                     name != nullptr ? name : "(unnamed)", port);
+                    } else {
+                        std::fprintf(stdout,
+                                     "Gamepad connected: pad '%s' -> no free port (idle)\n",
+                                     name != nullptr ? name : "(unnamed)");
+                    }
                 }
             }
             // `which` is a joystick instance id here (unlike ADDED above).
             else if (event.type == SDL_CONTROLLERDEVICEREMOVED) {
-                auto it = open_controllers.find(event.cdevice.which);
-                if (it != open_controllers.end()) {
-                    const char* name = SDL_GameControllerName(it->second);
+                auto it = open_pads.find(event.cdevice.which);
+                if (it != open_pads.end()) {
+                    const int port = it->second.port;
+                    const char* name = SDL_GameControllerName(it->second.gc);
                     std::fprintf(stdout, "Gamepad disconnected: %s\n", name != nullptr ? name : "(unnamed)");
-                    SDL_GameControllerClose(it->second);
-                    open_controllers.erase(it);
+                    SDL_GameControllerClose(it->second.gc);
+                    open_pads.erase(it);
+                    if (port >= 0) {
+                        port_has_pad[port].store(false, std::memory_order_relaxed);
+                        // Nothing may stay held on a port whose pad just left,
+                        // or the game would read the last sampled state
+                        // forever (the sampling pass below no longer visits
+                        // this port).
+                        pad_buttons[port].store(0, std::memory_order_relaxed);
+                        pad_stick_x[port].store(0.0f, std::memory_order_relaxed);
+                        pad_stick_y[port].store(0.0f, std::memory_order_relaxed);
+                        // Undrained latches on ports 1..3 must go too: that
+                        // port stops being reported connected below, so
+                        // get_input() no longer drains it, and the presses
+                        // would otherwise resurface on whichever pad next
+                        // takes the port. Port 0's latch is deliberately left
+                        // alone -- it holds keyboard and mouse presses as
+                        // well, which are not this pad's to discard, and port
+                        // 0 keeps being read either way.
+                        if (port != 0) {
+                            latched_buttons[port].store(0, std::memory_order_relaxed);
+                        }
+                        std::fprintf(stdout, "Gamepad disconnected: port %d freed\n", port);
+                    }
                 }
             }
             // Digital buttons only -- axis-derived inputs (Z via triggers, C
@@ -457,12 +563,19 @@ namespace {
             // comfortably spans the game's ~67 ms read interval, unlike the
             // short taps latching exists to rescue, so there's nothing to
             // catch there and latching would just add stale state to drain.
+            //
+            // Per port: `which` is the joystick instance id, so the press
+            // latches onto the port that pad is assigned to and nowhere else.
+            // A pad with no port (OpenPad::port < 0) latches nothing.
             else if (latching && event.type == SDL_CONTROLLERBUTTONDOWN) {
-                const auto button = static_cast<SDL_GameControllerButton>(event.cbutton.button);
-                for (const PadBinding& b : pad_bindings) {
-                    if (b.button == button) {
-                        latched_buttons.fetch_or(b.mask, std::memory_order_relaxed);
-                        break;
+                auto it = open_pads.find(event.cbutton.which);
+                if (it != open_pads.end() && it->second.port >= 0) {
+                    const auto button = static_cast<SDL_GameControllerButton>(event.cbutton.button);
+                    for (const PadBinding& b : pad_bindings) {
+                        if (b.button == button) {
+                            latched_buttons[it->second.port].fetch_or(b.mask, std::memory_order_relaxed);
+                            break;
+                        }
                     }
                 }
             }
@@ -495,7 +608,8 @@ namespace {
                         // still register. The capture-consuming first click
                         // never reaches here, so it's never latched either.
                         if (latching) {
-                            latched_buttons.fetch_or(mask, std::memory_order_relaxed);
+                            // Mouse is port 0's, always, like the keyboard.
+                            latched_buttons[0].fetch_or(mask, std::memory_order_relaxed);
                         }
                     }
                 }
@@ -544,21 +658,30 @@ namespace {
             }
         }
 
-        // Sample every open pad and publish the combined state (see
-        // open_controllers/pad_buttons above for the threading rationale and
-        // the multi-pad-as-controller-1 rationale).
-        uint16_t buttons = 0;
-        float stick_x = 0.0f;
-        float stick_y = 0.0f;
+        // Sample every open pad and publish the per-port state (see
+        // open_pads/pad_buttons above for the threading rationale and the
+        // port-assignment policy). This is the same accumulate-then-publish
+        // pass it has always been, with the accumulators indexed by port: at
+        // most one pad can occupy a port, so the OR/sum below now only ever
+        // has one contributor per port -- but keeping the shape makes the
+        // port-0 path diff as "the old path plus an index".
+        uint16_t buttons[max_ports] = {};
+        float stick_x[max_ports] = {};
+        float stick_y[max_ports] = {};
         // Loaded once per sampling pass, not per pad -- config.input.stick_*
-        // (see the atomics above).
+        // (see the atomics above). Identical shaping for every port.
         const float deadzone = stick_deadzone.load(std::memory_order_relaxed);
         const float curve = stick_curve.load(std::memory_order_relaxed);
         const float sensitivity = stick_sensitivity.load(std::memory_order_relaxed);
-        for (const auto& [id, gc] : open_controllers) {
+        for (const auto& [id, pad] : open_pads) {
+            if (pad.port < 0) {
+                continue; // no port to drive (see OpenPad::port)
+            }
+            SDL_GameController* const gc = pad.gc;
+            const int port = pad.port;
             for (const PadBinding& b : pad_bindings) {
                 if (SDL_GameControllerGetButton(gc, b.button)) {
-                    buttons |= b.mask;
+                    buttons[port] |= b.mask;
                 }
             }
 
@@ -567,7 +690,7 @@ namespace {
             // need to expose analog trigger depth to the game).
             if (SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 16384 ||
                 SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 16384) {
-                buttons |= BTN_Z;
+                buttons[port] |= BTN_Z;
             }
 
             // Right stick -> C buttons, digital thresholds at 0.4 of full
@@ -575,10 +698,10 @@ namespace {
             constexpr Sint16 c_threshold = 13107; // 0.4 * 32767, rounded down
             const Sint16 rx = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTX);
             const Sint16 ry = SDL_GameControllerGetAxis(gc, SDL_CONTROLLER_AXIS_RIGHTY);
-            if (rx < -c_threshold) buttons |= BTN_CL;
-            if (rx >  c_threshold) buttons |= BTN_CR;
-            if (ry < -c_threshold) buttons |= BTN_CU;
-            if (ry >  c_threshold) buttons |= BTN_CD;
+            if (rx < -c_threshold) buttons[port] |= BTN_CL;
+            if (rx >  c_threshold) buttons[port] |= BTN_CR;
+            if (ry < -c_threshold) buttons[port] |= BTN_CU;
+            if (ry >  c_threshold) buttons[port] |= BTN_CD;
 
             // Left stick -> N64 stick. Radial (not per-axis) deadzone: below
             // `deadzone` magnitude the stick contributes nothing; above it,
@@ -605,13 +728,15 @@ namespace {
                 }
                 shaped = std::min(shaped * sensitivity, 1.0f);
                 const float scale = shaped / mag;
-                stick_x += lx * scale;
-                stick_y += ly * scale;
+                stick_x[port] += lx * scale;
+                stick_y[port] += ly * scale;
             }
         }
-        pad_buttons.store(buttons, std::memory_order_relaxed);
-        pad_stick_x.store(std::clamp(stick_x, -1.0f, 1.0f), std::memory_order_relaxed);
-        pad_stick_y.store(std::clamp(stick_y, -1.0f, 1.0f), std::memory_order_relaxed);
+        for (int port = 0; port < max_ports; port++) {
+            pad_buttons[port].store(buttons[port], std::memory_order_relaxed);
+            pad_stick_x[port].store(std::clamp(stick_x[port], -1.0f, 1.0f), std::memory_order_relaxed);
+            pad_stick_y[port].store(std::clamp(stick_y[port], -1.0f, 1.0f), std::memory_order_relaxed);
+        }
     }
 
     // ---- positional mouse aim ---------------------------------------------
@@ -690,15 +815,79 @@ namespace {
         return s > 0 ? mag : -mag;
     }
 
-    bool get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
-        if (controller_num != 0) {
+    // ---- reported port count ----------------------------------------------
+    //
+    // What the game is told is plugged in. It gates the multiplayer modes on
+    // this (>= 2 controllers enables TEAM and BATTLE -- measured, see
+    // analysis/docs/multiplayer.md section 2) and latches the answer at
+    // osContInit time, so the policy is resolved once in main() BEFORE
+    // recomp::start() rather than lazily on first call.
+    //
+    // Highest precedence first:
+    //   1. KE_FORCE_PORTS=<n> env  -- diagnostic, unchanged from phase 1.
+    //   2. config.input.ports 1..4 -- report exactly that many ports.
+    //   3. auto (the default): port 0 always, ports 1..3 iff a pad is
+    //      currently assigned there.
+    //
+    // 0 in `configured_ports` means "auto", i.e. not set -- same convention
+    // as tuning.rcp_frame_ms.
+    std::atomic<int> forced_ports{0};     // 0 = KE_FORCE_PORTS unset
+    std::atomic<int> configured_ports{0}; // 0 = input.ports unset (auto)
+
+    bool port_reported_connected(int controller_num) {
+        if (controller_num < 0 || controller_num >= max_ports) {
             return false;
         }
+        const int forced = forced_ports.load(std::memory_order_relaxed);
+        if (forced > 0) {
+            return controller_num < forced;
+        }
+        const int configured = configured_ports.load(std::memory_order_relaxed);
+        if (configured > 0) {
+            return controller_num < configured;
+        }
+        // Auto: port 0 is the keyboard/mouse port and is always there.
+        return controller_num == 0 || port_has_pad[controller_num].load(std::memory_order_relaxed);
+    }
+
+    bool get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
+        if (!port_reported_connected(controller_num)) {
+            // A port the game is told is empty must read as no-response, not
+            // as a neutral controller -- that is what `false` means here (see
+            // ultramodern/input.hpp, and osContGetReadData's err_no). This is
+            // also what every previous build did for controller_num != 0.
+            return false;
+        }
+
+        if (controller_num != 0) {
+            // Ports 1..3: that port's pad, and nothing else. No keyboard, no
+            // mouse -- those are port 0's by policy (see open_pads above).
+            // Stick shaping, trigger->Z and right-stick->C all already
+            // happened identically for every port in update_gfx()'s sampling
+            // pass, so this is just a publish-side read.
+            //
+            // A port reported connected with no pad assigned (KE_FORCE_PORTS,
+            // input.ports, or a pad unplugged mid-game) lands here and reads
+            // connected-but-neutral: every per-port atomic is zeroed on
+            // disconnect and starts at zero.
+            uint16_t held = pad_buttons[controller_num].load(std::memory_order_relaxed);
+            if (input_latching_enabled.load(std::memory_order_relaxed)) {
+                held |= latched_buttons[controller_num].exchange(0, std::memory_order_relaxed);
+            }
+            *buttons = held;
+            *x = pad_stick_x[controller_num].load(std::memory_order_relaxed);
+            *y = pad_stick_y[controller_num].load(std::memory_order_relaxed);
+            return true;
+        }
+
+        // Port 0: keyboard + mouse + whichever pad (if any) was assigned to
+        // port 0. Everything below this line is the pre-multiplayer path,
+        // with the pad atomics indexed [0].
         const Uint8* keys = SDL_GetKeyboardState(nullptr);
         if (keys == nullptr) {
             return false;
         }
-        uint16_t held = sample_buttons(keys) | pad_buttons.load(std::memory_order_relaxed) |
+        uint16_t held = sample_buttons(keys) | pad_buttons[0].load(std::memory_order_relaxed) |
                         mouse_buttons.load(std::memory_order_relaxed);
         if (input_latching_enabled.load(std::memory_order_relaxed)) {
             // Press-latch: OR everything pressed since the last read into what
@@ -706,7 +895,7 @@ namespace {
             // (flag off) never touches latched_buttons at all, so this is a
             // pure no-op there -- the raw sample above is exactly what used to
             // be returned.
-            held |= latched_buttons.exchange(0, std::memory_order_relaxed);
+            held |= latched_buttons[0].exchange(0, std::memory_order_relaxed);
         }
         *buttons = held;
         const float kx = (keys[SDL_SCANCODE_D] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_A] ? 1.0f : 0.0f);
@@ -868,55 +1057,93 @@ namespace {
             mouse_y = ysign * (mouse_dy / dt) * sens / 500.0f;
         }
 
-        *x = std::clamp(kx + pad_stick_x.load(std::memory_order_relaxed) + mouse_x, -1.0f, 1.0f);
-        *y = std::clamp(ky + pad_stick_y.load(std::memory_order_relaxed) + mouse_y, -1.0f, 1.0f);
+        *x = std::clamp(kx + pad_stick_x[0].load(std::memory_order_relaxed) + mouse_x, -1.0f, 1.0f);
+        *y = std::clamp(ky + pad_stick_y[0].load(std::memory_order_relaxed) + mouse_y, -1.0f, 1.0f);
         return true;
     }
 
-    void set_rumble(int, bool) {}
+    // Rumble stays a no-op, per port, DELIBERATELY.
+    //
+    // This callback is only ever reached through osMotorStart/osMotorStop,
+    // which librecomp gates on osMotorInit having succeeded, which it does
+    // only if get_connected_device_info() reports Pak::RumblePak for that port
+    // (deps/N64ModernRuntime/ultramodern/src/input.cpp). We report Pak::None
+    // on every port -- the faithful answer for a player with no Rumble Pak --
+    // so osMotorInit returns PFS_ERR_NOPACK and this function is unreachable
+    // in practice. Making pads actually rumble would mean telling the game a
+    // Rumble Pak is inserted, which changes what the game does (it has its own
+    // Rumble Pak notice screen before every mission), i.e. it would be an
+    // enhancement with a flag, not a quiet side effect of per-port input.
+    // See analysis/docs/enhancements.md.
+    //
+    // The plumbing is nonetheless per-port now: the port index arrives here,
+    // and the pad it names is `open_pads`' entry with that `port` -- one
+    // lookup away, on the event thread's map, if a flagged rumble enhancement
+    // is ever added.
+    void set_rumble(int controller_num, bool rumble) {
+        (void)controller_num;
+        (void)rumble;
+    }
 
-    // KE_FORCE_PORTS=<n> (1..4) -- diagnostic, not an enhancement.
+    // KE_FORCE_PORTS=<n> (1..4) -- diagnostic, not an enhancement. Unchanged
+    // from multiplayer phase 1 except for the log line's parenthetical, which
+    // used to say "only port 0 receives input" and no longer would be true.
     //
     // The game asks the runtime how many controllers are plugged in
-    // (osContInit -> librecomp -> this callback) and gates its multiplayer
-    // offer on the answer. Nothing else in this port can make ports 1..3 exist,
-    // so the multiplayer code paths -- never-run code under this recomp -- are
-    // unreachable for investigation without it. With the variable set, ports
-    // 0..n-1 report the SAME device type port 0 reports today; ports n..3 stay
-    // Device::None exactly as before.
+    // (osContInit -> librecomp -> get_connected_device_info) and gates its
+    // multiplayer offer on the answer. Before per-port input existed this was
+    // the only way to reach the multiplayer code paths at all; it remains the
+    // way to reach them without four pads on the desk. With the variable set,
+    // ports 0..n-1 report Device::Controller; ports n..3 stay Device::None.
     //
-    // This does NOT route any input: get_input() still only ever fills
-    // controller 0 (librecomp calls it per port but our implementation ignores
-    // the port index), so ports 1..n-1 read connected-but-neutral. That is
-    // enough for the game to offer and enter a multiplayer game with idle
-    // players, which is all a feasibility probe needs.
-    //
-    // Unset => byte-identical behavior: parse_forced_ports() returns 1 and the
-    // function reduces to the original `controller_num == 0` test.
+    // Unset => 0 and the whole override drops out of port_reported_connected().
     int parse_forced_ports() {
         const char* env = std::getenv("KE_FORCE_PORTS");
         if (env == nullptr || env[0] == '\0') {
-            return 1;
+            return 0;
         }
         char* end = nullptr;
         long parsed = std::strtol(env, &end, 10);
         if (end == env || parsed < 1 || parsed > 4) {
             std::fprintf(stderr,
                 "[input] KE_FORCE_PORTS=\"%s\" is not a number in 1..4; ignoring\n", env);
-            return 1;
+            return 0;
         }
-        std::fprintf(stderr,
-            "[input] KE_FORCE_PORTS=%ld: reporting ports 0..%ld as connected "
-            "(only port 0 receives input)\n", parsed, parsed - 1);
         return static_cast<int>(parsed);
     }
 
-    ultramodern::input::connected_device_info_t get_connected_device_info(int controller_num) {
-        // Resolved once, on the first call, so the stderr line above is printed
-        // exactly once and the env read stays off the per-poll path.
-        static const int forced_ports = parse_forced_ports();
+    // Resolves the reported-port-count policy and logs it, once, from main()
+    // before recomp::start(). Must happen before osContInit: the game latches
+    // the controller count then, and the multiplayer menu entries are gated on
+    // what it latched (analysis/docs/multiplayer.md sections 2 and 7.1).
+    void init_port_policy(const kerecomp::Config& config) {
+        pad_start_port.store(config.input.pad_start_port, std::memory_order_relaxed);
+        configured_ports.store(config.input.ports, std::memory_order_relaxed);
+        const int forced = parse_forced_ports();
+        forced_ports.store(forced, std::memory_order_relaxed);
 
-        if (controller_num >= 0 && controller_num < forced_ports) {
+        const int start = config.input.pad_start_port;
+        if (forced > 0) {
+            std::fprintf(stderr,
+                "[input] ports: KE_FORCE_PORTS=%d -- reporting ports 0..%d as connected "
+                "(a port with no pad assigned reads neutral); pads from port %d\n",
+                forced, forced - 1, start);
+        } else if (config.input.ports > 0) {
+            std::fprintf(stderr,
+                "[input] ports: input.ports=%d -- reporting ports 0..%d as connected "
+                "(a port with no pad assigned reads neutral); pads from port %d\n",
+                config.input.ports, config.input.ports - 1, start);
+        } else {
+            std::fprintf(stderr,
+                "[input] ports: auto -- port 0 always (keyboard/mouse), ports 1-3 follow "
+                "connected pads; pads from port %d\n", start);
+        }
+    }
+
+    ultramodern::input::connected_device_info_t get_connected_device_info(int controller_num) {
+        if (port_reported_connected(controller_num)) {
+            // Pak::None on every port, deliberately -- see set_rumble() above
+            // for why reporting a Rumble Pak would be an enhancement.
             return { ultramodern::input::Device::Controller, ultramodern::input::Pak::None };
         }
         return { ultramodern::input::Device::None, ultramodern::input::Pak::None };
@@ -1021,6 +1248,12 @@ int main(int argc, char** argv) {
     mouse_mode_positional.store(config.input.mouse_mode == kerecomp::MouseMode::Positional,
                                 std::memory_order_relaxed);
     mouse_invert_y.store(config.input.mouse_invert_y, std::memory_order_relaxed);
+
+    // Multiplayer port policy (config.input.pad_start_port / .ports, plus the
+    // KE_FORCE_PORTS override). Resolved and logged here, before
+    // recomp::start() spins up the game threads -- osContInit latches the
+    // controller count and the multiplayer menu entries are gated on it.
+    init_port_policy(config);
 
     // enhancements.high_resolution / .widescreen / .high_framerate
     // (analysis/docs/enhancements.md). Must be set before recomp::start()

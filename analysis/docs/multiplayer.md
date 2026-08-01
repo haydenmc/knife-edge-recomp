@@ -1,4 +1,9 @@
-# Multiplayer — phase 1: feasibility (2026-08-01)
+# Multiplayer
+
+Phase 1 (feasibility) is the body of this document; **phase 2 (input
+plumbing) is at the end**, after the phase-1 quick-reference.
+
+## Phase 1: feasibility (2026-08-01)
 
 Knife Edge has a **four-player** multiplayer mode set that has never run under
 this recomp: the game refuses to offer it unless the runtime reports more than
@@ -36,7 +41,9 @@ It is a **permanent, env-gated diagnostic** in the same family as `KE_PERF`,
 `KE_AUDIO_DUMP` and `KE_DL_DUMP`, not an enhancement: it changes nothing unless
 the variable is set. Unset, `parse_forced_ports()` returns 1 and the function
 reduces to the original `controller_num == 0` test — the same two return
-values, in the same order, for every input. Confirmed by inspection and by
+values, in the same order, for every input. (Phase 2 changed the unset return
+to `0` and moved the resolution into `main()`; the override's meaning and its
+precedence over everything else are unchanged. See P2.1.) Confirmed by inspection and by
 `scripts/smoke_test.sh` **PASS** with the variable unset (alive, 34215 distinct
 colours, 99.3 % non-zero audio) plus a boot with no `[input]` line in the log.
 
@@ -44,7 +51,9 @@ It deliberately does **not** route input. `get_input()` still early-returns for
 `controller_num != 0`, so ports 1..3 read connected-but-neutral. That is enough
 for the game to offer *and enter* a multiplayer game with idle players, which
 is exactly what a feasibility probe wants: it isolates "does the multiplayer
-code path work" from "is our input plumbing right".
+code path work" from "is our input plumbing right". (Phase 2 routes input to
+ports 1..3 for real; a forced port with no pad on it still reads
+connected-but-neutral, so this paragraph's *use* as a diagnostic is unchanged.)
 
 Setting it does **not** disturb single player: a STORY mission entered with
 `KE_FORCE_PORTS=4` still draws one reticle and one player (§10 O1).
@@ -101,6 +110,15 @@ x      (12 s)  -> mission (intro cutscene, then gameplay ~25 s later)
 
 Total process-start to gameplay is ~95 s, which is what `KE_DL_DUMP_AFTER_S`
 has to clear.
+
+**Correction from phase 2:** the first `x` after `Return` is swallowed in
+practice (it lands during the title→main-menu transition), so the sequences
+that actually work are `Return, x, x, Right, x, x, x, x` for TEAM and
+`Return, x, x, x, x, x, x` for STORY. Getting this wrong is *silent* — the
+`Right` lands on the vertical main menu, does nothing, and the run enters
+STORY while looking exactly like a successful TEAM boot. Always screenshot the
+GAME MODE SELECT frame and confirm the caption before trusting a multiplayer
+measurement.
 
 ---
 
@@ -552,3 +570,283 @@ func_8016E520_1501A0      per-slot aim integrator + clamp; $a0 = slot
                           0, 0, <stack var>, 2, 1, 3
 0x8016EC30 .. 0x8016ECEC  the four clamp blocks (extended_aim's hook sites)
 ```
+
+---
+
+# Phase 2: input plumbing (2026-08-01)
+
+Phase 1 left the game able to *enter* a multiplayer match with phantom
+players: `get_connected_device_info` could be made to report up to four ports,
+but `get_input()` early-returned for every port but 0, so P2–P4 never pressed
+anything. Phase 2 makes ports 1–3 real.
+
+The design was fixed in the brief before any code was written (phase 1 §9
+risk 2: *"device→port assignment has no obviously right answer and it is
+user-visible — decide it in the brief, not in the code"*). What follows is
+that design, what it cost, and how each part was verified.
+
+Everything is in `src/main/main.cpp` (the input region) and
+`src/main/config.{h,cpp}`. **No recompiled game code, no `analysis/` pipeline
+change, and nothing in `deps/`** — phase 1 §7.4 predicted exactly this, and it
+held.
+
+## P2.1 The policy
+
+1. **Keyboard and mouse are port 0's, always, and only port 0's.** Every
+   keyboard binding, the mouse capture/accumulate/button state and the whole
+   positional mouse controller stay single-instance. Mouse aim therefore keeps
+   closing its loop on reticle slot 0 (phase 1 §6.3) with no change at all.
+
+2. **Pads take ports in connection order**, each new pad claiming the lowest
+   free port at or above `input.pad_start_port` (new key, `0..3`, default `0`).
+
+   * `pad_start_port = 0` (default) puts the first pad on port 0, where it
+     merges with keyboard and mouse — **bit-for-bit the behavior every build
+     before this one had for a single pad**. A second pad then becomes P2, a
+     third P3, and so on.
+   * `pad_start_port = 1` gives a keyboard-only P1 and pads as P2–P4: the
+     two-humans-one-pad setup.
+
+   Assignment is **sticky**: a disconnect frees only that pad's port and the
+   pads that remain keep theirs, so ports never renumber under a player's
+   hands. A reconnect takes the lowest free port again.
+
+   This replaces the old "every pad acts as controller 1, buttons OR'd and
+   sticks summed" policy. That merge now happens only *within* a port, and at
+   most one pad can occupy a port — so in practice only port 0 merges
+   anything, and only with keyboard and mouse.
+
+3. **Reported connectivity**, highest precedence first:
+
+   | source | meaning |
+   |---|---|
+   | `KE_FORCE_PORTS=<n>` env | report ports `0..n-1`; unchanged from phase 1 |
+   | `input.ports` = 1..4 (new key) | report exactly that many ports |
+   | auto (`input.ports = 0`, default) | port 0 always; ports 1–3 iff a pad is *currently* assigned there |
+
+   The count is resolved and logged **once, in `main()`, before
+   `recomp::start()`** — not lazily on first call as in phase 1. That is
+   deliberate: the game latches the controller count at `osContInit` and gates
+   the multiplayer menu entries on what it latched (§2, and phase 1 §9 risk 3).
+   The startup line names the resolved policy:
+
+   ```
+   [input] ports: auto -- port 0 always (keyboard/mouse), ports 1-3 follow connected pads; pads from port 0
+   [input] ports: KE_FORCE_PORTS=2 -- reporting ports 0..1 as connected (a port with no pad assigned reads neutral); pads from port 0
+   [input] ports: input.ports=2 -- reporting ports 0..1 as connected (a port with no pad assigned reads neutral); pads from port 1
+   ```
+
+   Hot-plug lines now name the port: `Gamepad connected: pad '<name>' ->
+   port N` and, on removal, `Gamepad disconnected: port N freed`.
+
+4. **`get_input(n)`**:
+   * `n == 0` — the pre-existing full merge: keyboard sample, event-latched
+     keys/mouse/port-0-pad presses (only when the `input_latching`
+     enhancement is on), port-0 pad state, mouse controller output.
+   * `n in 1..3` — that port's pad and nothing else. Identical stick shaping
+     (`input.stick_deadzone`/`stick_curve`/`stick_sensitivity`), identical
+     trigger→Z and right-stick→C mappings, identical per-port press latching
+     under the same enhancement flag. No keyboard, no mouse.
+   * A port reported connected with **no pad** reads connected-but-neutral:
+     `true` with zero buttons and zero stick.
+   * A port reported **disconnected** returns `false`, which librecomp turns
+     into `CONT_NO_RESPONSE_ERROR`. This is exactly what every previous build
+     did for `n != 0`, so the single-player wire format is unchanged.
+
+## P2.2 The guarantee that mattered most: port 0 is untouched
+
+Phase 1 §9 risk 1 was that this refactor touches keyboard, pad, mouse and
+latching at once, all of them owner-verified as they stand. The structure was
+chosen to make that reviewable rather than to be elegant:
+
+* `pad_buttons` / `pad_stick_x` / `pad_stick_y` / `latched_buttons` became
+  `[4]` arrays with the **same relaxed-atomic discipline** (event thread
+  writes, the ~15 Hz controller-read thread reads).
+* The sampling pass in `update_gfx()` kept its accumulate-then-publish shape
+  and simply indexes the accumulators by port, so the port-0 path diffs as
+  "the old path plus an index" rather than as a rewrite. The OR/sum now only
+  ever has one contributor per port, which is a harmless no-op, not a
+  behavior change.
+* Every keyboard and mouse write is hard-coded to `latched_buttons[0]`, with a
+  comment saying why at each site.
+
+Net effect with no pad connected and no new config keys set: the port-0 code
+path is the old code path with `[0]` appended to four loads, and
+`get_connected_device_info` answers exactly as before.
+
+## P2.3 Rumble: plumbing wired, behavior deliberately unchanged
+
+`set_rumble` was an empty `void set_rumble(int, bool)` and **remains a no-op**,
+now with the port index named and documented.
+
+This is not laziness, it is the enhancement policy. `set_rumble` is only ever
+reached through `osMotorStart`/`osMotorStop`, and
+`ultramodern/src/input.cpp`'s `osMotorInit` refuses with `PFS_ERR_NOPACK`
+unless `get_connected_device_info` reports `Pak::RumblePak` for that port. We
+report `Pak::None` on every port — the faithful answer for a player with no
+Rumble Pak — so the callback is unreachable in practice. Making pads actually
+rumble means telling the game a Rumble Pak is *inserted*, which changes what
+the game does (it has its own Rumble Pak notice screen before every mission).
+That is an enhancement with a flag, not a quiet side effect of per-port input,
+and it was not in this brief. The comment at `set_rumble` records where the
+port→pad lookup would go.
+
+## P2.4 Verification (headless, this tree)
+
+Xvfb 1280x720 + lavapipe, dummy audio, scratch `KE_DATA_DIR`, `build-shim`,
+ROM `ke_recomp_data/knifeedge.n64.us.1.0.z64`. Driving scripts are throwaway
+and live outside the repo.
+
+**A note on the key path.** Phase 1 §2.1's recipe is one press short in
+practice: the first `x` after `Return` is swallowed (it lands during the
+title→main-menu transition), so the working sequences here are
+`Return, x, x, x, x, x, x` for STORY and
+`Return, x, x, Right, x, x, x, x` for TEAM. Getting this wrong is silent —
+the `Right` lands on the vertical main menu, does nothing, and the run enters
+**STORY** while looking exactly like a successful TEAM boot. Two runs were
+wasted that way before per-step screenshots caught it. Screenshot the GAME
+MODE SELECT frame and confirm the caption, always.
+
+| gate | result |
+|---|---|
+| Build | clean (`cmake --build build-shim`) |
+| `scripts/smoke_test.sh` | **PASS** — alive, 34215 distinct colours, 99.4 % non-zero audio |
+| Single-player regression, keyboard | **PASS** — reaches stage-1 gameplay, one green reticle, 26.6–27.0 frames/s at 60.00 VI/s |
+| TEAM via `KE_FORCE_PORTS=2` | **PASS** — TEAM caption green, two-player mission, green P1 + red P2 reticles |
+| TEAM via `input.ports = 2` | **PASS** — same, and the same policy line modulo its source |
+| TEAM soak | **PASS** — 274 s run (~3.5 min in-mission), 271 `[perf]` samples, last-50 mean 26.68 frames/s, min 16.0 (cutscene frames), no new errors |
+| Config keys | **PASS** — see below |
+| **Pad→port assignment, end to end** | **PASS** via SDL virtual joysticks — see P2.5 |
+
+**Keyboard drives P1 and only P1.** Measured on a live two-player TEAM
+mission by holding `d` for 2 s and reading the reticle centroids off the
+frames (green = slot 0, red = slot 1, per phase 1 §5.2):
+
+| | green (P1) | red (P2) |
+|---|---|---|
+| before | (571, 352) | (823, 359) |
+| after holding `d` 2 s | **(1144, 366)** | **(825, 359)** |
+
+P1 travels 573 px; P2 does not move. That is the whole phase-2 contract in one
+measurement: the keyboard reaches port 0, port 1 is reported connected and
+reads neutral.
+
+**Config surface.** New keys parse, clamp with the standard single warning,
+appear in the generated template with comments, and are reported by
+`describe_config`:
+
+```
+input.pad_start_port = 7  -> [config] warning: input.pad_start_port = 7 is out of range [0, 3]; clamping to 3
+input.ports = 9           -> [config] warning: input.ports = 9 is out of range [0, 4]; clamping to 4
+input.pad_start_port = -3 -> clamped to 0;  input.ports = -1 -> clamped to 0
+unknown key                -> [config] warning: unknown key(s) in ...: input.bogus_key (ignored)
+non-default values         -> profile: vanilla (stick_deadzone=0.20, pad_start_port=1, ports=2)
+```
+
+The freshly generated `config.toml` template round-trips with **no** warnings.
+
+**Precedence proven, not assumed.** With `input.ports = 2` in the file *and*
+`KE_FORCE_PORTS=4` in the environment, the resolved line is
+`KE_FORCE_PORTS=4 -- reporting ports 0..3`, while `describe_config` still
+honestly reports the file's `ports=2`. A malformed `KE_FORCE_PORTS=zz` warns
+and falls through to `input.ports`, as it should.
+
+## P2.5 The pad path, proven headless with SDL virtual joysticks
+
+No pad hardware reaches this container, but SDL 2.32's
+`SDL_JoystickAttachVirtual` can synthesise one in-process. That is enough to
+exercise the whole pad path end to end without a single real device.
+
+This needs code inside the binary (a virtual joystick is process-local, so no
+external helper can create one), so it was a **throwaway hack in
+`update_gfx()`, since reverted** — no test seam ships. It attached two
+virtual controllers on the first event pump, then drove and detached pad #2 on
+a timer.
+
+**Assignment and the log lines** (auto mode, no `KE_FORCE_PORTS`, no
+`input.ports`):
+
+```
+[input] ports: auto -- port 0 always (keyboard/mouse), ports 1-3 follow connected pads; pads from port 0
+Gamepad connected: pad 'Virtual Controller' -> port 0
+Gamepad connected: pad 'Virtual Controller' -> port 1
+...
+Gamepad disconnected: Virtual Controller
+Gamepad disconnected: port 1 freed
+```
+
+With `input.pad_start_port = 1` the same two pads instead take **ports 1 and
+2**, leaving port 0 to the keyboard — the two-humans-one-pad setup, confirmed
+directly.
+
+**The reported count follows the pads.** With two virtual pads and *no*
+override of any kind, the GAME MODE SELECT carousel showed TEAM's caption in
+**green**. Nothing else could have enabled it: `auto` reports port 1 only when
+a pad is assigned there. This is the phase-1 gate (§2) being satisfied by real
+device presence for the first time.
+
+**Routing is per port.** In a live two-player TEAM mission, virtual pad #2's
+left stick was held full right for 4 s. Reticle centroids across the soak
+captures:
+
+| capture | green (P1) | red (P2) |
+|---|---|---|
+| before the push | (569, 366) | (825, 359) |
+| after (stick released) | (569, 357) | **(1243, 357)** |
+| +15 s, +30 s, +45 s later | (561–576, ~365) | (1258, ~360) |
+
+P2's reticle travels to the rail and stays there (the game does not
+auto-centre — phase 1 §5.1); P1's does not move at all, because the pad on
+port 1 reaches port 1 and nothing else. The red sprite's pixel count halves at
+the rail (252 → 129), which is phase-1 §6.1's **F1** slicing showing up
+exactly as predicted now that P2 can actually reach the rail.
+
+## P2.6 What is still not verified here
+
+1. **Real pad hardware.** Virtual joysticks exercise our assignment,
+   sampling, routing and disconnect logic, but not SDL's real-device paths:
+   actual button/axis mappings, trigger scaling, and physical hotplug.
+   **Owner hands-on remains the gate** for those, and for whether the
+   `pad_start_port` default feels right with one pad plus keyboard.
+2. **Reconnect after a disconnect** taking the lowest free port again. Only
+   the free half (`port 1 freed`) was driven.
+3. **BATTLE mode with real per-port input.** Only TEAM was driven here.
+   Phase 1 §9 risk 6 (a mode that *waits* on all players behaving differently
+   once the players can actually act) is still open, and now testable.
+4. **Hot-plug changing the reported count mid-session** — phase 1 O4. In auto
+   mode a pad connecting after `osContInit` does update `port_has_pad`, and
+   `get_connected_device_info` will report it, but whether the game re-reads
+   the count is unknown. `input.ports` is the reliable answer either way.
+   (Pads present at launch are fine: the virtual-pad run above enabled TEAM
+   from device presence alone.)
+5. **A pad with no port.** With more pads than ports at or above
+   `pad_start_port` (e.g. two pads at `pad_start_port = 3`), the extra pad is
+   opened, logged as `-> no free port (idle)` and contributes nothing. It is
+   **not** promoted when a port later frees, because assignment is sticky.
+   Reported here rather than improvised around: it is a deliberate corner of
+   the frozen policy, not an oversight, but it is the one place where "sticky"
+   and "lowest free port" visibly disagree with what a user might expect.
+6. **Phase 3's cosmetic faults are untouched** (phase 1 §8, F1–F4). P2–P4's
+   reticles are still drawn +42 N64 px right on the `enhanced` profile, which
+   is now much easier to notice because P2–P4 can move them.
+
+## P2.7 Where the frozen design met the code
+
+Three places, all reported rather than redesigned:
+
+1. **`get_input` for a disconnected port.** The brief asked whether the
+   callback contract wants `true` with zeros or `false`. Answer, from
+   `ultramodern/src/input.cpp`'s `osContGetReadData`: `false` sets
+   `err_no = CONT_NO_RESPONSE_ERROR`, which is exactly "nothing in this port".
+   So the split is: reported-disconnected → `false`; reported-connected but
+   empty → `true` with zeros. Implemented that way, and it keeps the
+   single-player wire format byte-identical to before.
+2. **Rumble.** The brief allowed either implementing it or wiring plumbing
+   only, conditional on what `get_connected_device_info` reports for the Pak
+   field. It reports `Pak::None`, so rumble stayed a no-op — see P2.3.
+3. **Clearing state on disconnect.** Not in the brief and it has to be decided
+   somewhere: a pad's port has its buttons and stick zeroed when it leaves, or
+   the game would read that pad's last sampled state forever (the sampling
+   pass no longer visits the port). Undrained *latches* are also cleared, but
+   **only on ports 1–3** — port 0's latch also holds keyboard and mouse
+   presses, which are not the departing pad's to discard.
