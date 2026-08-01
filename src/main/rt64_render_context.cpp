@@ -742,22 +742,49 @@ namespace {
         Right,     // hug the window's right edge, keeping its own inset
         Center,    // stay centred -- i.e. exactly where it is today
         Stretch,   // left edge to the window's left, right edge to its right
+        // The two halves of BATTLE's split damage flash: left edge to the
+        // window's left / right edge to the window's centre, and the mirror.
+        // Only a rect that already spans exactly half the 320 px frame can
+        // use these -- see the flash entries in hud_elements[].
+        StretchLeftHalf,
+        StretchRightHalf,
+    };
+
+    // Which in-mission HUD layout a frame is drawing.
+    //
+    // Single player and TEAM (multiplayer co-op) share one layout exactly --
+    // four players are gunners on one aircraft, so there is one health dial
+    // and one S-BOMB gauge, at byte-identical addresses and coordinates
+    // (analysis/docs/multiplayer.md §4.1). BATTLE is genuinely different: two
+    // teams, each with its own dial and gauge, and team A's copies -- at the
+    // *same* sub-DL addresses as single player's -- sit at different
+    // coordinates (§4.2). So one element can need two different anchors.
+    enum class HudMode : uint8_t {
+        Any,        // this entry applies to every in-mission layout
+        Normal,     // single player and TEAM only
+        Battle,     // BATTLE only
     };
 
     struct HudElement {
         uint32_t sub_dl;       // KSEG0 address of the game's element sub-DL
-        HudAnchor anchor;
+        HudAnchor anchor;         // anchor in single player / TEAM
+        HudAnchor battle_anchor;  // anchor in BATTLE (usually the same)
         int16_t vertical_px;   // applied only when full_height is also on
         // True for a sub-DL address the game also uses outside missions.
         // Such an element is only redirected on frames that also contain an
         // unambiguously in-mission element -- see hud_redirect_frame().
         bool shared_buffer;
-        // True for the one element whose game-side coordinates the
-        // extended_aim enhancement biases (the reticle): its stub carries the
-        // matching negative offset that puts the sprite back where the game
-        // meant it. Zero unless that enhancement is active, so this is the
-        // exact identity in every other configuration.
+        // True for the elements whose game-side coordinates the extended_aim
+        // enhancement biases (the four players' reticles): their stubs carry
+        // the matching negative offset that puts the sprite back where the
+        // game meant it. Zero unless that enhancement is active, so this is
+        // the exact identity in every other configuration.
         bool aim_biased;
+        // True for an element that ONLY exists in BATTLE -- team B's mirror
+        // copies. Seeing one is how the redirect pass knows which layout this
+        // frame is (see hud_redirect_frame()); a shared-buffer element can
+        // never be one, because it also draws in the front end.
+        bool battle_marker;
         const char* name;
     };
 
@@ -774,7 +801,9 @@ namespace {
     // Without full_height the letterbox is still there and the elements are
     // already flush against it -- zero vertical offset.
     constexpr HudElement hud_elements[] = {
-        // The reticle is a world-relative cursor, not a corner widget. It is
+        // ---- the four players' aiming reticles -------------------------
+        //
+        // A reticle is a world-relative cursor, not a corner widget. It is
         // anchored Center with NO vertical offset, ever: it has to stay
         // registered with the 3D projection, and widescreen (RT64
         // AspectRatio::Expand) widens the frustum *around* the original 4:3
@@ -782,41 +811,130 @@ namespace {
         // reticle moved off that registration would point at something other
         // than what the game's hit test is aiming at.
         //
-        // It is also the one element the extended_aim enhancement biases
+        // These are also the elements the extended_aim enhancement biases
         // game-side (analysis/docs/hud-relocation.md, "Reticle range
         // extension"): to be drawable outside the original 4:3 column at all,
         // the blit's x is shifted right by B N64 pixels so the game's own
         // sprite library emits non-negative, unclipped texrect coordinates,
-        // and this stub subtracts the same B again. B is 0 -- the exact
+        // and these stubs subtract the same B again. B is 0 -- the exact
         // identity -- whenever that enhancement is not widening the
         // horizontal rail.
-        { 0x801C8470u, HudAnchor::Center,  0, false, true, "reticle" },
+        //
+        // All FOUR are listed because extended_aim's blit hook biases all
+        // four: ke_reticle_blit_x() compares the blit's sprite object against
+        // every entry of the game's four-element table at 0x8019D864 and
+        // biases (and marks the sprite-library scissor for) any of them
+        // (src/main/extended_aim.cpp). Listing only slot 0 -- which is what
+        // shipped before multiplayer could be entered -- left P2-P4 biased
+        // but never un-biased, i.e. drawn 42 N64 px (129 window px at 720p)
+        // to the right and sliced at the window edge near the rail
+        // (analysis/docs/multiplayer.md §6.1, F1). The addresses are the
+        // measured `0x801C8470 + slot * 0x120` progression (§4.1); they are
+        // pushed only when that player exists, so single player still
+        // matches exactly one of them.
+        { 0x801C8470u, HudAnchor::Center, HudAnchor::Center,  0, false, true, false, "reticle P1" },
+        { 0x801C8590u, HudAnchor::Center, HudAnchor::Center,  0, false, true, false, "reticle P2" },
+        { 0x801C86B0u, HudAnchor::Center, HudAnchor::Center,  0, false, true, false, "reticle P3" },
+        { 0x801C87D0u, HudAnchor::Center, HudAnchor::Center,  0, false, true, false, "reticle P4" },
 
-        // Bottom-left health cluster: x 20..86, y 172..220 (a 20 px left
-        // margin, flush against the letterbox floor).
+        // ---- team A's cluster (= the whole HUD in single player / TEAM) --
+        //
+        // Bottom-left health cluster: x 20..86, y 172..220 in single player
+        // and TEAM (a 20 px left margin, flush against the letterbox floor);
+        // x 16..82 in BATTLE. Left-anchoring preserves whichever margin the
+        // layout actually has, so one anchor covers both.
         // The fill arc is deliberately absent: it is a dynamic fill and is
         // matched by region below. Phase 2 listed two of its addresses here,
         // which is why it stayed behind at any health those two did not cover.
-        { 0x801BCE30u, HudAnchor::Left, 20, false, false, "health backing" },
-        { 0x801BD070u, HudAnchor::Left, 20, false, false, "health jet glyph" },
-        { 0x801BD2B0u, HudAnchor::Left, 20, false, false, "health number panel" },
+        { 0x801BCE30u, HudAnchor::Left, HudAnchor::Left, 20, false, false, false, "health backing" },
+        { 0x801BD070u, HudAnchor::Left, HudAnchor::Left, 20, false, false, false, "health jet glyph" },
+        { 0x801BD2B0u, HudAnchor::Left, HudAnchor::Left, 20, false, false, false, "health number panel" },
         // Drawn from a shared boot-segment buffer in its own 2D group after a
         // render-mode restore, so it needs its own align/reset pair even
         // though it is visually part of the dial. The buffer really is shared
         // (phase 1 open question O3, settled for phase 2 by a from-boot dump)
         // -- hence shared_buffer = true and the in-mission gate in
         // hud_redirect_frame().
-        { 0x800F2B50u, HudAnchor::Left, 20, true, false, "health % digits" },
+        { 0x800F2B50u, HudAnchor::Left, HudAnchor::Left, 20, true, false, false, "health % digits" },
 
-        // Bottom-right S-BOMB cluster: x 215..295, y 188..220 (a 25 px right
-        // margin, same letterbox floor).
-        // Likewise the charge fill (phase 2's "S-BOMB blinker") is a dynamic
-        // fill, matched by region below.
-        { 0x801C25F0u, HudAnchor::Right, 20, false, false, "S-BOMB gauge" },
+        // S-BOMB gauge. THIS is the one element whose anchor depends on the
+        // layout, and getting it wrong is what made BATTLE visibly broken
+        // (analysis/docs/multiplayer.md §6.2, F3):
+        //   single player / TEAM  x 215..295, a 25 px margin from the RIGHT
+        //                         frame edge -> Right.
+        //   BATTLE                x  78..158, i.e. left of centre, part of
+        //                         team A's own cluster -> Left, which puts it
+        //                         78 px in from the window's left edge and
+        //                         keeps its exact relationship to team A's
+        //                         dial (both anchored to the same edge means
+        //                         the whole cluster translates rigidly).
+        // With the single-player Right anchor a BATTLE gauge lands at window
+        // 1280 + (78-320)*3 = 554 -- left of centre, dragged away from its
+        // own team and on top of team B's copy.
+        { 0x801C25F0u, HudAnchor::Right, HudAnchor::Left, 20, false, false, false, "S-BOMB gauge" },
 
-        // A screen effect, not a widget: one 319x239 rect covering the whole
-        // frame. Stretched to the true window edges rather than translated.
-        { 0x801B6CB0u, HudAnchor::Stretch, 0, false, false, "full-screen flash" },
+        // The damage flash: a screen effect, not a widget, so it is stretched
+        // to the true window edges rather than translated.
+        //
+        // Its shape depends on the layout, and this is the second element
+        // (after the S-BOMB gauge) whose anchor therefore has to:
+        //   single player / TEAM  ONE 319x239 rect at (0,0), dsdx 51 -- one
+        //                         copy of the 16x12 flash texture stretched
+        //                         over the whole frame -> Stretch.
+        //   BATTLE                TWO half-frame rects in two adjacent sub-DLs
+        //                         -- 0x801B6CB0 draws x 0..160 and 0x801B6DD0
+        //                         draws x 160..319, each with dsdx 102, i.e.
+        //                         its own complete copy of the same texture.
+        //                         They are drawn independently: a dumped
+        //                         BATTLE frame has either one alone or both
+        //                         (5 frames each in 400). That is a per-team
+        //                         damage indicator, each half over its own
+        //                         team's side of the screen, and vanilla
+        //                         BATTLE shows exactly that -- so each half
+        //                         must stretch to its own half of the *window*
+        //                         (analysis/docs/multiplayer.md P3.6).
+        // Giving BATTLE the single-player Stretch was visibly wrong: the left
+        // half alone was stretched across the full window while the right half,
+        // unlisted, stayed in the 4:3 column, so a flash frame showed three
+        // unequal vertical bands instead of a tint (P3.6, F5).
+        { 0x801B6CB0u, HudAnchor::Stretch, HudAnchor::StretchLeftHalf, 0, false, false, false, "damage flash (full frame; left half in BATTLE)" },
+        // BATTLE-only, and never drawn anywhere else: zero pushes across the
+        // title, intro, single-player-mission and TEAM-mission captures. It is
+        // deliberately NOT a battle_marker even though it qualifies on that
+        // test -- a marker has to be present in every BATTLE frame and this one
+        // appears in about 2% of them. The layout is already decided by team
+        // B's HUD twins, which are in 100%.
+        { 0x801B6DD0u, HudAnchor::StretchRightHalf, HudAnchor::StretchRightHalf, 0, false, false, false, "damage flash (right half, BATTLE)" },
+
+        // ---- team B's mirror cluster (BATTLE only) ----------------------
+        //
+        // In BATTLE the game draws a second dial and a second gauge for the
+        // other team, at `team A + 0x120` for every dial part (and +0xA0 for
+        // the percent digits, +0x2A0 for the gauge) -- the same 0x120 grid
+        // the reticles use. Measured, 80 BATTLE frames, 1280x720:
+        //
+        //   backing  0x801BCF50  64x48 @ (233,172)      jet 0x801BD190 @ (241,180)
+        //   panel    0x801BD3D0  32x24 @ (267,179)      digits 0x800F2BF0 @ (280|288,183)
+        //   gauge    0x801C2890  5 x 16x32 @ (156..236,188)
+        //
+        // The cluster is the mirror of team A's: its dial ends 23 px from the
+        // right frame edge where team A's starts 16 px from the left, so it
+        // Right-anchors, and its gauge Right-anchors with it for the same
+        // rigid-translation reason as above. Before this, none of these six
+        // were in the table at all: team A's half of the HUD flew out to the
+        // window edges and team B's stayed marooned in the 4:3 column
+        // (analysis/docs/multiplayer.md §6.2, F2 -- only 6 redirects fired in
+        // BATTLE against single player's 7).
+        //
+        // battle_marker: these addresses appear in BATTLE and nowhere else,
+        // in 100% of dumped BATTLE frames each, so any one of them identifies
+        // the layout. The percent digits are deliberately NOT a marker -- that
+        // buffer is shared with the front end.
+        { 0x801BCF50u, HudAnchor::Right, HudAnchor::Right, 20, false, false, true, "health backing (team B)" },
+        { 0x801BD190u, HudAnchor::Right, HudAnchor::Right, 20, false, false, true, "health jet glyph (team B)" },
+        { 0x801BD3D0u, HudAnchor::Right, HudAnchor::Right, 20, false, false, true, "health number panel (team B)" },
+        { 0x800F2BF0u, HudAnchor::Right, HudAnchor::Right, 20, true, false, false, "health % digits (team B)" },
+        { 0x801C2890u, HudAnchor::Right, HudAnchor::Right, 20, false, false, true, "S-BOMB gauge (team B)" },
 
         // The in-mission cutscene radio box (dialogue panel 0x801C88F0,
         // glyphs 0x80109550, portrait frame 0x801D0AB0, portraits
@@ -864,37 +982,97 @@ namespace {
     // the reticle -- 32x32, and aimed at the bottom left its rect does fit
     // the health box -- but it is matched by address first, and its address
     // was identical in all 1769 frames of every capture.
+    //
+    // The boxes are layout-specific (HudMode): BATTLE's containers are
+    // somewhere else entirely, and reusing single player's boxes there was
+    // not merely useless but actively wrong -- team B's health fill, which in
+    // BATTLE sits at x 233..281 y 188..220, fell inside the *S-BOMB* box
+    // (x 215..300, y 185..220) and was relocated as if it were the charge
+    // fill (analysis/docs/multiplayer.md §6.2, F4: "[hud] S-BOMB fill matched
+    // by region at sub-DL 0x801BF7D0", which is 0x801BF6B0 + 0x120, i.e. the
+    // team-B twin of a known *health* fill slot). Splitting the table by
+    // layout removes the overlap by construction rather than by tuning.
     struct HudRegion {
         int16_t x0, y0, x1, y1;   // N64 pixels, inclusive
         HudAnchor anchor;
         int16_t vertical_px;      // applied only when full_height is also on
+        HudMode mode;
         const char* name;
     };
 
     constexpr HudRegion hud_regions[] = {
+        // ---- single player / TEAM --------------------------------------
         // Health dial: backing 64x48 at (20,172), number panel out to x 86,
         // the fill arc 48x48 at (20,172) shrinking towards its fixed
         // bottom-right corner (68,220) as health drops.
-        { 20, 172, 90, 220, HudAnchor::Left, 20, "health fill" },
+        { 20, 172, 90, 220, HudAnchor::Left, 20, HudMode::Normal, "health fill" },
         // S-BOMB gauge: five 16x32 segments spanning (215,188)..(295,220),
         // charge fill 16x8 at (215,207).
-        { 215, 185, 300, 220, HudAnchor::Right, 20, "S-BOMB fill" },
+        { 215, 185, 300, 220, HudAnchor::Right, 20, HudMode::Normal, "S-BOMB fill" },
+
+        // ---- BATTLE ----------------------------------------------------
+        // Measured over 80 BATTLE frames: team A's dial backing is 64x48 at
+        // (16,172) with its fill 48x48 at (16,172); team B's are the same
+        // shapes at (233,172). The fill shrinks towards its own dial's fixed
+        // bottom-right corner exactly as in single player, so each box is its
+        // dial's own footprint.
+        //
+        // Health boxes come first, and stop short of the gauges: team A's
+        // fill can never extend past x 64 and team B's never starts before
+        // x 233, so 72 / 231 are comfortable bounds that cannot reach either
+        // gauge's charge fill.
+        { 14, 172,  72, 220, HudAnchor::Left,  20, HudMode::Battle, "health fill (team A)" },
+        { 231, 172, 289, 220, HudAnchor::Right, 20, HudMode::Battle, "health fill (team B)" },
+        // The two gauges: team A (78,188)..(158,220), team B
+        // (156,188)..(236,220) -- side by side across the centre, each with
+        // its own S-BOMB label, abutting only because 320 px is cramped. Their
+        // charge fills are the same 16x8-at-y-207 shape single player's is,
+        // so an 18 px tall box separates them from any health fill (the
+        // shortest health fill variant ever dumped is 24 px tall) without
+        // depending on the exact width the fill grows to.
+        { 74, 203, 160, 222, HudAnchor::Left,  20, HudMode::Battle, "S-BOMB fill (team A)" },
+        { 154, 203, 240, 222, HudAnchor::Right, 20, HudMode::Battle, "S-BOMB fill (team B)" },
     };
     constexpr size_t HUD_REGION_COUNT = sizeof(hud_regions) / sizeof(hud_regions[0]);
+
+    bool hud_mode_applies(HudMode mode, bool is_battle) {
+        switch (mode) {
+            case HudMode::Normal: return !is_battle;
+            case HudMode::Battle: return is_battle;
+            case HudMode::Any:
+            default:              return true;
+        }
+    }
+
+    // Each element gets TWO stubs, one per layout (HudMode::Normal /
+    // HudMode::Battle), because which anchor an address wants can depend on
+    // the layout -- see the S-BOMB gauge above. Only that one element's pair
+    // actually differs today; the rest are identical twins, which costs
+    // 12 words of scratch each and keeps the addressing arithmetic trivial
+    // and the "which stub" decision a single boolean at the point of use.
+    constexpr size_t HUD_STUB_VARIANTS = 2;
 
     // Total scratch footprint, prologue included -- what the one-time
     // zero-check below has to cover.
     constexpr uint32_t SCRATCH_WORDS =
-        (HUD_STUB_BASE - SCRATCH_BASE) / 4 + (HUD_ELEMENT_COUNT + HUD_DYN_STUBS) * HUD_STUB_WORDS;
+        (HUD_STUB_BASE - SCRATCH_BASE) / 4 +
+        (HUD_ELEMENT_COUNT * HUD_STUB_VARIANTS + HUD_DYN_STUBS) * HUD_STUB_WORDS;
+    // Scratch is the 4 KiB page at physical 0x7FF000, the last page of
+    // librecomp's 8 MiB RDRAM allocation.
+    static_assert(SCRATCH_WORDS * 4 <= 0x1000, "HUD stubs no longer fit the scratch page");
 
     uint32_t hud_stub_address(size_t index) {
         return HUD_STUB_BASE + uint32_t(index) * HUD_STUB_WORDS * 4u;
     }
 
+    uint32_t hud_element_stub_address(size_t element, bool is_battle) {
+        return hud_stub_address(element * HUD_STUB_VARIANTS + (is_battle ? 1u : 0u));
+    }
+
     // The per-frame stubs for region matches live immediately after the
     // fixed per-element ones.
     uint32_t hud_dyn_stub_address(size_t slot) {
-        return hud_stub_address(HUD_ELEMENT_COUNT + slot);
+        return hud_stub_address(HUD_ELEMENT_COUNT * HUD_STUB_VARIANTS + slot);
     }
 
     // Horizontal alignment for one element, in RT64's terms.
@@ -943,6 +1121,18 @@ namespace {
                 // them leave a few window pixels of margin, and a flash with
                 // an unlit hairline down each side would be visible.
                 return { EX_ORIGIN_LEFT, EX_ORIGIN_RIGHT, -2 * 4, (-319 + 2) * 4 };
+            case HudAnchor::StretchLeftHalf:
+                // Half of the above. The rect is 0..160, so its right edge is
+                // measured from the CENTER origin with a -160 px offset --
+                // landing exactly on the window centre -- while its left edge
+                // gets the same 2 px outward overdraw the full-width flash has.
+                return { EX_ORIGIN_LEFT, EX_ORIGIN_CENTER, -2 * 4, -160 * 4 };
+            case HudAnchor::StretchRightHalf:
+                // The mirror: 160..319, left edge on the window centre (same
+                // CENTER origin and offset as the left half's right edge, so
+                // the two abut exactly rather than leaving a seam), right edge
+                // 2 px past the window's right edge like the full-width flash.
+                return { EX_ORIGIN_CENTER, EX_ORIGIN_RIGHT, -160 * 4, (-319 + 2) * 4 };
             case HudAnchor::Center:
             default:
                 return { EX_ORIGIN_CENTER, EX_ORIGIN_CENTER, -160 * 4, -160 * 4 };
@@ -1004,9 +1194,13 @@ namespace {
     // bias is derived from the window aspect. See maybe_redirect_hud().
     void hud_build_stubs(uint8_t* rdram, bool vertical_shift, int16_t aim_bias_px) {
         for (size_t i = 0; i < HUD_ELEMENT_COUNT; i++) {
-            hud_write_stub(rdram, hud_stub_address(i), hud_elements[i].sub_dl,
+            const int16_t bias = hud_elements[i].aim_biased ? aim_bias_px : int16_t(0);
+            hud_write_stub(rdram, hud_element_stub_address(i, false), hud_elements[i].sub_dl,
                            hud_elements[i].anchor, hud_elements[i].vertical_px, vertical_shift,
-                           hud_elements[i].aim_biased ? aim_bias_px : int16_t(0));
+                           bias);
+            hud_write_stub(rdram, hud_element_stub_address(i, true), hud_elements[i].sub_dl,
+                           hud_elements[i].battle_anchor, hud_elements[i].vertical_px,
+                           vertical_shift, bias);
         }
     }
 
@@ -1026,21 +1220,32 @@ namespace {
         uint32_t segments[16] = {};
         uint32_t rewrites = 0;
 
-        // A shared-buffer element can only be judged once the whole frame has
-        // been seen, so its call sites are collected and resolved afterwards.
-        // In practice there is at most one per frame; the small fixed array
-        // keeps this allocation-free on a per-frame path.
+        // EVERY match is collected during the walk and resolved after it,
+        // because two of the things a match needs are properties of the whole
+        // frame:
+        //   * in_mission -- a shared-buffer element (the percent digits) is
+        //     only ours if some unambiguously in-mission element was also
+        //     drawn;
+        //   * is_battle  -- which of an element's two anchors applies, and
+        //     which region boxes are in play. It is answered by the presence
+        //     of team B's mirror sub-DLs, which can appear anywhere in the
+        //     frame relative to the element being decided, so the decision
+        //     cannot be made in walk order.
+        // The fixed arrays keep this allocation-free on a per-frame path.
+        // A BATTLE frame is the busiest: 4 reticles + 5 team-A + 5 team-B
+        // elements + the occasional flash, which is two halves there = 16.
         struct Deferred { uint32_t here; size_t index; };
-        Deferred deferred[8];
+        Deferred deferred[24];
         size_t deferred_count = 0;
         bool in_mission = false;
+        bool is_battle = false;
 
-        // Region (geometric) matches. Deferred for the same reason and behind
-        // the same gate as the shared buffer, plus one of their own: a stub
-        // has to be written for each, and writing it before the frame is
-        // known to be in-mission would be a scratch write on a front-end
-        // frame.
-        struct DeferredRegion { uint32_t here; uint32_t sub_dl_word; size_t region; };
+        // Region (geometric) match candidates: a sub-DL whose texrects all
+        // fit some region box. Which box, and whether that box's layout is
+        // this frame's, is settled afterwards along with everything else --
+        // as is writing the stub, which must not touch scratch RDRAM on a
+        // front-end frame.
+        struct DeferredRegion { uint32_t here; uint32_t sub_dl_word; int32_t x0, y0, x1, y1; };
         DeferredRegion dyn[HUD_DYN_STUBS];
         size_t dyn_count = 0;
 
@@ -1057,16 +1262,24 @@ namespace {
         bool probe_has_rect = false;
         int32_t bx0 = 0, by0 = 0, bx1 = 0, by1 = 0;   // 10.2, like the texrects
 
-        auto finish_probe = [&]() {
-            if (probe_has_rect && dyn_count < HUD_DYN_STUBS) {
-                for (size_t r = 0; r < HUD_REGION_COUNT; r++) {
-                    const HudRegion& region = hud_regions[r];
-                    if (bx0 >= int32_t(region.x0) * 4 && bx1 <= int32_t(region.x1) * 4 &&
-                        by0 >= int32_t(region.y0) * 4 && by1 <= int32_t(region.y1) * 4) {
-                        dyn[dyn_count++] = { probe_here, probe_word, r };
-                        break;
-                    }
+        // Cheap layout-independent pre-filter, so that only HUD-sized,
+        // HUD-placed sub-DLs are carried to the post-walk resolution (a
+        // mission frame contains hundreds of top-level pushes; at most a
+        // handful can fit any box).
+        auto fits_any_region = [&]() {
+            for (size_t r = 0; r < HUD_REGION_COUNT; r++) {
+                const HudRegion& region = hud_regions[r];
+                if (bx0 >= int32_t(region.x0) * 4 && bx1 <= int32_t(region.x1) * 4 &&
+                    by0 >= int32_t(region.y0) * 4 && by1 <= int32_t(region.y1) * 4) {
+                    return true;
                 }
+            }
+            return false;
+        };
+
+        auto finish_probe = [&]() {
+            if (probe_has_rect && dyn_count < HUD_DYN_STUBS && fits_any_region()) {
+                dyn[dyn_count++] = { probe_here, probe_word, bx0, by0, bx1, by1 };
             }
             probing = false;
             probe_has_rect = false;
@@ -1106,21 +1319,15 @@ namespace {
                 if (target != (hud_elements[i].sub_dl & 0x00FFFFF8u)) {
                     continue;
                 }
-                if (hud_elements[i].shared_buffer) {
-                    if (deferred_count < sizeof(deferred) / sizeof(deferred[0])) {
-                        deferred[deferred_count++] = { here, i };
-                    }
-                    return DLStep::SkipCall;
+                if (!hud_elements[i].shared_buffer) {
+                    in_mission = true;
                 }
-                in_mission = true;
-                // w1 of the push, i.e. the second word of the command.
-                // Written in the game's own KSEG0 form: RSP::fromSegmented()
-                // indexes the segment table with bits 27:24, which are 0 for
-                // both 0x80... and a bare physical address, and the game
-                // sets segment 0 to 0 exactly once per frame (phase 1 §5).
-                const uint32_t stub = 0x80000000u | hud_stub_address(i);
-                std::memcpy(rdram + here + 4, &stub, 4);
-                rewrites++;
+                if (hud_elements[i].battle_marker) {
+                    is_battle = true;
+                }
+                if (deferred_count < sizeof(deferred) / sizeof(deferred[0])) {
+                    deferred[deferred_count++] = { here, i };
+                }
                 return DLStep::SkipCall;
             }
             if (depth == 0) {
@@ -1135,6 +1342,11 @@ namespace {
 
         dl_walk(rdram, entry, segments, visit, [](DLNote, int, uint32_t) {});
 
+        // ---- resolution ------------------------------------------------
+        //
+        // `is_battle` is now known (a team-B mirror sub-DL was pushed, or it
+        // was not), so each element takes its layout's anchor.
+        //
         // The health % digits live in a boot-segment buffer the front end
         // also draws from (phase 1 open question O3, measured for phase 2:
         // in the 640x480 boot/logo screen the same sub-DL address draws 8x19
@@ -1146,33 +1358,49 @@ namespace {
         // reticle, the health dial backing, the jet glyph and the number
         // panel are each present in 100% of dumped gameplay frames, and the
         // digits never appear without them.
-        if (in_mission) {
-            for (size_t d = 0; d < deferred_count; d++) {
-                const uint32_t stub = 0x80000000u | hud_stub_address(deferred[d].index);
-                std::memcpy(rdram + deferred[d].here + 4, &stub, 4);
-                rewrites++;
+        for (size_t d = 0; d < deferred_count; d++) {
+            const HudElement& element = hud_elements[deferred[d].index];
+            if (element.shared_buffer && !in_mission) {
+                continue;
             }
-            // The dynamic fills. Same gate, and the stub is built here rather
-            // than once at startup because the sub-DL it calls is whichever
-            // pool slot the game happened to use for this frame's health /
-            // charge value. Rebuilding is 12 stores.
-            for (size_t d = 0; d < dyn_count; d++) {
-                const HudRegion& region = hud_regions[dyn[d].region];
-                const uint32_t stub_addr = hud_dyn_stub_address(d);
-                hud_write_stub(rdram, stub_addr, dyn[d].sub_dl_word,
-                               region.anchor, region.vertical_px, vertical_shift);
-                const uint32_t stub = 0x80000000u | stub_addr;
-                std::memcpy(rdram + dyn[d].here + 4, &stub, 4);
-                rewrites++;
+            const uint32_t stub =
+                0x80000000u | hud_element_stub_address(deferred[d].index, is_battle);
+            std::memcpy(rdram + deferred[d].here + 4, &stub, 4);
+            rewrites++;
+        }
 
-                // One line per region, the first time it ever matches: which
-                // pool slot a fill lands in is the single most useful thing
-                // to have in a bug report about it.
-                static bool region_logged[HUD_REGION_COUNT] = {};
-                if (!region_logged[dyn[d].region]) {
-                    region_logged[dyn[d].region] = true;
-                    std::fprintf(stderr, "[hud] %s matched by region at sub-DL 0x%08X\n",
-                                 region.name, dyn[d].sub_dl_word);
+        // The dynamic fills. Behind the same in-mission gate, and the stub is
+        // built here rather than once at startup because the sub-DL it calls
+        // is whichever pool slot the game happened to use for this frame's
+        // health / charge value. Rebuilding is 12 stores.
+        if (in_mission) {
+            for (size_t d = 0; d < dyn_count; d++) {
+                for (size_t r = 0; r < HUD_REGION_COUNT; r++) {
+                    const HudRegion& region = hud_regions[r];
+                    if (!hud_mode_applies(region.mode, is_battle)) {
+                        continue;
+                    }
+                    if (dyn[d].x0 < int32_t(region.x0) * 4 || dyn[d].x1 > int32_t(region.x1) * 4 ||
+                        dyn[d].y0 < int32_t(region.y0) * 4 || dyn[d].y1 > int32_t(region.y1) * 4) {
+                        continue;
+                    }
+                    const uint32_t stub_addr = hud_dyn_stub_address(d);
+                    hud_write_stub(rdram, stub_addr, dyn[d].sub_dl_word,
+                                   region.anchor, region.vertical_px, vertical_shift);
+                    const uint32_t stub = 0x80000000u | stub_addr;
+                    std::memcpy(rdram + dyn[d].here + 4, &stub, 4);
+                    rewrites++;
+
+                    // One line per region, the first time it ever matches:
+                    // which pool slot a fill lands in is the single most
+                    // useful thing to have in a bug report about it.
+                    static bool region_logged[HUD_REGION_COUNT] = {};
+                    if (!region_logged[r]) {
+                        region_logged[r] = true;
+                        std::fprintf(stderr, "[hud] %s matched by region at sub-DL 0x%08X\n",
+                                     region.name, dyn[d].sub_dl_word);
+                    }
+                    break;
                 }
             }
         }

@@ -229,6 +229,30 @@ when wanted: per-effect gEXMatrixGroup tagging (doc §4); lock-on + trails
 are the first targets, likely treatment is opting them out of
 interpolation.
 
+Multiplayer shipped (2026-08-01), three phases, all headless-verified:
+phase 1 probe (GO: TEAM/BATTLE run the same overlay + retrace callback as
+single player — no wedges, 4.6 min soak; mode menu gates purely on
+reported controller count >= 2 at osContInit; reticle slots at
+0x8011D4BC/CC + slot*4, sub-DLs + slot*0x120; KE_FORCE_PORTS=<n> env
+diagnostic); phase 2 input plumbing (keyboard+mouse = port 0 always;
+pads -> ports by connection order from `input.pad_start_port` [default
+0 = first pad merges into P1 as before; 1 = keyboard-P1 + pads P2..];
+`input.ports` 0=auto/1..4 + KE_FORCE_PORTS override; per-port latching/
+shaping/rumble-plumbing [rumble stays no-op: we report Pak::None];
+proven end-to-end with throwaway SDL virtual pads — pad 2 moved only
+P2's reticle); phase 3 enhancement compat (P2-4 reticle un-bias stubs
+so extended_aim draws right for all four; BATTLE's mirrored team-B HUD
+[+0x120 twins] anchored per-team via battle_marker layout keying;
+region matcher split by layout; BATTLE's damage flash is TWO per-team
+half-frame rects [0x801B6CB0 + its +0x120 twin] — new half-stretch
+anchors, was banding under the full-frame stretch). TEAM health is one
+shared scalar (co-op, one aircraft). See `analysis/docs/multiplayer.md`
+(phases 1-3) + `hud-relocation.md` phase 4. **Owner hands-on pending**:
+real 2-pad play (or keyboard+pad with `pad_start_port = 1`), BATTLE
+feel, per-team edge anchoring vs centered gauges (one-word table change
+if preferred), team-B S-BOMB charge fill (mirrored, never observed
+charging), BATTLE round-end screens (undumped, O2 class).
+
 RCP frame budget: **36.5 ms** (~24.6 measured game fps), tuned by the owner
 against real N64 gameplay footage. This replaced an earlier 59.733 ms figure
 taken from the game's own cutscene limiter — that paced cutscenes correctly but
@@ -395,29 +419,38 @@ default only affects fresh installs.
    signatures — no decompilation exists to tag at the source). All items
    of the agreed enhancement order are now shipped. High-score
    persistence remains deferred (see candidates).
-6. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
+6. Multiplayer: shipped (see Status), owner hands-on pending — the
+   headless rig cannot hold real pads. Checklist: 2-player TEAM with a
+   real pad on port 1 (or keyboard+pad via `[input] pad_start_port=1`),
+   BATTLE both teams' HUD reading naturally at the window edges (say the
+   word if you'd rather the gauge pair stay centered — one-word change),
+   per-team damage flash halves, P2 reticle reaching the widened rails,
+   round-end screens (undumped — anything misplaced there, screenshot
+   it). Rumble remains off (we report no Pak; enabling it is a flagged
+   decision with its own notice-screen behavior).
+7. Mouse aim: owner hands-on pending (positional/velocity A/B, sensitivity,
    `mouse-aim.md` §9.1 inert-aim watch-item). Buttons settled: L/R/M →
    Z/A/B, owner-specified.
-7. Gamepad: hotplug mid-game unverified (everything else owner-verified);
+8. Gamepad: hotplug mid-game unverified (everything else owner-verified);
    `[input]` stick knobs shipped, owner feel-check pending.
-8. Upstream: owner decided (2026-07-29) **not** to pursue a N64ModernRuntime
+9. Upstream: owner decided (2026-07-29) **not** to pursue a N64ModernRuntime
    PR for the orderly-shutdown patch — we carry it in `patches/`
    indefinitely (an upstream *issue* with repro + patch link remains an
    option if the owner ever wants it). Report candidates unchanged: RT64
    letterbox-band color bug (vanilla-only cosmetic;
    `letterbox-full-height.md` §4); RT64-bundled nativefiledialog null-dbus
    abort (container-only).
-9. Containerized build: owner-verified end-to-end on the host (see Status).
+10. Containerized build: owner-verified end-to-end on the host (see Status).
    Remaining: first GitHub-runner execution of the rewritten workflow
    (automatic on next push — check the Actions tab).
-10. Flatpak packaging: owner-verified build+run on the host (see Status).
+11. Flatpak packaging: owner-verified build+run on the host (see Status).
    Remaining: retest the first-launch picker fix (6788841) against a fresh
    data dir (wipe `~/.var/app/io.github.haydenmc.KnifeEdgeRecompiled/data/`
    or unset-`KE_DATA_DIR` equivalent), and data-dir persistence across
    runs. Report candidate: the pre-existing modal-message-box behavior
    under a bare-Xvfb-no-WM harness (`build-notes.md`, "Flatpak packaging"
    — not a real-world defect, left alone).
-11. Encrypted-ROM CI: owner setup done (2026-07-31, see Status).
+12. Encrypted-ROM CI: owner setup done (2026-07-31, see Status).
     Unverified-in-anger after the restructure: first full run on the next
     main push (linux-build with in-CI smoke + tarball, flatpak-build —
     first-ever flatpak-builder on a hosted runner: AppArmor userns sysctl,

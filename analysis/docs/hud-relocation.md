@@ -474,6 +474,7 @@ Consequences for the two ambitions:
 
 in-mission HUD sub-DLs (rebuilt every frame at these fixed addresses):
 0x801C8470  aiming reticle          texture 0x8003E480   32x32
+            (players 2-4 at +0x120 each: 8590 / 86B0 / 87D0 -- phase 4)
 0x801BCE30  health dial backing     texture 0x8003EC80   64x48 @ (20,172)
 0x801BD4F0  health arc              texture 0x8003F600   48x48 @ (20,172)
 0x801BDBB0  health arc (alt)        texture 0x80040380   48x48 @ (20,172)
@@ -515,6 +516,13 @@ repo.
 | ~~radio / dialogue box (panel, glyphs, portrait frame, portrait)~~ | ~~CENTER~~ | ~~−20 px~~ **reverted, see phase 3 §4** |
 | aiming reticle | CENTER, **no offsets ever** | none |
 | full-screen flash | LEFT + RIGHT (stretched edge to edge) | none |
+
+(Phase 4 adds the other three players' reticles on the same CENTER terms, and a
+second, BATTLE-only set of anchors — see "Phase 4: multiplayer layouts" at the
+end of this document. The single-player behaviour in this table is unchanged by
+it, measured. One row is mode-qualified there rather than added to: in BATTLE
+the flash is *two* half-frame rects, one per team, each stretched to its own
+half of the window.)
 
 CENTER is deliberately a no-op placement: the 4:3 column is already centred
 in the window, so a CENTER-anchored element lands exactly where it lands
@@ -924,6 +932,10 @@ signature that is actually structural here is geometric:
 |---|---|---|---|
 | health fill | x 20..90, y 172..220 | LEFT | +20 (full_height only) |
 | S-BOMB fill | x 215..300, y 185..220 | RIGHT | +20 (full_height only) |
+
+(Phase 4 tags each region with the layout it belongs to and adds four more for
+BATTLE, whose containers are elsewhere; these two now apply to single player and
+TEAM only. See "Phase 4: multiplayer layouts".)
 
 Implementation, all inside the existing per-frame redirect pass:
 
@@ -1648,3 +1660,143 @@ last row exactly on the frame edge and cost a pixel to the box's `0..239`.
 * **Resize mid-mission** re-derives the rail and rebuilds the reticle stub on
   the next frame; a single frame could in principle draw with the old bias and
   the new stub (a few px, one frame). Not observed, not worth a lock.
+
+---
+
+# Phase 4: multiplayer layouts (2026-08-01)
+
+Driven by `analysis/docs/multiplayer.md` phase 1, which was the first time
+anyone could enter this game's TEAM and BATTLE modes and found that
+`hud_relocation` and `extended_aim` are both wrong there. **That document's
+"Phase 3: enhancement compatibility" section is the authority** for the
+symptoms, the BATTLE anchor design, the BATTLE detection scheme, and every
+before/after measurement. This section records only what changed *here*, in
+the tables this document owns.
+
+One source file changed: `src/main/rt64_render_context.cpp`.
+
+## 1. Three more reticles in the fingerprint table
+
+```
+0x801C8470  reticle P1   Center, no vertical offset, aim_biased
+0x801C8590  reticle P2   ""      (new)
+0x801C86B0  reticle P3   ""      (new)
+0x801C87D0  reticle P4   ""      (new)
+```
+
+`0x801C8470 + slot*0x120`. These are pushed only for players that exist, so
+single player still matches exactly one of them and its redirect count is
+unchanged at 7.
+
+They have to be here because `extended_aim`'s blit hook biases **all four**
+reticles' x — it compares the blit's sprite object against every entry of the
+game's four-element table at `0x8019D864` — while only P1 had a stub to
+subtract the bias back. The result was P2–P4 drawn 42 N64 px (129 host px at
+720p) right and sliced at the window edge near the rail. Nothing else about
+`extended_aim` needed changing: the clamp is per-slot already, and the
+sprite-library scissor widening is set on the same all-four match.
+
+## 2. The table and the region list are now layout-aware
+
+Single player and TEAM share one layout exactly (multiplayer phase 1 §4.1:
+byte-identical addresses and coordinates). BATTLE does not — two teams, each
+with its own dial and gauge, and team A's copies at the *same* addresses as
+single player's but at different coordinates. So:
+
+* `HudElement` gained `battle_anchor` alongside `anchor`, and each element gets
+  **two pre-built stubs**, one per layout. Only one element's pair differs
+  today — the S-BOMB gauge `0x801C25F0`, `Right` in single player / TEAM and
+  `Left` in BATTLE, where it is part of team A's left-hand cluster.
+* Six new rows for team B's mirror elements (`0x801BCF50`, `0x801BD190`,
+  `0x801BD3D0`, `0x800F2BF0`, `0x801C2890`), all `Right`.
+* `HudRegion` gained a `mode`, and four BATTLE boxes joined the two existing
+  ones (which are now single-player/TEAM only). The old S-BOMB box was
+  *actively* wrong in BATTLE: it is where team B's health dial lives there,
+  and team B's shorter fill variants were being matched and relocated as if
+  they were the charge fill.
+
+### The damage flash: one rect here, two there
+
+The second element with two anchors, and the second entry in this document's
+§4 anchor table to be qualified by mode. In single player **and TEAM** the
+flash is what §4 always said — one 319x239 rect at `0x801B6CB0`, `dsdx=51`,
+`Stretch`ed edge to edge. In BATTLE it is **two half-frame rects in two
+sub-DLs**, `0x801B6CB0` drawing x 0..160 and `0x801B6DD0` (= `+0x120`) drawing
+x 160..319, each at `dsdx=102`, i.e. each a complete copy of the same 16x12
+texture over its own half. They are drawn independently — either alone or both
+in a frame — because each is one team's damage indicator over that team's own
+side of the screen, and vanilla BATTLE renders exactly that.
+
+So two new anchors, built from this document's own origin/offset rule
+(`offset = −(the N64 x of the chosen origin)`, §4), which keeps them the exact
+identity at aspect ratio `Original` like every other anchor:
+
+| anchor | left edge | right edge |
+|---|---|---|
+| `StretchLeftHalf` | `LEFT`, −2 px (the usual overdraw) | `CENTER`, −160 px |
+| `StretchRightHalf` | `CENTER`, −160 px | `RIGHT`, −317 px (the usual overdraw) |
+
+The inner edges share an origin *and* an offset, so the halves abut with
+neither a gap nor a double-tinted overlap column. `0x801B6DD0` takes
+`StretchRightHalf` in both layouts; it is never pushed outside BATTLE (zero
+across the title, intro, single-player and TEAM captures, ~1.4 M dumped lines),
+so its `Normal` stub is dead and is set to the geometrically correct value
+rather than to anything special-cased. It is **not** a `battle_marker` — that
+flag needs an address present in every BATTLE frame, and the flash is in ~2 %.
+
+Symptom before the fix, and the full measurement set:
+`analysis/docs/multiplayer.md` P3.6 (fault F5).
+
+Four of team B's rows are flagged `battle_marker`; matching any of them makes
+the frame BATTLE. That answer is not available in walk order, so **every**
+match is now collected during the walk and applied after it — a generalisation
+of the deferral this pass already did for the shared digit buffer and the region
+fills, not a new mechanism. The region match itself was likewise split: the walk
+now records a *candidate* (the probe's bounding box) if it fits any box at all,
+and which box — and whether that box's layout is this frame's — is decided
+afterwards.
+
+## 3. What this changes in the phase 1–3 record
+
+* **Phase 1 §4's "sub-DL addresses are stable" and phase 3 §2's refinement of it
+  both hold**, and the mirror twins are a third case of the same pool
+  structure: team B's copy of a static element is its team-A address `+0x120`
+  (`+0xA0` for the percent digits, `+0x2A0` for the gauge), and team B's copy of
+  a *dynamic fill* is whichever pool slot team A landed in, `+0x120`. Measured
+  across three runs at different health values, without exception.
+* **Phase 3 §3.1's false-positive analysis extends unchanged.** The one
+  geometric near-miss it names — the reticle, 32x32, which fits the health box
+  when aimed at the bottom-left — is still resolved by address first, and now
+  for all four players rather than one. The BATTLE boxes add a second
+  separator of the same kind: they are 19 rows tall where the shortest health
+  fill ever dumped is 24, so the two families cannot be confused by geometry at
+  any value.
+* **Open question O2 is still open and now has a multiplayer half**: BATTLE's
+  round-end and winner screens have never been dumped.
+
+## 4. Address quick-reference (this section)
+
+```
+reticles (all four, Center-anchored, extended_aim-biased):
+0x801C8470 + slot*0x120     8470 / 8590 / 86B0 / 87D0
+
+BATTLE, team A  (= the single-player addresses, at BATTLE's own coordinates)
+0x801BCE30  health backing        64x48 @ (16,172)
+0x801BD070  health jet glyph      32x32 @ (24,180)
+0x801BD2B0  health number panel   32x24 @ (50,179)
+0x800F2B50  health % digits (2)    8x13 @ (63|71,183)   [shared buffer]
+0x801C25F0  S-BOMB gauge      5 x 16x32 @ (78..158,188) [Left in BATTLE]
+            health fill: pool slot, 48x48 @ (16,172) shrinking to (64,220)
+
+BATTLE, team B  (team A + 0x120, except digits +0xA0 and gauge +0x2A0)
+0x801BCF50 / 0x801BD190 / 0x801BD3D0 / 0x800F2BF0 / 0x801C2890
+            health fill: team A's pool slot + 0x120
+
+battle_marker set (any one identifies a BATTLE frame):
+0x801BCF50  0x801BD190  0x801BD3D0  0x801C2890
+
+damage flash (not a marker -- only ~2% of BATTLE frames draw one):
+0x801B6CB0  full frame  319x239 @ (0,0)   dsdx 51    single player / TEAM
+0x801B6CB0  left half   160x239 @ (0,0)   dsdx 102   BATTLE, team A
+0x801B6DD0  right half  159x239 @ (160,0) dsdx 102   BATTLE, team B  [BATTLE-only]
+```
