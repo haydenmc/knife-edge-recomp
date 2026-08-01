@@ -875,8 +875,48 @@ namespace {
 
     void set_rumble(int, bool) {}
 
+    // KE_FORCE_PORTS=<n> (1..4) -- diagnostic, not an enhancement.
+    //
+    // The game asks the runtime how many controllers are plugged in
+    // (osContInit -> librecomp -> this callback) and gates its multiplayer
+    // offer on the answer. Nothing else in this port can make ports 1..3 exist,
+    // so the multiplayer code paths -- never-run code under this recomp -- are
+    // unreachable for investigation without it. With the variable set, ports
+    // 0..n-1 report the SAME device type port 0 reports today; ports n..3 stay
+    // Device::None exactly as before.
+    //
+    // This does NOT route any input: get_input() still only ever fills
+    // controller 0 (librecomp calls it per port but our implementation ignores
+    // the port index), so ports 1..n-1 read connected-but-neutral. That is
+    // enough for the game to offer and enter a multiplayer game with idle
+    // players, which is all a feasibility probe needs.
+    //
+    // Unset => byte-identical behavior: parse_forced_ports() returns 1 and the
+    // function reduces to the original `controller_num == 0` test.
+    int parse_forced_ports() {
+        const char* env = std::getenv("KE_FORCE_PORTS");
+        if (env == nullptr || env[0] == '\0') {
+            return 1;
+        }
+        char* end = nullptr;
+        long parsed = std::strtol(env, &end, 10);
+        if (end == env || parsed < 1 || parsed > 4) {
+            std::fprintf(stderr,
+                "[input] KE_FORCE_PORTS=\"%s\" is not a number in 1..4; ignoring\n", env);
+            return 1;
+        }
+        std::fprintf(stderr,
+            "[input] KE_FORCE_PORTS=%ld: reporting ports 0..%ld as connected "
+            "(only port 0 receives input)\n", parsed, parsed - 1);
+        return static_cast<int>(parsed);
+    }
+
     ultramodern::input::connected_device_info_t get_connected_device_info(int controller_num) {
-        if (controller_num == 0) {
+        // Resolved once, on the first call, so the stderr line above is printed
+        // exactly once and the env read stays off the per-poll path.
+        static const int forced_ports = parse_forced_ports();
+
+        if (controller_num >= 0 && controller_num < forced_ports) {
             return { ultramodern::input::Device::Controller, ultramodern::input::Pak::None };
         }
         return { ultramodern::input::Device::None, ultramodern::input::Pak::None };
