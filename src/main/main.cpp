@@ -1397,15 +1397,23 @@ int main(int argc, char** argv) {
         // from a sandbox granted zero explicit filesystem permissions -- see
         // that manifest's finish-args comment.
         //
-        // Only attempted when a display is plausibly present. A headless run
-        // (no DISPLAY and no WAYLAND_DISPLAY -- this is CI's contract, and
-        // also plain `--rom`-less local runs over SSH) must keep failing
-        // exactly as before: promptly, with no dialog attempt at all, so it
-        // can never hang a script or a CI job.
+        // Only attempted when a display is plausibly present.
+#if defined(_WIN32)
+        // Windows has no DISPLAY/WAYLAND_DISPLAY equivalent: a desktop session
+        // is the normal case, and NFD's Win32 backend is a plain IFileDialog
+        // with no portal/D-Bus preflight to do. The headless-CI contract the
+        // env vars encode in the #else branch below is Linux-specific.
+        bool have_display = true;
+#else
+        // A headless run (no DISPLAY and no WAYLAND_DISPLAY -- this is CI's
+        // contract, and also plain `--rom`-less local runs over SSH) must
+        // keep failing exactly as before: promptly, with no dialog attempt
+        // at all, so it can never hang a script or a CI job.
         const char* display_env = std::getenv("DISPLAY");
         const char* wayland_env = std::getenv("WAYLAND_DISPLAY");
         bool have_display = (display_env != nullptr && display_env[0] != '\0') ||
                              (wayland_env != nullptr && wayland_env[0] != '\0');
+#endif
 
 #if defined(__linux__)
         // See portal_reachable() above: without this, a live display but no
