@@ -407,7 +407,14 @@ if (WIN32)
     target_include_directories(KnifeEdgeRecompiled PRIVATE "${KE_WIN_SDL2_DIR}/include")
     target_link_directories(KnifeEdgeRecompiled PRIVATE "${KE_WIN_SDL2_DIR}/lib/x64")
     target_link_libraries(KnifeEdgeRecompiled PRIVATE SDL2 SDL2main)
-    target_compile_definitions(KnifeEdgeRecompiled PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    # NOMINMAX only — deliberately NOT WIN32_LEAN_AND_MEAN at target scope:
+    # rt64_render_context.cpp transitively includes rt64's dxcapi.h (via
+    # hle/rt64_application.h), whose interfaces derive from COM base types
+    # (IUnknown, IStream) that a lean windows.h never declares — first
+    # Windows CI run failed on exactly this ("unknown type name 'IStream'",
+    # "expected class name"). Files that want the lean windows.h define it
+    # themselves before their own include (main.cpp does).
+    target_compile_definitions(KnifeEdgeRecompiled PRIVATE NOMINMAX)
 
     # RT64_SDL_WINDOW_VULKAN is deliberately NOT defined here: rt64 only defines
     # it on Linux; on Windows RT64 takes the HWND path (see create_window() in
