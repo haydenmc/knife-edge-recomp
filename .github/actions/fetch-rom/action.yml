@@ -1,11 +1,16 @@
 name: Fetch and decrypt the ROM
 description: >
-  Installs age and runs scripts/fetch_rom.sh to place the decrypted ROM at
-  $RUNNER_TEMP/knife_edge.rom — outside the workspace and every
-  actions/cache and artifact path, wiped when the job ends. Composite
-  actions cannot read the `secrets` context; callers pass the four secret
-  values via `with:` (log masking still applies — it is by value, not by
-  context path). Must run after actions/checkout (local action, and it
+  Installs age and runs scripts/fetch_rom.sh to place the decrypted ROM under
+  $RUNNER_TEMP (knife_edge.rom) — outside the workspace and every
+  actions/cache and artifact path, wiped when the job ends. Works on Linux
+  runners (age from apt) and Windows runners (age from the official release
+  zip, pinned by SHA256; everything else the script needs — bash, curl,
+  md5sum, mktemp — comes from Git Bash, which is preinstalled). Use the
+  `rom-path` output rather than reconstructing the path, since the Windows
+  form differs; on Linux it is exactly $RUNNER_TEMP/knife_edge.rom as before.
+  Composite actions cannot read the `secrets` context; callers pass the four
+  secret values via `with:` (log masking still applies — it is by value, not
+  by context path). Must run after actions/checkout (local action, and it
   needs scripts/ present).
 inputs:
   rom-url:
@@ -22,19 +27,73 @@ inputs:
     description: KE_B2_APP_KEY secret value (optional, together with b2-key-id)
     required: false
     default: ""
+outputs:
+  rom-path:
+    description: >
+      Absolute path to the decrypted ROM, in a form CMake accepts directly:
+      a plain POSIX path on Linux, drive-letter-with-forward-slashes
+      (C:/Users/.../knife_edge.rom) on Windows. Always under $RUNNER_TEMP.
+    value: ${{ steps.fetch.outputs.rom-path }}
 runs:
   using: composite
   steps:
     # Composite-action run steps need an explicit shell:, unlike workflow
-    # steps. age is not preinstalled on the runner image.
-    - name: Install age
+    # steps. age is not preinstalled on either runner image.
+    - name: Install age (Linux)
+      if: runner.os == 'Linux'
       shell: bash
       run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+    # Pinned by SHA256 to the official upstream release asset rather than
+    # installed via choco/scoop: a community-maintained, floating package
+    # would mean unreviewed third-party code executing in the same job that
+    # holds the ROM-decryption secrets. A hash pin makes that supply chain a
+    # fixed artifact — the bytes are the ones reviewed here or the step fails.
+    - name: Install age (Windows)
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        set -euo pipefail
+        dest="$(cygpath -u "$RUNNER_TEMP")/age-install"
+        mkdir -p "$dest"
+        cd "$dest"
+        curl --fail --silent --show-error --location --retry 3 \
+          -o age.zip \
+          https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-windows-amd64.zip
+        echo "46db0db71f146061f7c8fffa912cb806aef1bc8450e27a3abc1744f0591b89fb  age.zip" | sha256sum -c -
+        # Git Bash's tar is bsdtar, which reads zip archives natively; there
+        # is no unzip on PATH. The archive extracts to age/{age,age-keygen}.exe.
+        tar -xf age.zip
+        # $GITHUB_PATH is consumed by the runner process, not by bash, so it
+        # needs the native Windows path form. It only affects LATER steps,
+        # hence the explicit PATH export for the sanity check below.
+        cygpath -w "$dest/age" >> "$GITHUB_PATH"
+        export PATH="$dest/age:$PATH"
+        age --version
     - name: Fetch + decrypt the ROM
+      id: fetch
       shell: bash
       env:
         KE_ROM_URL: ${{ inputs.rom-url }}
         KE_ROM_AGE_KEY: ${{ inputs.rom-age-key }}
         KE_B2_KEY_ID: ${{ inputs.b2-key-id }}
         KE_B2_APP_KEY: ${{ inputs.b2-app-key }}
-      run: ./scripts/fetch_rom.sh "$RUNNER_TEMP/knife_edge.rom"
+      run: |
+        set -euo pipefail
+        if [ "${RUNNER_OS:-}" = "Windows" ]; then
+          temp_u="$(cygpath -u "$RUNNER_TEMP")"
+          # fetch_rom.sh's mktemp scratch — the age identity file and the
+          # downloaded ciphertext — follows TMPDIR. Point it at the
+          # job-scoped temp so neither can land in the machine-wide %TEMP%.
+          # (fetch_rom.sh chmod 600s the plaintext before publishing it;
+          # on NTFS via msys that is advisory, which is acceptable on an
+          # ephemeral single-tenant runner whose whole temp dir is wiped
+          # with the job.)
+          export TMPDIR="$temp_u"
+          out_path="$temp_u/knife_edge.rom"
+          out_reported="$(cygpath -m "$out_path")"
+        else
+          out_path="$RUNNER_TEMP/knife_edge.rom"
+          out_reported="$out_path"
+        fi
+        ./scripts/fetch_rom.sh "$out_path"
+        printf 'rom-path=%s\n' "$out_reported" >> "$GITHUB_OUTPUT"
