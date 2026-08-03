@@ -272,15 +272,30 @@ jobs:
 
       # -Xclang -fexceptions -Xclang -fcxx-exceptions: see job header comment;
       # NOT replaceable with /EHsc.
+      #
+      # On failure the real error lines are re-emitted as ::error::
+      # annotations: annotations are visible in the PR UI and via the
+      # unauthenticated REST API, while raw step logs are not — this keeps
+      # Windows failures diagnosable without downloading logs.
       - name: Configure + build (clang-cl + Ninja, no ROM)
         shell: bash
         run: |
           set -euo pipefail
-          cmake -S . -B build-win -G Ninja \
+          annotate_and_die() {
+            grep -aiE "error|FAILED:|fatal" "$1" | grep -av "::error" | tail -12 | \
+              while IFS= read -r l; do printf '::error::%s\n' "${l:0:800}"; done
+            exit 1
+          }
+          if ! cmake -S . -B build-win -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl \
-            -DCMAKE_CXX_FLAGS='-Xclang -fexceptions -Xclang -fcxx-exceptions'
-          cmake --build build-win 2>&1 | tee build-win.log
+            -DCMAKE_CXX_FLAGS='-Xclang -fexceptions -Xclang -fcxx-exceptions' \
+            2>&1 | tee configure-win.log; then
+            annotate_and_die configure-win.log
+          fi
+          if ! cmake --build build-win 2>&1 | tee build-win.log; then
+            annotate_and_die build-win.log
+          fi
 
       # A silently dropped -march=nehalem would lose SSE4.1 for librecomp's
       # RSP vector backend — turn "argument unused" warnings into failures.
@@ -627,11 +642,21 @@ jobs:
       # cache-restored) above instead of letting CMake build them again
       # in-tree. CXX flags: see windows-stub-build's /EHsc comment — same
       # reasoning, same prohibition on "simplifying" this to /EHsc.
+      # On failure the real error lines are re-emitted as ::error::
+      # annotations (see windows-stub-build's configure step). NOTE: this is
+      # safe here only because grep pulls lines from CMake/compiler output,
+      # which never contains secret values — fetch-rom runs in its own step
+      # and fetch_rom.sh never prints secrets on any path (reviewed).
       - name: Configure + build (clang-cl + Ninja, full ROM)
         shell: bash
         run: |
           set -euo pipefail
-          cmake -S . -B build-win -G Ninja \
+          annotate_and_die() {
+            grep -aiE "error|FAILED:|fatal" "$1" | grep -av "::error" | tail -12 | \
+              while IFS= read -r l; do printf '::error::%s\n' "${l:0:800}"; done
+            exit 1
+          }
+          if ! cmake -S . -B build-win -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl \
             -DCMAKE_CXX_FLAGS='-Xclang -fexceptions -Xclang -fcxx-exceptions' \
@@ -639,8 +664,12 @@ jobs:
             -DN64RECOMP_HOST_TOOL="$PWD/deps/N64Recomp/build-win/N64Recomp.exe" \
             -DRSPRECOMP_HOST_TOOL="$PWD/deps/N64Recomp/build-win/RSPRecomp.exe" \
             -DKE_ROM='${{ steps.rom.outputs.rom-path }}' \
-            2>&1 | tee configure-win.log
-          cmake --build build-win 2>&1 | tee build-win.log
+            2>&1 | tee configure-win.log; then
+            annotate_and_die configure-win.log
+          fi
+          if ! cmake --build build-win 2>&1 | tee build-win.log; then
+            annotate_and_die build-win.log
+          fi
 
       # A silently dropped -march=nehalem would lose SSE4.1 for librecomp's
       # RSP vector backend — turn "argument unused" warnings into failures.
