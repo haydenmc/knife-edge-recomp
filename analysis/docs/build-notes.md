@@ -831,3 +831,319 @@ A wrong `KE_ROM_AGE_KEY` fails at the `age -d` step with the diagnostic
 described above; a ciphertext that decrypts to something other than a known
 Knife Edge (USA) dump fails at the md5 gate instead, with the actual
 (non-secret) md5 printed for comparison.
+
+
+## Windows build
+
+**Status: implemented, first CI run pending.** Both `windows-stub-build` and
+`windows-build` are new in `.github/workflows/build.yml` on
+`feature/windows-build` and have not yet executed on a GitHub runner (the
+branch's push hasn't landed at time of writing). No human has run the
+resulting `.exe` on real Windows hardware either. Nothing below is
+"verified" or "shipped" — see "Status and what's actually unproven" at the
+end of this section for exactly what each unresolved risk is and who can
+resolve it.
+
+### Toolchain: clang-cl, Ninja, no container
+
+Windows builds require `clang-cl`, enforced by a configure-time guard in
+`CMakeLists.txt` (`if (WIN32 AND NOT CMAKE_CXX_COMPILER_ID STREQUAL
+"Clang")` → `FATAL_ERROR`). Reason: this project's recompiled-code compile
+flags (`-march=nehalem`, `-fms-extensions`, assorted `-Wno-*`) are GCC-style
+and used **verbatim** — the same block Zelda64Recomp ships its own Windows
+builds with. `clang-cl` accepts and passes them straight through (it's a
+Clang frontend with an MSVC-compatible CLI); MSVC's `cl.exe` would reject
+every one of them with a wall of unknown-flag errors. Rather than let that
+cascade confuse a first-time Windows builder, the guard fails fast with a
+message naming the exact `-DCMAKE_C_COMPILER=clang-cl
+-DCMAKE_CXX_COMPILER=clang-cl` fix.
+
+Ninja is the generator on Windows too (`choco install ninja`), for the same
+reason it's used everywhere else in this project: one generator, one set of
+build-script assumptions, no MSBuild-specific CI logic to maintain in
+parallel.
+
+`containers/Containerfile` is **Linux-only** (Debian-based, apt-driven) —
+there is no containerized Windows build, and none is planned; Windows CI
+builds natively on `windows-latest` using an inline `vswhere` + `vcvars64`
+step to export `INCLUDE`/`LIB`/`LIBPATH`/`PATH` (deliberately not a
+third-party action — same minimal-trusted-code-surface reasoning as
+elsewhere in this workflow, and the exact step both `windows-stub-build`
+and `windows-build` share verbatim).
+
+**Host tools are the one deliberate exception**: `deps/N64Recomp`
+(N64Recomp/RSPRecomp) builds with the **default MSVC `cl.exe`**, not
+clang-cl — this is upstream N64Recomp's own proven `windows-latest` CI
+configuration, reused rather than "harmonized" to clang-cl. There's no ABI
+coupling to worry about: the host tools are standalone `.exe` processes
+invoked by CMake's `execute_process`/`add_custom_command`, not linked
+against anything the game executable links against. Mixing toolchains here
+is intentional and called out in a workflow comment precisely so a future
+cleanup pass doesn't "fix" it.
+
+### The exception-model decision
+
+Both Windows CI jobs configure with:
+
+```
+-DCMAKE_CXX_FLAGS='-Xclang -fexceptions -Xclang -fcxx-exceptions'
+```
+
+and a workflow comment marked "IMPORTANT, do not simplify" forbids
+replacing this with `/EHsc`. The reason is the orderly-shutdown patch
+(`patches/n64modernruntime-orderly-shutdown.patch`, see CLAUDE.md's
+"Shutdown segfault on quit"): it throws `ultramodern::thread_terminated`
+*through* recompiled `extern "C"` frames as part of tearing down the game's
+host threads before RDRAM is freed. `/EHsc`'s trailing `c` is a promise to
+the compiler that `extern "C"` functions never throw — on that promise,
+MSVC-ABI unwinding is permitted to skip destructors and catch frames when
+crossing such a boundary, which would silence or corrupt the exact throw
+path the shutdown fix depends on. `-fexceptions -Xclang -fcxx-exceptions`
+(the Clang/Itanium-style flags, passed through clang-cl's `-Xclang`
+passthrough) make no such promise and are what keeps that throw path
+working.
+
+**Residual risk, explicitly not closed by CI.** This is the
+highest-consequence untested path in the whole Windows port: MSVC-ABI
+exception unwinding through *recompiled C* frames specifically (the CXX
+flag covers `KnifeEdgeRecompiled`'s own C++ TUs, but `RecompiledFuncs` is
+compiled as C — `CMAKE_C_FLAGS` carries no equivalent override yet). Only a
+real clean-quit test on real Windows hardware exercises this path; neither
+CI job's kill-based launch check comes anywhere near it (see "have_display"
+below — the launch checks kill the process, they never let it reach a quit
+path). The pre-designed fallback, not yet applied because it's unproven
+whether it's even necessary: add the same `-Xclang -fexceptions -Xclang
+-fcxx-exceptions` pair to `CMAKE_C_FLAGS` so the recompiled C translation
+units aren't implicitly marked `nounwind` either. Apply it if the owner's
+clean-quit test crashes or hangs on shutdown; leave it alone if that test
+passes, since an unnecessary flag on every recompiled C function is not
+free.
+
+### The `link_directories` scoping trap
+
+`deps/rt64` vendors SDL2 for Windows under
+`src/contrib/mupen64plus-win32-deps/SDL2-2.26.3` and links it by **bare
+name** (`target_link_libraries(rt64 SDL2 SDL2main)`), which does propagate
+to a consumer target like `KnifeEdgeRecompiled`. But the `link_directories()`
+call that makes that bare name resolvable is **directory-scoped** — it does
+not cross `add_subdirectory()`. This is the exact same trap already known
+from the dxc include path (`deps/rt64/src/contrib/dxc/inc`, re-added
+manually at the top level for the same reason). `CMakeLists.txt`'s
+`if (WIN32)` block re-adds the search path explicitly:
+
+```cmake
+target_link_directories(KnifeEdgeRecompiled PRIVATE "${KE_WIN_SDL2_DIR}/lib/x64")
+```
+
+Skipping this reproduces as an "unresolved external symbol" /
+`SDL2.lib not found`-shaped link failure, not a configure-time error — worth
+knowing if this ever needs re-diagnosing.
+
+### DLL staging
+
+There are no `install()` rules anywhere in this project's `CMakeLists.txt`
+(it's a build-system skeleton by design), so local Windows runs must work
+directly out of the build directory — there's no packaging step that would
+otherwise gather dependencies. `deps/rt64` does have its own
+`configure_file()` calls that copy `dxcompiler.dll`/`dxil.dll`, but they
+target *rt64's own* binary output directory, and this project overrides
+`CMAKE_RUNTIME_OUTPUT_DIRECTORY` to point at the top-level build dir instead
+— so rt64's copies land somewhere `KnifeEdgeRecompiled.exe` never looks.
+The `if (WIN32)` block instead stages the three required DLLs
+(`SDL2.dll`, `dxcompiler.dll`, `dxil.dll`) with an explicit `POST_BUILD`
+`copy_if_different` sourced directly from the vendored paths
+(`deps/rt64/src/contrib/dxc/bin/x64/`, `${KE_WIN_SDL2_DIR}/lib/x64/`) into
+`$<TARGET_FILE_DIR:KnifeEdgeRecompiled>` — independent of rt64's internal
+output layout, so it can't silently break if that layout changes upstream.
+Both CI jobs also verify this by uploading the staged DLLs alongside the
+exe (`windows-stub-build`'s artifact exists specifically to keep this rule
+continuously checked, not just occasionally hand-built).
+
+### The `autocrlf` trap
+
+Git for Windows defaults to `core.autocrlf=true`. `deps/N64ModernRuntime`
+(a submodule) carries no `.gitattributes` of its own, so a default Windows
+checkout would silently convert its files to CRLF line endings — including
+the file `patches/n64modernruntime-orderly-shutdown.patch` is a diff
+against. That patch is LF-only; applying it to a CRLF working tree fails
+`git apply`'s context matching, and `ke_apply_dep_patch()`'s existing
+divergence check (`git apply --check` fails, and it's not already applied
+either) surfaces as a `FATAL_ERROR` at configure time — before any compiler
+even runs.
+
+Both Windows CI jobs run:
+
+```yaml
+- name: Configure git for Windows checkouts
+  run: |
+    git config --global core.autocrlf false
+    git config --global core.longpaths true
+```
+
+**before** `actions/checkout@v4`, so the checkout itself never introduces
+CRLF. `CMakeLists.txt`'s `ke_apply_dep_patch()` error message was also
+extended to name this trap explicitly (`"On Windows this also happens when
+the checkout used core.autocrlf=true..."`), for the benefit of anyone who
+clones without following the CI recipe. `core.longpaths true` is unrelated
+housekeeping — it guards against Windows's legacy `MAX_PATH` limit biting
+on the deep object paths this repo's several vendored submodules produce.
+
+### Renderer default
+
+Nothing to configure here — it falls out of how `RT64_SDL_WINDOW_VULKAN` is
+defined. rt64's own CMake only sets that flag on Linux, and
+`CMakeLists.txt`'s `if (WIN32)` block deliberately does **not** define it
+either. Without it, `create_window()` in `src/main/main.cpp` takes the
+HWND/`GetCurrentThreadId` path instead of requesting an `SDL_WINDOW_VULKAN`
+surface, which is what lets RT64's own device selection default to
+D3D12-first on Windows. No Windows-side equivalent flag exists or is
+needed — this is purely an absence, not a Windows-specific code path to
+maintain.
+
+### `have_display` / launch-check contract
+
+`main.cpp`'s `have_display` is unconditionally `true` on `_WIN32` —
+`DISPLAY`/`WAYLAND_DISPLAY` (the env vars the Linux code checks) simply
+don't exist on Windows, and the NFD Win32 file-dialog backend needs no
+portal preflight the way the Linux/Flatpak path does (see "Flatpak
+packaging" above for that preflight's own history). The consequence: a
+no-ROM Windows run can legitimately reach and block on a native file-picker
+dialog, or later on a modal `MessageBox` from `exit_error()` — either can
+sit forever on a CI runner with no human to dismiss it.
+
+Because of this, **every Windows CI launch check is kill-based, never
+exit-code-based**: both jobs `Start-Process` the exe, wait up to 30 s,
+`Kill()` it if it's still alive (expected — that's the file-dialog-or-no-GPU
+case), and then assert only that stdout contains the literal startup line
+(`"Knife Edge Recompiled"`, from `kerecomp::log_build_info()`, immediately
+`fflush`'d). That's a deliberately narrow assertion — process image loaded,
+`main()` ran, the staged DLLs resolved, the CRT is satisfied — and nothing
+more. The Linux `build` job's exit-code contract (clean exit 1 with no
+ROM/no display) does **not** transfer to Windows; `have_display` being
+unconditionally true is exactly why not.
+
+### `fetch-rom` on Windows
+
+`.github/actions/fetch-rom/action.yml` gained a `runner.os == 'Windows'`
+branch so both ROM-gated Windows jobs can reuse it unchanged from the Linux
+callers' point of view. Git Bash (preinstalled on `windows-latest`) already
+supplies everything `scripts/fetch_rom.sh` itself needs — `curl` 8.x with
+`--aws-sigv4`, `md5sum`, `mktemp`, `sed -E`, same-directory `mv` — so the
+script required **no changes**. What the action adds around it:
+
+- **age**: not preinstalled on Windows, and rather than a floating
+  choco/scoop package (unreviewed third-party code in the same job that
+  holds the ROM-decryption secrets), it downloads the official v1.2.1
+  Windows release zip and checks it against a pinned SHA256
+  (`46db0db71f146061f7c8fffa912cb806aef1bc8450e27a3abc1744f0591b89fb`),
+  extracted with `bsdtar` (Git Bash's `tar` reads zip natively; there is no
+  `unzip` on `PATH`). That pin was cross-checked against Microsoft's
+  independently published winget manifest for the same release URL — exact
+  match — as a second source of truth beyond "trust the download."
+- **The age identity file** (`KE_ROM_AGE_KEY`, written by
+  `fetch_rom.sh` via `printf '%s\n' ... > "$identity_tmp"`) ends up bare
+  LF, not CRLF, on Windows too — `printf` never inserts a `\r`, and msys
+  mounts are binary (no autocrlf-style translation happens on file writes
+  through Git Bash the way it does on `git checkout`), so `age -d -i` reads
+  the identity line cleanly. `chmod 600` on that file is only advisory on
+  NTFS via msys, accepted as fine on an ephemeral single-tenant runner
+  whose entire temp directory is wiped with the job regardless.
+- **`TMPDIR`** is pointed at `$RUNNER_TEMP` (converted once via `cygpath
+  -u`) before invoking `fetch_rom.sh`, so its `mktemp` scratch (the identity
+  file and the downloaded ciphertext) stays job-scoped instead of landing in
+  the machine-wide `%TEMP%` — a tightening Linux's own runner layout doesn't
+  need.
+- **The new `rom-path` output** exists because the decrypted ROM's path
+  needs to reach `-DKE_ROM=...` on the `cmake` command line, and the
+  Windows path shape differs from Linux's plain POSIX path: the action
+  reports `cygpath -m "$out_path"` (drive-letter-with-forward-slashes,
+  e.g. `C:/Users/.../knife_edge.rom`) — a form CMake accepts directly
+  without any path-translation logic on the CMake side. Existing Linux
+  callers are unaffected (still exactly `$RUNNER_TEMP/knife_edge.rom`).
+
+### Zip packaging
+
+`windows-build`'s "Assemble release zip" step mirrors `linux-build`'s
+tarball step in structure but diverges in a few Windows-specific ways:
+
+- **Staged in `$RUNNER_TEMP/stage`** (converted to its msys form via
+  `cygpath -u`), with the decrypted ROM (`$RUNNER_TEMP/knife_edge.rom`)
+  sitting outside that staged subtree — the same "ROM can't be swept into
+  the archive by construction" pattern `linux-build` uses, not just a
+  `.gitignore`-style exclude list that could silently miss a new file.
+- **7z writes a relative name, then Git Bash `mv` relocates it.** 7z is
+  preinstalled on `windows-latest` and reachable on `PATH` under Git Bash,
+  but it's a *native* Windows tool, not an msys one — whether
+  `$GITHUB_WORKSPACE`/`$PWD` in the form Git Bash exports would even be a
+  path 7z understands wasn't something this branch could verify before its
+  first real run (no Windows runner to test against pre-merge). Rather than
+  gamble on that translation, the step `cd`s into the stage directory
+  first (unambiguous to any tool, msys or native, once `cd` has resolved
+  it) and has 7z write a plain relative filename there; the *relocation*
+  into the workspace root is then done with `mv`, which — being an msys
+  tool itself — already handles the translation correctly. This is a
+  deliberate hedge against an unverified path-form assumption, not a
+  simplification for its own sake.
+- **Fixed artifact name, versioned inner filename** — same convention as
+  `linux-build`'s tarball: `actions/upload-artifact` always sees
+  `KnifeEdgeRecompiled-windows-x86_64`, while the zip's own name and the
+  directory inside it carry the tag or short SHA
+  (`KnifeEdgeRecompiled-windows-x86_64-<version>`), so `publish`'s
+  by-exact-name download never has to guess.
+- **VC++ redistributable**: not bundled, documented instead.
+  `packaging/windows/README.txt` names the Microsoft VC++ 2015–2022 x64
+  redistributable and links `https://aka.ms/vs/17/release/vc_redist.x64.exe`,
+  with a note on the missing-DLL symptom (`VCRUNTIME`/`MSVCP` errors) that
+  means it's needed. Owner decision: `/MD` (dynamic CRT) plus documenting
+  the redist, rather than static-CRT linking machinery — most target
+  systems already have the redist from some other application, and static
+  linking the CRT is extra build-system surface for a marginal convenience.
+
+### Status and what's actually unproven
+
+**Implemented, all headless/local-review only — no Windows runner has ever
+executed either job:**
+- `windows-stub-build` (no ROM, fork-PR-safe) and `windows-build` (full
+  ROM, gated identically to `linux-build` via `rom-gate`), both added to
+  `.github/workflows/build.yml`.
+- `CMakeLists.txt`'s `WIN32` branch (SDL2 include/link re-add, DLL staging,
+  NOMINMAX/WIN32_LEAN_AND_MEAN, the clang-cl guard), the `_WIN32`
+  `have_display` branch in `src/main/main.cpp`, and the `%LOCALAPPDATA%`
+  data dir in `src/main/support.cpp`.
+- `.github/actions/fetch-rom`'s Windows leg (pinned age install,
+  `TMPDIR`/`rom-path` handling).
+- `packaging/windows/README.txt`.
+
+**What the first CI runs must prove** (mechanical/toolchain risk, the kind
+of thing that fails loudly if wrong):
+- The GCC-style recompiled-code flags actually pass through clang-cl
+  without being silently dropped (the "assert no compiler flags were
+  silently dropped" step exists for exactly this — a dropped
+  `-march=nehalem` would lose SSE4.1 for librecomp's RSP vector backend
+  with no compile error, just wrong runtime behavior).
+- `cl.exe`-built host tools (on a cache miss) actually produce
+  `N64RecompCLI`/`RSPRecomp` binaries `-DN64RECOMP_HOST_TOOL`/
+  `-DRSPRECOMP_HOST_TOOL` can drive from a clang-cl-configured outer build.
+- `fetch-rom` actually round-trips under Git Bash on a real
+  `windows-latest` image (the pinned age zip extracts, `cygpath`
+  conversions produce paths CMake accepts, `TMPDIR` scoping holds).
+- The kill-based launch checks actually see the startup line (i.e. the
+  staged DLLs really do resolve at process load).
+- The 7z-then-`mv` zip-staging hedge actually behaves the way it's
+  reasoned to (see "Zip packaging" above) — this is the one step in the
+  whole design explicitly flagged as unverifiable before a real run.
+
+**What only the project owner, on real Windows hardware, can prove** (no CI
+job — kill-based launch checks included — comes anywhere near these):
+- Actual D3D12 device creation and rendering on a real GPU (CI's launch
+  checks never get past the file dialog / no-GPU wait).
+- Input (keyboard, gamepad, mouse aim) and audio output.
+- The `enhanced` profile end-to-end.
+- The NFD Win32 file-picker dialog actually opening and completing a pick.
+- `%LOCALAPPDATA%\KnifeEdgeRecompiled` persistence across runs (config +
+  cached ROM).
+- **Clean quit** — the highest-consequence item on this whole list, since
+  it's the one exercising MSVC-ABI unwinding through recompiled `extern
+  "C"`/C frames (see "The exception-model decision" above). If this hangs
+  or crashes, the pre-designed fallback is adding the exception flags to
+  `CMAKE_C_FLAGS` too.
