@@ -17,12 +17,16 @@ namespace kerecomp {
     // directory is not a stable (or necessarily writable) place to keep the
     // ROM cache/config across launches and updates.
     //
-    // TODO: without KE_DATA_DIR, use a proper per-OS user data directory
-    // (XDG_DATA_HOME on Linux, %APPDATA% on Windows, Application Support on
-    // macOS) once save/config handling is implemented more broadly. For now
-    // the default just anchors everything under a folder next to the current
-    // working directory so the skeleton has somewhere writable to point
-    // recomp::register_config_path() at.
+    // Windows: without KE_DATA_DIR, this is %LOCALAPPDATA%\KnifeEdgeRecompiled
+    // (LOCALAPPDATA, not roaming APPDATA -- this directory holds the cached
+    // ROM (~12 MB) plus config, and roaming would sync that across domain
+    // profiles). Falls back to the CWD-relative default below if
+    // LOCALAPPDATA is unset or empty.
+    //
+    // TODO: without KE_DATA_DIR, Linux/macOS still fall back to the
+    // CWD-relative default below rather than a proper XDG_DATA_HOME (Linux)
+    // / Application Support (macOS) directory, once save/config handling is
+    // implemented more broadly.
     std::filesystem::path get_app_folder_path();
 
     // Shows a native OS error dialog. Falls back to stderr if SDL's video

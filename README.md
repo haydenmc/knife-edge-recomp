@@ -145,9 +145,10 @@ cmake -B build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
 cmake --build build
 ```
 
-macOS and Windows should work per the top-level `CMakeLists.txt`'s
-platform branches (this mirrors Zelda64Recomp's supported set) but have not
-been exercised for this project — Linux is the actively-tested platform (see
+Windows has a native CMake branch and CI jobs (see Option E below);
+first CI runs are pending. macOS should work per the top-level
+`CMakeLists.txt`'s platform branches (this mirrors Zelda64Recomp's supported
+set) but remains unexercised — Linux is the actively-tested platform (see
 `analysis/docs/build-notes.md`).
 
 ### Option C: containerized (any machine with docker or podman)
@@ -202,6 +203,46 @@ so it persists across app updates. See `analysis/docs/build-notes.md`,
 `packaging/flatpak/io.github.haydenmc.KnifeEdgeRecompiled.yml`'s
 `finish-args` for the exact sandbox permissions (wayland/X11/pulseaudio
 sockets, DRI, IPC — no filesystem, no network).
+
+### Option E: Windows (clang-cl, native)
+
+Install Visual Studio 2022 Build Tools (or VS with the C++ workload), which
+provides CMake ≥3.20, Ninja, and LLVM/clang-cl — all available via the Visual
+Studio installer. Python 3 with rabbitizer, capstone, and tomlkit is needed
+for ROM-based builds:
+
+```sh
+pip install rabbitizer capstone tomlkit
+```
+
+**CRITICAL:** Before cloning, run these **once** (the pinned-submodule patch
+is LF-only and configure fails if autocrlf mangles it; long paths are needed
+by the deep build tree):
+
+```sh
+git config --global core.autocrlf false
+git config --global core.longpaths true
+```
+
+Then clone with submodules and build the host tools:
+
+```sh
+git clone --recurse-submodules <this repo>
+cmake -S deps/N64Recomp -B deps/N64Recomp/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build deps/N64Recomp/build --target N64RecompCLI RSPRecomp
+```
+
+From a **Visual Studio x64 Developer Prompt** (not a plain cmd.exe; open it
+from the Start Menu or via `vcvarsall.bat x64`), configure and build:
+
+```sh
+cmake -B build -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl "-DCMAKE_CXX_FLAGS=-Xclang -fexceptions -Xclang -fcxx-exceptions" -DKE_ROM="<path to knife_edge.n64>"
+cmake --build build
+```
+
+SDL2 and dxc DLLs are staged next to the exe automatically. App data (config,
+normalized ROM cache) lives in `%LOCALAPPDATA%\KnifeEdgeRecompiled` (override
+with `KE_DATA_DIR` if needed).
 
 ## Running
 

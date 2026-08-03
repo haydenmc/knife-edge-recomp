@@ -253,6 +253,31 @@ feel, per-team edge anchoring vs centered gauges (one-word table change
 if preferred), team-B S-BOMB charge fill (mirrored, never observed
 charging), BATTLE round-end screens (undumped, O2 class).
 
+Windows build implemented (2026-08-03): CMake WIN32 branch + clang-cl guard,
+`have_display` fix so the ROM picker can trigger (previously impossible on
+Windows), %LOCALAPPDATA% data dir with `KE_DATA_DIR` override, and two CI jobs
+— `windows-stub-build` (fork-PR-safe, no ROM) and `windows-build` (ROM-gated,
+produces release zip). `fetch-rom` action extended to Windows (age v1.2.1
+pinned, SHA256 cross-checked; `TMPDIR` pointed at `$RUNNER_TEMP` so mktemp
+scratch — age identity, ciphertext — stays job-scoped, not machine-wide
+%TEMP%).
+`publish` job gains the Windows zip as a third mandatory artifact (owner
+decision: releases remain atomic, all three platforms or none). Phase-0 spike
+proved wheels/clang-cl/host-tools on windows-latest in ~3 minutes. Headless
+verified end-to-end: all changes are Linux no-ops (stub rebuild, behavior
+checks). **Both CI jobs green on PR #1 (2026-08-03)** — stub on run 3, full
+ROM on run 2; two first-run findings fixed and recorded in build-notes
+(target-wide WIN32_LEAN_AND_MEAN vs dxcapi.h COM bases; Git Bash tar is GNU
+tar, not bsdtar — System32 tar.exe used for zip both ways, which also
+preempted 7-Zip missing from PATH). Zip artifact verified: exactly exe +
+3 DLLs + COPYING + README. NOT yet: owner hands-on on actual Windows
+hardware. Highest-consequence untested path: MSVC-ABI exception unwinding
+through recompiled C frames on clean quit. The CI/README configure lines pass
+`-Xclang -fexceptions -Xclang -fcxx-exceptions` in CMAKE_CXX_FLAGS (never
+/EHsc — see build-notes); if quit still terminates, the pre-designed fallback
+is adding the same flags to CMAKE_C_FLAGS so recompiled C TUs aren't marked
+nounwind. Key doc: `analysis/docs/build-notes.md` "Windows build" section.
+
 RCP frame budget: **36.5 ms** (~24.6 measured game fps), tuned by the owner
 against real N64 gameplay footage. This replaced an earlier 59.733 ms figure
 taken from the game's own cutscene limiter — that paced cutscenes correctly but
@@ -460,3 +485,14 @@ default only affects fresh installs.
     default /dev/shm and lavapipe speed on 4-vCPU runners — if it flakes,
     raise smoke `--seconds`, don't loosen the color/audio thresholds;
     only add `--shm-size` plumbing if an actual XShm error appears.
+13. Windows build — implemented and CI-green (see Status; (a) done
+    2026-08-03 — both jobs green on PR #1, findings recorded in
+    build-notes.md "Windows build"), now remaining: (b) owner hands-on checklist: real-GPU D3D12
+    boot to title, audio/input working (keyboard/mouse/pad), enhanced profile
+    rendering, NFD ROM picker accepts a file, %LOCALAPPDATA% dir created and
+    persists, **CLEAN QUIT without crash** (exercises the N64ModernRuntime
+    shutdown patch's exception unwinding through recompiled C frames under MSVC
+    ABI — highest-consequence untested path), binary runs on a machine without
+    VS installed (VC++ redist chain), (c) throwaway v-tag release dry-run: all
+    three artifacts (linux tarball, flatpak, windows zip) attach cleanly, then
+    delete release + tag for real.

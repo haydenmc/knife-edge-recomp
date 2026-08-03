@@ -14,6 +14,17 @@ endif()
 
 project(KnifeEdgeRecompiled LANGUAGES C CXX)
 
+# This project's recompiled-code compile flags (-march=nehalem, -fms-extensions,
+# assorted -Wno-*) are GCC-style and used verbatim; clang-cl accepts and passes
+# them through, but MSVC's cl.exe would reject them with a wall of errors. Fail
+# fast with a clear message instead of a confusing cascade of unknown-flag errors.
+if (WIN32 AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    message(FATAL_ERROR "Windows builds require clang-cl. Configure with "
+        "-DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl "
+        "(MSVC cl.exe is not a supported frontend for this project's "
+        "GCC-style recompiled-code flags).")
+endif()
+
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -44,9 +55,9 @@ endif()
 # CMake project instead of a manual script invocation, replace this
 # IMPORTED-by-path shim with an add_subdirectory/ExternalProject_Add of
 # deps/N64Recomp itself so a clean checkout doesn't need a side-channel build.
-set(N64RECOMP_HOST_TOOL "${CMAKE_SOURCE_DIR}/deps/N64Recomp/build/N64Recomp" CACHE FILEPATH
+set(N64RECOMP_HOST_TOOL "${CMAKE_SOURCE_DIR}/deps/N64Recomp/build/N64Recomp${CMAKE_EXECUTABLE_SUFFIX}" CACHE FILEPATH
     "Path to the prebuilt N64Recomp host tool binary (deps/N64Recomp/build/N64Recomp)")
-set(RSPRECOMP_HOST_TOOL "${CMAKE_SOURCE_DIR}/deps/N64Recomp/build/RSPRecomp" CACHE FILEPATH
+set(RSPRECOMP_HOST_TOOL "${CMAKE_SOURCE_DIR}/deps/N64Recomp/build/RSPRecomp${CMAKE_EXECUTABLE_SUFFIX}" CACHE FILEPATH
     "Path to the prebuilt RSPRecomp host tool binary (deps/N64Recomp/build/RSPRecomp)")
 
 if (EXISTS "${N64RECOMP_HOST_TOOL}")
@@ -89,7 +100,8 @@ if (KE_ROM)
         message(FATAL_ERROR
             "KE_ROM is set but the N64Recomp host tool is missing at ${N64RECOMP_HOST_TOOL}.\n"
             "Build it first: cmake -S deps/N64Recomp -B deps/N64Recomp/build -G Ninja "
-            "-DCMAKE_BUILD_TYPE=Release && cmake --build deps/N64Recomp/build")
+            "-DCMAKE_BUILD_TYPE=Release && cmake --build deps/N64Recomp/build "
+            "--target N64RecompCLI RSPRecomp")
     endif()
 
     # The analysis pipeline needs tomlkit/rabbitizer. -DKE_PYTHON=<interpreter>
@@ -101,6 +113,8 @@ if (KE_ROM)
     if (NOT KE_PYTHON)
         if (EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
             set(KE_PYTHON "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+        elseif (EXISTS "${CMAKE_SOURCE_DIR}/.venv/Scripts/python.exe")
+            set(KE_PYTHON "${CMAKE_SOURCE_DIR}/.venv/Scripts/python.exe")
         else()
             find_program(KE_PYTHON NAMES python3 python REQUIRED)
         endif()
@@ -213,7 +227,10 @@ function(ke_apply_dep_patch repo patch)
             "already applied.\n"
             "The submodule has diverged from the SHA the patch was written against. "
             "Reset it with 'git -C ${repo} checkout -- .' and re-run cmake, or "
-            "regenerate the patch with 'git -C ${repo} diff > ${patch}'.")
+            "regenerate the patch with 'git -C ${repo} diff > ${patch}'. "
+            "On Windows this also happens when the checkout used "
+            "core.autocrlf=true -- the patch is LF-only; re-clone with "
+            "'git config --global core.autocrlf false'.")
     endif()
     message(STATUS "Knife Edge: applying ${patch} to ${repo}")
     execute_process(COMMAND ${GIT_EXECUTABLE} -C "${repo}" apply "${patch}"
@@ -377,6 +394,45 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(KE_DBUS REQUIRED IMPORTED_TARGET dbus-1)
     target_link_libraries(KnifeEdgeRecompiled PRIVATE PkgConfig::KE_DBUS)
+endif()
+
+if (WIN32)
+    # rt64 vendors SDL2 for Windows (headers + x64 import libs + SDL2.dll):
+    # deps/rt64/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3. rt64 links it by
+    # BARE NAME (target_link_libraries(rt64 SDL2 SDL2main)), which propagates to
+    # this target, but rt64's link_directories() call is directory-scoped and
+    # does NOT propagate across add_subdirectory() -- same trap as the dxc/inc
+    # include dir re-added manually above. Re-add the search path here.
+    set(KE_WIN_SDL2_DIR "${CMAKE_SOURCE_DIR}/deps/rt64/src/contrib/mupen64plus-win32-deps/SDL2-2.26.3")
+    target_include_directories(KnifeEdgeRecompiled PRIVATE "${KE_WIN_SDL2_DIR}/include")
+    target_link_directories(KnifeEdgeRecompiled PRIVATE "${KE_WIN_SDL2_DIR}/lib/x64")
+    target_link_libraries(KnifeEdgeRecompiled PRIVATE SDL2 SDL2main)
+    # NOMINMAX only — deliberately NOT WIN32_LEAN_AND_MEAN at target scope:
+    # rt64_render_context.cpp transitively includes rt64's dxcapi.h (via
+    # hle/rt64_application.h), whose interfaces derive from COM base types
+    # (IUnknown, IStream) that a lean windows.h never declares — first
+    # Windows CI run failed on exactly this ("unknown type name 'IStream'",
+    # "expected class name"). Files that want the lean windows.h define it
+    # themselves before their own include (main.cpp does).
+    target_compile_definitions(KnifeEdgeRecompiled PRIVATE NOMINMAX)
+
+    # RT64_SDL_WINDOW_VULKAN is deliberately NOT defined here: rt64 only defines
+    # it on Linux; on Windows RT64 takes the HWND path (see create_window() in
+    # src/main/main.cpp) and defaults to D3D12.
+
+    # Runtime DLLs must sit beside the .exe. rt64's own configure_file() copies
+    # dxcompiler/dxil only into rt64's binary dir, but this project overrides
+    # CMAKE_RUNTIME_OUTPUT_DIRECTORY, so the exe would otherwise ship without
+    # them. Copy from the vendored sources directly so this does not depend on
+    # rt64's internal output layout.
+    add_custom_command(TARGET KnifeEdgeRecompiled POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/deps/rt64/src/contrib/dxc/bin/x64/dxcompiler.dll"
+            "${CMAKE_SOURCE_DIR}/deps/rt64/src/contrib/dxc/bin/x64/dxil.dll"
+            "${KE_WIN_SDL2_DIR}/lib/x64/SDL2.dll"
+            "$<TARGET_FILE_DIR:KnifeEdgeRecompiled>"
+        COMMENT "Staging SDL2/dxcompiler/dxil DLLs next to KnifeEdgeRecompiled.exe"
+        VERBATIM)
 endif()
 
 if (APPLE)
