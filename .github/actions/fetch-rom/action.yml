@@ -60,9 +60,12 @@ runs:
           -o age.zip \
           https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-windows-amd64.zip
         echo "46db0db71f146061f7c8fffa912cb806aef1bc8450e27a3abc1744f0591b89fb  age.zip" | sha256sum -c -
-        # Git Bash's tar is bsdtar, which reads zip archives natively; there
-        # is no unzip on PATH. The archive extracts to age/{age,age-keygen}.exe.
-        tar -xf age.zip
+        # Git Bash has no unzip, and its own tar is GNU tar (cannot read
+        # zip — the first windows-build run failed on exactly that). The
+        # system tar at C:\Windows\System32\tar.exe IS bsdtar (present on
+        # every Windows since 10 1803) and reads zip natively. The archive
+        # extracts to age/{age,age-keygen}.exe.
+        /c/Windows/System32/tar.exe -xf age.zip
         # $GITHUB_PATH is consumed by the runner process, not by bash, so it
         # needs the native Windows path form. It only affects LATER steps,
         # hence the explicit PATH export for the sanity check below.

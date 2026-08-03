@@ -738,19 +738,18 @@ jobs:
              build-win/SDL2.dll build-win/dxcompiler.dll build-win/dxil.dll \
              COPYING packaging/windows/README.txt \
              "$stage/$dir/"
-          # 7z is preinstalled on windows-latest and on PATH under Git Bash.
-          # 7z is a native (non-msys) tool, and this workflow can't be test-run
-          # on a real windows-latest before landing, so rather than assert a
-          # path form for $GITHUB_WORKSPACE (Git Bash env vars from the runner
-          # process are not reliably msys-translated, and getting this wrong
-          # would mean 7z silently writes somewhere unexpected instead of
-          # failing loudly) this sidesteps the question entirely: write the
-          # zip to a plain relative filename in the current directory (which
-          # `cd "$stage"` has already made unambiguous to every tool in this
-          # step, msys or native), then `mv` it into the workspace root with
-          # bash, which — being an msys tool itself — already handles that
-          # translation correctly.
-          (cd "$stage" && 7z a -tzip -mx=9 "${dir}.zip" "$dir" >/dev/null)
+          # System32 tar.exe is bsdtar (present on every Windows since 10
+          # 1803): `-a` picks the format from the .zip extension. NOT `7z` —
+          # the first windows-build run's PATH dump showed 7-Zip is not on
+          # PATH under our vcvars64-exported environment — and NOT Git
+          # Bash's own tar, which is GNU tar and does not write zip. tar is
+          # a native (non-msys) tool and this step can't be test-run before
+          # landing, so rather than assert a path form for $GITHUB_WORKSPACE
+          # the zip is written to a plain relative filename in the current
+          # directory (unambiguous to every tool, msys or native), then
+          # `mv`d into the workspace root by bash, which — being an msys
+          # tool itself — handles that translation correctly.
+          (cd "$stage" && /c/Windows/System32/tar.exe -a -cf "${dir}.zip" "$dir")
           mv "$stage/${dir}.zip" "${dir}.zip"
           echo "zip=${dir}.zip" >> "$GITHUB_OUTPUT"
           ls -l "${dir}.zip"

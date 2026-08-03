@@ -1036,8 +1036,12 @@ script required **no changes**. What the action adds around it:
   holds the ROM-decryption secrets), it downloads the official v1.2.1
   Windows release zip and checks it against a pinned SHA256
   (`46db0db71f146061f7c8fffa912cb806aef1bc8450e27a3abc1744f0591b89fb`),
-  extracted with `bsdtar` (Git Bash's `tar` reads zip natively; there is no
-  `unzip` on `PATH`). That pin was cross-checked against Microsoft's
+  extracted with the *system* bsdtar, `C:\Windows\System32\tar.exe`,
+  invoked by absolute path (a real first-run finding: Git Bash's own `tar`
+  is GNU tar and cannot read zip — the first `windows-build` run failed on
+  exactly that — and there is no `unzip` on `PATH`; System32's tar.exe IS
+  bsdtar, shipped with every Windows since 10 1803, and reads zip
+  natively). That pin was cross-checked against Microsoft's
   independently published winget manifest for the same release URL — exact
   match — as a second source of truth beyond "trust the download."
 - **The age identity file** (`KE_ROM_AGE_KEY`, written by
@@ -1071,17 +1075,19 @@ tarball step in structure but diverges in a few Windows-specific ways:
   sitting outside that staged subtree — the same "ROM can't be swept into
   the archive by construction" pattern `linux-build` uses, not just a
   `.gitignore`-style exclude list that could silently miss a new file.
-- **7z writes a relative name, then Git Bash `mv` relocates it.** 7z is
-  preinstalled on `windows-latest` and reachable on `PATH` under Git Bash,
-  but it's a *native* Windows tool, not an msys one — whether
+- **System32 bsdtar writes a relative name, then Git Bash `mv` relocates
+  it.** The zip is created by `C:\Windows\System32\tar.exe -a -cf` (`-a`
+  picks zip format from the extension). Two first-run findings shaped
+  this: Git Bash's own tar is GNU tar (no zip support), and 7-Zip — the
+  original choice — turned out NOT to be on `PATH` under the
+  vcvars64-exported environment (visible in the first run's PATH dump).
+  tar.exe is a *native* Windows tool, not an msys one — whether
   `$GITHUB_WORKSPACE`/`$PWD` in the form Git Bash exports would even be a
-  path 7z understands wasn't something this branch could verify before its
-  first real run (no Windows runner to test against pre-merge). Rather than
-  gamble on that translation, the step `cd`s into the stage directory
-  first (unambiguous to any tool, msys or native, once `cd` has resolved
-  it) and has 7z write a plain relative filename there; the *relocation*
-  into the workspace root is then done with `mv`, which — being an msys
-  tool itself — already handles the translation correctly. This is a
+  path it understands isn't worth gambling on, so the step `cd`s into the
+  stage directory first (unambiguous to any tool, msys or native, once
+  `cd` has resolved it) and writes a plain relative filename there; the
+  *relocation* into the workspace root is then done with `mv`, which —
+  being an msys tool itself — handles the translation correctly. A
   deliberate hedge against an unverified path-form assumption, not a
   simplification for its own sake.
 - **Fixed artifact name, versioned inner filename** — same convention as
@@ -1129,7 +1135,7 @@ of thing that fails loudly if wrong):
   conversions produce paths CMake accepts, `TMPDIR` scoping holds).
 - The kill-based launch checks actually see the startup line (i.e. the
   staged DLLs really do resolve at process load).
-- The 7z-then-`mv` zip-staging hedge actually behaves the way it's
+- The bsdtar-then-`mv` zip-staging hedge actually behaves the way it's
   reasoned to (see "Zip packaging" above) — this is the one step in the
   whole design explicitly flagged as unverifiable before a real run.
 
