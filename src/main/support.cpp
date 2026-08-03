@@ -24,7 +24,20 @@ std::filesystem::path kerecomp::get_app_folder_path() {
     if (data_dir_override != nullptr && data_dir_override[0] != '\0') {
         path = data_dir_override;
     } else {
+#if defined(_WIN32)
+        // %LOCALAPPDATA%, not the roaming %APPDATA%: this directory holds the
+        // cached ROM (~12 MB) alongside config, and roaming would sync that
+        // across domain profiles on every login. LOCALAPPDATA is the
+        // idiomatic home for machine-local app data on Windows.
+        const char* local_app_data = std::getenv("LOCALAPPDATA");
+        if (local_app_data != nullptr && local_app_data[0] != '\0') {
+            path = std::filesystem::path(local_app_data) / "KnifeEdgeRecompiled";
+        } else {
+            path = std::filesystem::current_path() / "ke_recomp_data";
+        }
+#else
         path = std::filesystem::current_path() / "ke_recomp_data";
+#endif
     }
     // librecomp writes the stored ROM and config here without creating the
     // directory itself; a missing dir makes every ROM validation fail silently.
