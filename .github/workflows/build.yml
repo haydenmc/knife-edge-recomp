@@ -59,7 +59,8 @@ name: build
 
 on:
   push:
-    branches: [main]   # feature branches get CI via pull_request instead —
+    branches: [main, feature/windows-build]   # feature branches get CI via pull_request instead —
+    # TEMPORARY while iterating windows-stub-build — remove before merge
     tags: ['v*']       # unfiltered push + pull_request would run everything twice
   pull_request:
   workflow_dispatch:
@@ -175,6 +176,166 @@ jobs:
           name: KnifeEdgeRecompiled-linux-stub
           path: build-container/KnifeEdgeRecompiled
           if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Windows build (stub, no ROM): the Windows twin of `build` above, and built
+  # for the same reason — no ROM, no secrets, works for pull requests from
+  # forks exactly like the Linux stub job. It exists so the project's
+  # `_WIN32` code paths (src/main/*.cpp) and CMakeLists.txt's WIN32 branch
+  # (the DLL-staging POST_BUILD rule that copies SDL2.dll/dxcompiler.dll/
+  # dxil.dll next to the exe) are continuously compiled and continuously
+  # verified, not just occasionally hand-built on someone's Windows machine.
+  # This is the first Windows leg of the project: native MSVC-ABI (clang-cl),
+  # no container (containers/Containerfile is Linux-only), no ROM-gated
+  # counterpart yet — that would be a future `windows-build` job reusing the
+  # MSVC-environment step below next to live secrets, mirroring how
+  # linux-build relates to build.
+  #
+  # IMPORTANT, do not "simplify": the CXX flags below
+  # (-Xclang -fexceptions -Xclang -fcxx-exceptions) must NEVER be replaced
+  # with /EHsc. The orderly-shutdown patch
+  # (patches/n64modernruntime-orderly-shutdown.patch) throws
+  # ultramodern::thread_terminated through recompiled `extern "C"` frames
+  # (see CLAUDE.md, "Shutdown segfault on quit"); /EHsc's trailing `c` tells
+  # the compiler extern-C functions never throw, and MSVC-ABI exception
+  # unwinding is permitted to skip destructors/catch frames across such a
+  # boundary on that promise. -fexceptions/-fcxx-exceptions (the Clang/Itanium
+  # style flags, which clang-cl also understands via -Xclang) make no such
+  # promise and are what keeps that throw path working on Windows.
+  # ---------------------------------------------------------------------------
+  windows-stub-build:
+    name: "windows build (stub, no ROM)"
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      # MUST precede checkout. Git for Windows defaults to core.autocrlf=true,
+      # which would give deps/N64ModernRuntime CRLF line endings and make
+      # ke_apply_dep_patch's LF-only patch fail at cmake configure time.
+      # longpaths guards deep object paths under the runner workspace.
+      - name: Configure git for Windows checkouts
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve submodule commits for cache keys
+        id: submodules
+        shell: bash
+        run: |
+          echo "n64recomp=$(git -C deps/N64Recomp rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "runtime=$(git -C deps/N64ModernRuntime rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "rt64=$(git -C deps/rt64 rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Ninja
+        run: choco install ninja -y --no-progress
+
+      # Inline vswhere + vcvars64 instead of a third-party action: this
+      # workflow's design keeps the trusted-code surface minimal (see the
+      # header comment's pull_request_target discussion), and the ROM-gated
+      # windows-build job will reuse this exact step next to live secrets.
+      # Exports exactly INCLUDE/LIB/LIBPATH/PATH — not a blind `set` dump.
+      - name: Set up the MSVC toolchain environment (x64)
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSPATH=%%i"
+          call "%VSPATH%\VC\Auxiliary\Build\vcvars64.bat" >nul
+          echo INCLUDE=%INCLUDE%>>"%GITHUB_ENV%"
+          echo LIB=%LIB%>>"%GITHUB_ENV%"
+          echo LIBPATH=%LIBPATH%>>"%GITHUB_ENV%"
+          echo PATH=%PATH%>>"%GITHUB_ENV%"
+
+      # The cached build dir embeds absolute paths into the VS/LLVM installs
+      # (CMakeCache.txt), so a runner-image bump must miss the cache. The
+      # toolchain fingerprint is in BOTH the key and the restore-key prefix so
+      # a partial restore can never cross a toolchain generation.
+      - name: Toolchain fingerprint
+        id: toolchain
+        shell: bash
+        run: |
+          fp="$( { clang-cl --version; cmake --version; ninja --version; } | sha256sum | cut -c1-16 )"
+          echo "fp=$fp" >> "$GITHUB_OUTPUT"
+          clang-cl --version
+
+      # Safe to cache: no ROM exists anywhere in this job (stub build).
+      # The ROM-gated windows-build job must NEVER copy this step for its
+      # own build dir — see the cache-hygiene comments on linux-build.
+      - name: Cache the Windows stub build directory
+        uses: actions/cache@v4
+        with:
+          path: build-win
+          key: build-win-stub-${{ steps.toolchain.outputs.fp }}-${{ steps.submodules.outputs.n64recomp }}-${{ steps.submodules.outputs.runtime }}-${{ steps.submodules.outputs.rt64 }}-${{ hashFiles('CMakeLists.txt', 'src/**', 'patches/**') }}
+          restore-keys: |
+            build-win-stub-${{ steps.toolchain.outputs.fp }}-
+
+      # -Xclang -fexceptions -Xclang -fcxx-exceptions: see job header comment;
+      # NOT replaceable with /EHsc.
+      - name: Configure + build (clang-cl + Ninja, no ROM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-win -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl \
+            -DCMAKE_CXX_FLAGS='-Xclang -fexceptions -Xclang -fcxx-exceptions'
+          cmake --build build-win 2>&1 | tee build-win.log
+
+      # A silently dropped -march=nehalem would lose SSE4.1 for librecomp's
+      # RSP vector backend — turn "argument unused" warnings into failures.
+      - name: Assert no compiler flags were silently dropped
+        shell: bash
+        run: |
+          if grep -Eq "unknown argument|argument unused during compilation" build-win.log; then
+            grep -E "unknown argument|argument unused during compilation" build-win.log | sort -u | head -20
+            echo "::error::clang-cl rejected or ignored a compile flag. If -march=nehalem was dropped, use the /clang: passthrough fallback (see CMakeLists.txt toolchain guard comment)."
+            exit 1
+          fi
+
+      # Kill-based, never exit-code-based: with no ROM, the exe now reaches
+      # the NFD file dialog on Windows (have_display is true there by design)
+      # and exit_error() shows a modal MessageBox — either can block forever
+      # on a runner. This asserts exactly one thing: the process image loads
+      # and main() runs, i.e. SDL2.dll/dxcompiler.dll/dxil.dll resolved and
+      # the CRT is satisfied. The Linux `build` job's exit-code contract does
+      # NOT transfer to Windows.
+      #
+      # The stable substring matched below ("Knife Edge Recompiled") is
+      # kerecomp::log_build_info()'s literal prefix (src/main/support.cpp:
+      # `"Knife Edge Recompiled - build %s%s\n"`, stdout, immediately
+      # fflush'd) — verified against the source, not guessed.
+      - name: Launch check (startup line only, kill-based)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath build-win\KnifeEdgeRecompiled.exe `
+               -RedirectStandardOutput out.txt -RedirectStandardError err.txt -PassThru -NoNewWindow
+          if (-not $p.WaitForExit(30000)) {
+            Write-Host "process still alive after 30s (expected: file dialog / no GPU); killing"
+            $p.Kill()
+            $p.WaitForExit()
+          }
+          Write-Host "--- stdout ---"; Get-Content out.txt -ErrorAction SilentlyContinue
+          Write-Host "--- stderr ---"; Get-Content err.txt -ErrorAction SilentlyContinue
+          if (-not (Select-String -Path out.txt -SimpleMatch 'Knife Edge Recompiled')) {
+            Write-Host "::error::the exe did not print its startup build line — it failed before main() (missing DLL beside the exe is the usual cause)"
+            exit 1
+          }
+
+      # The stub exe + the three staged DLLs: uploading the DLLs makes the
+      # POST_BUILD staging rule continuously verified by a fork-runnable job.
+      # Name deliberately NOT matched by publish's by-name downloads.
+      - name: Upload stub artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KnifeEdgeRecompiled-windows-stub
+          path: |
+            build-win/KnifeEdgeRecompiled.exe
+            build-win/SDL2.dll
+            build-win/dxcompiler.dll
+            build-win/dxil.dll
+          if-no-files-found: error
+          retention-days: 7
 
   # The `secrets` context is not available in job-level `if:` expressions, so
   # this tiny job turns "are the ROM secrets configured?" into a job output
