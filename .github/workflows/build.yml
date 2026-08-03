@@ -59,8 +59,7 @@ name: build
 
 on:
   push:
-    branches: [main, feature/windows-build]   # feature branches get CI via pull_request instead —
-    # TEMPORARY while iterating windows-stub-build — remove before merge
+    branches: [main]   # feature branches get CI via pull_request instead —
     tags: ['v*']       # unfiltered push + pull_request would run everything twice
   pull_request:
   workflow_dispatch:

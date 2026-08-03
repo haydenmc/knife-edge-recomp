@@ -835,14 +835,18 @@ Knife Edge (USA) dump fails at the md5 gate instead, with the actual
 
 ## Windows build
 
-**Status: implemented, first CI run pending.** Both `windows-stub-build` and
-`windows-build` are new in `.github/workflows/build.yml` on
-`feature/windows-build` and have not yet executed on a GitHub runner (the
-branch's push hasn't landed at time of writing). No human has run the
-resulting `.exe` on real Windows hardware either. Nothing below is
-"verified" or "shipped" — see "Status and what's actually unproven" at the
-end of this section for exactly what each unresolved risk is and who can
-resolve it.
+**Status: both jobs CI-green (2026-08-03); owner hands-on pending.**
+`windows-stub-build` went green on its third run (two real first-run
+findings, both recorded below: target-wide WIN32_LEAN_AND_MEAN vs
+dxcapi.h's COM base types, and Git Bash `tar` being GNU tar rather than
+bsdtar — the latter also preempted a 7-Zip-not-on-PATH failure in the zip
+step). `windows-build` went green on its second run (run 30854478402: ROM
+fetch under Git Bash, MSVC host tools, full clang-cl ROM build, no dropped
+flags, no ROM bytes in the exe, launch check, zip artifact verified to
+contain exactly exe + 3 DLLs + COPYING + README). **No human has run the
+`.exe` on real Windows hardware yet** — see "Status and what's actually
+unproven" at the end of this section; every owner-only item there remains
+open, clean quit above all.
 
 ### Toolchain: clang-cl, Ninja, no container
 
@@ -1107,37 +1111,25 @@ tarball step in structure but diverges in a few Windows-specific ways:
 
 ### Status and what's actually unproven
 
-**Implemented, all headless/local-review only — no Windows runner has ever
-executed either job:**
+**Implemented and CI-proven (2026-08-03, stub run 3 / full-ROM run 2 —
+run 30854478402):**
 - `windows-stub-build` (no ROM, fork-PR-safe) and `windows-build` (full
-  ROM, gated identically to `linux-build` via `rom-gate`), both added to
-  `.github/workflows/build.yml`.
-- `CMakeLists.txt`'s `WIN32` branch (SDL2 include/link re-add, DLL staging,
-  NOMINMAX/WIN32_LEAN_AND_MEAN, the clang-cl guard), the `_WIN32`
-  `have_display` branch in `src/main/main.cpp`, and the `%LOCALAPPDATA%`
-  data dir in `src/main/support.cpp`.
-- `.github/actions/fetch-rom`'s Windows leg (pinned age install,
-  `TMPDIR`/`rom-path` handling).
-- `packaging/windows/README.txt`.
-
-**What the first CI runs must prove** (mechanical/toolchain risk, the kind
-of thing that fails loudly if wrong):
-- The GCC-style recompiled-code flags actually pass through clang-cl
-  without being silently dropped (the "assert no compiler flags were
-  silently dropped" step exists for exactly this — a dropped
-  `-march=nehalem` would lose SSE4.1 for librecomp's RSP vector backend
-  with no compile error, just wrong runtime behavior).
-- `cl.exe`-built host tools (on a cache miss) actually produce
-  `N64RecompCLI`/`RSPRecomp` binaries `-DN64RECOMP_HOST_TOOL`/
-  `-DRSPRECOMP_HOST_TOOL` can drive from a clang-cl-configured outer build.
-- `fetch-rom` actually round-trips under Git Bash on a real
-  `windows-latest` image (the pinned age zip extracts, `cygpath`
-  conversions produce paths CMake accepts, `TMPDIR` scoping holds).
-- The kill-based launch checks actually see the startup line (i.e. the
-  staged DLLs really do resolve at process load).
-- The bsdtar-then-`mv` zip-staging hedge actually behaves the way it's
-  reasoned to (see "Zip packaging" above) — this is the one step in the
-  whole design explicitly flagged as unverifiable before a real run.
+  ROM, gated identically to `linux-build` via `rom-gate`), both green.
+- `CMakeLists.txt`'s `WIN32` branch (SDL2 include/link re-add, DLL staging
+  — proven by the launch check resolving all three DLLs — NOMINMAX, the
+  clang-cl guard), the `_WIN32` `have_display` branch in
+  `src/main/main.cpp`, and the `%LOCALAPPDATA%` data dir in
+  `src/main/support.cpp`.
+- The GCC-style recompiled-code flags pass through clang-cl with nothing
+  silently dropped (the flag-drop assertion ran clean; `-march=nehalem`'s
+  SSE4.1 for librecomp's RSP backend was the scary one).
+- `cl.exe`-built host tools drive a clang-cl-configured outer build; the
+  full analysis pipeline + N64Recomp/RSPRecomp recompile ran on Windows.
+- `fetch-rom` round-trips under Git Bash (pinned age extracts via System32
+  bsdtar, `cygpath` paths accepted by CMake, `TMPDIR` scoping held) and
+  `assert_no_rom_assets.py` passed against the `.exe`.
+- The bsdtar-then-`mv` zip staging produced a zip verified to contain
+  exactly exe + SDL2/dxcompiler/dxil DLLs + COPYING + README.txt.
 
 **What only the project owner, on real Windows hardware, can prove** (no CI
 job — kill-based launch checks included — comes anywhere near these):
